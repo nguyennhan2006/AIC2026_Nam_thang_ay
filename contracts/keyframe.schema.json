@@ -1,0 +1,698 @@
+{
+  "$defs": {
+    "BoundingBox": {
+      "additionalProperties": false,
+      "description": "Normalized XYXY box, independent of image resolution.",
+      "properties": {
+        "x1": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "X1",
+          "type": "number"
+        },
+        "y1": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Y1",
+          "type": "number"
+        },
+        "x2": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "X2",
+          "type": "number"
+        },
+        "y2": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Y2",
+          "type": "number"
+        }
+      },
+      "required": [
+        "x1",
+        "y1",
+        "x2",
+        "y2"
+      ],
+      "title": "BoundingBox",
+      "type": "object"
+    },
+    "CaptionRecord": {
+      "additionalProperties": false,
+      "description": "One model-generated textual view of the keyframe.",
+      "properties": {
+        "language": {
+          "default": "en",
+          "minLength": 1,
+          "title": "Language",
+          "type": "string"
+        },
+        "caption_type": {
+          "enum": [
+            "short",
+            "detailed",
+            "tags",
+            "crop"
+          ],
+          "title": "Caption Type",
+          "type": "string"
+        },
+        "text": {
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        },
+        "confidence": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Confidence"
+        },
+        "crop_bbox": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BoundingBox"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "provenance": {
+          "$ref": "#/$defs/ModelProvenance"
+        }
+      },
+      "required": [
+        "caption_type",
+        "text",
+        "provenance"
+      ],
+      "title": "CaptionRecord",
+      "type": "object"
+    },
+    "ColorFeature": {
+      "additionalProperties": false,
+      "description": "Compact color metadata suitable for filtering and result explanation.",
+      "properties": {
+        "dominant_hex": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 8,
+          "title": "Dominant Hex",
+          "type": "array"
+        },
+        "mean_hsv": {
+          "anyOf": [
+            {
+              "maxItems": 3,
+              "minItems": 3,
+              "prefixItems": [
+                {
+                  "maximum": 360.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mean Hsv"
+        },
+        "histogram_uri": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Histogram Uri"
+        },
+        "provenance": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelProvenance"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "title": "ColorFeature",
+      "type": "object"
+    },
+    "EmbeddingReference": {
+      "additionalProperties": false,
+      "description": "Logical embedding and every backend in which it is available.",
+      "properties": {
+        "embedding_name": {
+          "minLength": 1,
+          "title": "Embedding Name",
+          "type": "string"
+        },
+        "modality": {
+          "enum": [
+            "image",
+            "caption",
+            "ocr",
+            "multimodal"
+          ],
+          "title": "Modality",
+          "type": "string"
+        },
+        "model_name": {
+          "minLength": 1,
+          "title": "Model Name",
+          "type": "string"
+        },
+        "model_revision": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model Revision"
+        },
+        "dimension": {
+          "exclusiveMinimum": 0,
+          "title": "Dimension",
+          "type": "integer"
+        },
+        "normalized": {
+          "default": true,
+          "title": "Normalized",
+          "type": "boolean"
+        },
+        "storage_locations": {
+          "items": {
+            "$ref": "#/$defs/VectorLocation"
+          },
+          "minItems": 1,
+          "title": "Storage Locations",
+          "type": "array"
+        }
+      },
+      "required": [
+        "embedding_name",
+        "modality",
+        "model_name",
+        "dimension",
+        "storage_locations"
+      ],
+      "title": "EmbeddingReference",
+      "type": "object"
+    },
+    "KeyframeRole": {
+      "description": "Reason why a frame was selected from its parent scene.",
+      "enum": [
+        "representative",
+        "middle",
+        "boundary_start",
+        "boundary_end",
+        "ocr_rich",
+        "motion_change",
+        "manual"
+      ],
+      "title": "KeyframeRole",
+      "type": "string"
+    },
+    "ModelProvenance": {
+      "additionalProperties": false,
+      "description": "Information required to reproduce a generated model output.",
+      "properties": {
+        "model_name": {
+          "minLength": 1,
+          "title": "Model Name",
+          "type": "string"
+        },
+        "model_revision": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model Revision"
+        },
+        "pipeline_version": {
+          "minLength": 1,
+          "title": "Pipeline Version",
+          "type": "string"
+        },
+        "prompt_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Prompt Version"
+        },
+        "device": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Device"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "parameters": {
+          "additionalProperties": true,
+          "title": "Parameters",
+          "type": "object"
+        }
+      },
+      "required": [
+        "model_name",
+        "pipeline_version"
+      ],
+      "title": "ModelProvenance",
+      "type": "object"
+    },
+    "OCRInstance": {
+      "additionalProperties": false,
+      "description": "A recognized text instance and its exact location in the keyframe.",
+      "properties": {
+        "text": {
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        },
+        "normalized_text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Normalized Text"
+        },
+        "language": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Language"
+        },
+        "confidence": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "bbox": {
+          "$ref": "#/$defs/BoundingBox"
+        },
+        "provenance": {
+          "$ref": "#/$defs/ModelProvenance"
+        }
+      },
+      "required": [
+        "text",
+        "confidence",
+        "bbox",
+        "provenance"
+      ],
+      "title": "OCRInstance",
+      "type": "object"
+    },
+    "ObjectInstance": {
+      "additionalProperties": false,
+      "description": "A detected object used as soft search evidence, not a hard truth.",
+      "properties": {
+        "label": {
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "confidence": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "bbox": {
+          "$ref": "#/$defs/BoundingBox"
+        },
+        "attributes": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              }
+            ]
+          },
+          "title": "Attributes",
+          "type": "object"
+        },
+        "provenance": {
+          "$ref": "#/$defs/ModelProvenance"
+        }
+      },
+      "required": [
+        "label",
+        "confidence",
+        "bbox",
+        "provenance"
+      ],
+      "title": "ObjectInstance",
+      "type": "object"
+    },
+    "QualitySignals": {
+      "additionalProperties": false,
+      "description": "Optional signals used to choose or down-rank weak keyframes.",
+      "properties": {
+        "sharpness": {
+          "anyOf": [
+            {
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sharpness"
+        },
+        "brightness": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Brightness"
+        },
+        "contrast": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Contrast"
+        },
+        "black_frame_ratio": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Black Frame Ratio"
+        },
+        "duplicate_score": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duplicate Score"
+        }
+      },
+      "title": "QualitySignals",
+      "type": "object"
+    },
+    "VectorLocation": {
+      "additionalProperties": false,
+      "description": "One physical location of a vector in FAISS, Qdrant, or a file.",
+      "properties": {
+        "backend": {
+          "enum": [
+            "faiss",
+            "qdrant",
+            "file"
+          ],
+          "title": "Backend",
+          "type": "string"
+        },
+        "vector_id": {
+          "minLength": 1,
+          "title": "Vector Id",
+          "type": "string"
+        },
+        "index_name": {
+          "minLength": 1,
+          "title": "Index Name",
+          "type": "string"
+        },
+        "vector_uri": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Vector Uri"
+        }
+      },
+      "required": [
+        "backend",
+        "vector_id",
+        "index_name"
+      ],
+      "title": "VectorLocation",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Complete metadata for one searchable frame inside a scene.",
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "keyframe_id": {
+      "pattern": "^L[0-9]{2}_V[0-9]{3}_S[0-9]{4}_F[0-9]{6}$",
+      "title": "Keyframe Id",
+      "type": "string"
+    },
+    "video_id": {
+      "pattern": "^L[0-9]{2}_V[0-9]{3}$",
+      "title": "Video Id",
+      "type": "string"
+    },
+    "scene_id": {
+      "pattern": "^L[0-9]{2}_V[0-9]{3}_S[0-9]{4}$",
+      "title": "Scene Id",
+      "type": "string"
+    },
+    "frame_idx": {
+      "maximum": 999999,
+      "minimum": 0,
+      "title": "Frame Idx",
+      "type": "integer"
+    },
+    "timestamp_sec": {
+      "minimum": 0.0,
+      "title": "Timestamp Sec",
+      "type": "number"
+    },
+    "image_path": {
+      "title": "Image Path",
+      "type": "string"
+    },
+    "width": {
+      "exclusiveMinimum": 0,
+      "title": "Width",
+      "type": "integer"
+    },
+    "height": {
+      "exclusiveMinimum": 0,
+      "title": "Height",
+      "type": "integer"
+    },
+    "roles": {
+      "items": {
+        "$ref": "#/$defs/KeyframeRole"
+      },
+      "minItems": 1,
+      "title": "Roles",
+      "type": "array"
+    },
+    "selection_score": {
+      "anyOf": [
+        {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Selection Score"
+    },
+    "quality": {
+      "$ref": "#/$defs/QualitySignals"
+    },
+    "captions": {
+      "items": {
+        "$ref": "#/$defs/CaptionRecord"
+      },
+      "title": "Captions",
+      "type": "array"
+    },
+    "ocr_instances": {
+      "items": {
+        "$ref": "#/$defs/OCRInstance"
+      },
+      "title": "Ocr Instances",
+      "type": "array"
+    },
+    "objects": {
+      "items": {
+        "$ref": "#/$defs/ObjectInstance"
+      },
+      "title": "Objects",
+      "type": "array"
+    },
+    "color": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ColorFeature"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "embedding_refs": {
+      "items": {
+        "$ref": "#/$defs/EmbeddingReference"
+      },
+      "title": "Embedding Refs",
+      "type": "array"
+    },
+    "source_checksum": {
+      "anyOf": [
+        {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Source Checksum"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "extensions": {
+      "additionalProperties": true,
+      "title": "Extensions",
+      "type": "object"
+    }
+  },
+  "required": [
+    "keyframe_id",
+    "video_id",
+    "scene_id",
+    "frame_idx",
+    "timestamp_sec",
+    "image_path",
+    "width",
+    "height",
+    "roles"
+  ],
+  "title": "Keyframe",
+  "type": "object"
+}

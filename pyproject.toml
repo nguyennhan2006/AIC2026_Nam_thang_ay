@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aic-2026-contracts"
+version = "0.1.0"
+description = "Versioned metadata contracts for the AIC 2026 retrieval system"
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2.12,<3",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["schemas*"]
