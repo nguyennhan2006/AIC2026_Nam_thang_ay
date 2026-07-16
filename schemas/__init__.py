@@ -10,9 +10,11 @@ from .keyframe import (
     OCRInstance,
     QualitySignals,
 )
+from .scene import ASRSegment, Scene, SceneCaptionRecord, SceneKeyword, TransitionType
 
 __all__ = [
     "BoundingBox",
+    "ASRSegment",
     "CaptionRecord",
     "ColorFeature",
     "EmbeddingReference",
@@ -22,5 +24,9 @@ __all__ = [
     "ObjectInstance",
     "OCRInstance",
     "QualitySignals",
+    "Scene",
+    "SceneCaptionRecord",
+    "SceneKeyword",
+    "TransitionType",
     "VectorLocation",
 ]

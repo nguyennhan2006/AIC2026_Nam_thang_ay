@@ -1,8 +1,5 @@
 # AIC 2026 metadata conventions
 
-> Quick reference only. Full documentation (features, usage guide, error
-> reference — Vietnamese) lives in [`docs/data_section.md`](../docs/data_section.md).
-
 ## ID hierarchy
 
 IDs are fixed-width, case-sensitive, and encode their parent relationship:
@@ -12,6 +9,8 @@ IDs are fixed-width, case-sensitive, and encode their parent relationship:
 | Video | `Ldd_Vddd` | `L01_V001` |
 | Scene | `<video_id>_Sdddd` | `L01_V001_S0003` |
 | Keyframe | `<scene_id>_Fdddddd` | `L01_V001_S0003_F001234` |
+| Source ASR | `<video_id>_ASRdddddd` | `L01_V001_ASR000123` |
+| Scene ASR projection | `<scene_id>_Adddd` | `L01_V001_S0003_A0001` |
 
 For a keyframe, the six digits after `F` must equal `frame_idx`. IDs must not
 be regenerated when metadata is reprocessed with a new model.
@@ -47,8 +46,20 @@ The checksum is calculated from the exact keyframe image bytes referenced by
 - `frame_idx` is the zero-based frame index in the original video and is the
   identity source used in `keyframe_id`.
 - `timestamp_sec` is the navigation/search time in seconds.
+- Scene intervals are half-open: `[start_frame, end_frame_exclusive)` and
+  `[start_sec, end_sec)`. A keyframe at the end boundary belongs to the next
+  scene, not the current scene.
 - Cross-checking `frame_idx / fps` against `timestamp_sec` belongs to a later
   validator that has access to the parent `Video` entity and its FPS policy.
+
+## Scene aggregation
+
+- A canonical `Scene` embeds its complete `keyframes` children.
+- OCR remains canonical at keyframe level. `Scene.ocr_text` is derived from
+  children and must not be stored as a second editable value.
+- ASR segments stored in a scene are scene-clipped projections. Preserve
+  `source_segment_id` so the original ASR segment remains traceable when it
+  crosses a scene boundary.
 
 ## Python and JSON behavior
 

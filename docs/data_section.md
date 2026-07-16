@@ -32,27 +32,32 @@ index. Contract này đảm bảo:
 ```text
 AIC2026_Nam_thang_ay/
 ├── pyproject.toml              # khai báo package + dependency (pydantic>=2, Python>=3.11)
+├── .gitattributes              # chuẩn hóa line ending (LF) cho mọi hệ điều hành
 ├── schemas/                    # ★ contract chính (Pydantic models)
-│   ├── __init__.py             # public API: from schemas import Keyframe, ...
+│   ├── __init__.py             # public API: from schemas import Keyframe, Scene, ...
 │   ├── common.py               # thành phần dùng chung cho MỌI entity
-│   ├── keyframe.py             # entity Keyframe (phần tử đầu tiên, đã hoàn thành)
+│   ├── keyframe.py             # entity Keyframe (hoàn thành)
+│   ├── scene.py                # entity Scene — aggregate root (hoàn thành)
 │   └── README.md               # tóm tắt quy ước (quick reference)
 ├── contracts/
-│   └── keyframe.schema.json    # JSON Schema export — hợp đồng cho tool ngoài Python
+│   ├── keyframe.schema.json    # JSON Schema export — hợp đồng cho tool ngoài Python
+│   └── scene.schema.json
 ├── scripts/
 │   └── export_schemas.py       # sinh lại contracts/*.json từ Pydantic model
 ├── tests/
-│   └── test_keyframe_schema.py # 8 contract test (unittest, không cần pytest)
+│   ├── test_keyframe_schema.py # contract test (unittest, không cần pytest)
+│   └── test_scene_schema.py
 └── docs/
     └── data_section.md         # tài liệu này
 ```
 
-Chiều phụ thuộc giữa các schema (entity mới **chỉ** import từ `common.py`,
-không import chéo lẫn nhau):
+Chiều phụ thuộc giữa các schema — entity mới **chỉ** import từ `common.py`;
+riêng `scene.py` import thêm `Keyframe` vì Scene nhúng trọn keyframe con
+(cha nhúng con là chiều xuôi, con không bao giờ import cha):
 
 ```text
-schemas/common.py  ◄──  schemas/keyframe.py
-                   ◄──  schemas/scene.py    (sắp tới)
+schemas/common.py  ◄──  schemas/keyframe.py  ◄──  schemas/scene.py
+                   ◄──  schemas/scene.py
                    ◄──  schemas/video.py    (sắp tới)
 ```
 
@@ -86,13 +91,19 @@ ngay trong chuỗi:
 | Video    | `Ldd_Vddd`           | `^L[0-9]{2}_V[0-9]{3}$`                | `L01_V001`               |
 | Scene    | `<video_id>_Sdddd`   | `^L[0-9]{2}_V[0-9]{3}_S[0-9]{4}$`      | `L01_V001_S0003`         |
 | Keyframe | `<scene_id>_Fdddddd` | `^L[0-9]{2}_V[0-9]{3}_S[0-9]{4}_F[0-9]{6}$` | `L01_V001_S0003_F001234` |
+| ASR gốc (theo video) | `<video_id>_ASRdddddd` | `^L[0-9]{2}_V[0-9]{3}_ASR[0-9]{6}$` | `L01_V001_ASR000123` |
+| ASR projection (theo scene) | `<scene_id>_Adddd` | `^L[0-9]{2}_V[0-9]{3}_S[0-9]{4}_A[0-9]{4}$` | `L01_V001_S0003_A0001` |
 
-Ba tầng kiểm tra được thực thi tự động khi tạo `Keyframe`:
+Các tầng kiểm tra được thực thi tự động khi tạo object:
 
 1. Từng ID phải khớp regex.
-2. `scene_id` phải bắt đầu bằng `video_id`.
+2. `scene_id` phải bắt đầu bằng `video_id`; với `Scene`, 4 chữ số sau `S`
+   phải bằng `scene_idx` (nên `scene_idx` giới hạn `0–9999`).
 3. `keyframe_id` phải bằng `scene_id + "_F" + frame_idx` (6 chữ số, zero-pad).
    Vì vậy `frame_idx` bị giới hạn `0–999999`.
+4. Trong một `Scene`: mọi keyframe con phải đúng `video_id`/`scene_id` và nằm
+   trong khoảng của scene; ASR projection phải mang tiền tố `scene_id`, ASR
+   gốc phải mang tiền tố `video_id`.
 
 ID **không được sinh lại** khi chạy lại model với phiên bản mới — identity
 của dữ liệu tách khỏi nội dung do model sinh.
@@ -145,6 +156,10 @@ source_checksum = f"sha256:{digest}"
   dùng sẵn `schemas.common.utc_now()`). Datetime naive bị từ chối.
 - `frame_idx` là chỉ số frame zero-based trong video gốc → dùng cho identity.
 - `timestamp_sec` là thời gian (giây) để mở video/hiển thị kết quả.
+- **Khoảng của scene là nửa-mở**: `[start_frame, end_frame_exclusive)` và
+  `[start_sec, end_sec)`. Keyframe nằm đúng biên cuối thuộc về scene **kế
+  tiếp**, không thuộc scene hiện tại — nhờ vậy hai scene liền nhau không bao
+  giờ tranh chấp một frame.
 - Kiểm tra chéo `frame_idx / fps ≈ timestamp_sec` sẽ nằm ở validator cấp
   `Video` (nơi giữ `fps`) — không lặp fps vào từng keyframe.
 
@@ -194,6 +209,26 @@ Mọi model kế thừa `StrictModel` với:
 Lưu ý thiết kế: **embedding không nằm trong metadata**. Metadata chỉ giữ
 *tham chiếu* (`EmbeddingReference`) tới vector trong FAISS/Qdrant/file —
 tránh phình JSON và tránh hai nguồn sự thật cho vector.
+
+### 5.3. `schemas/scene.py` — entity Scene (aggregate root)
+
+| Thành phần | Chức năng |
+|---|---|
+| `TransitionType` | Kiểu chuyển cảnh tại biên scene: `cut`, `fade`, `dissolve`, `unknown` |
+| `SceneCaptionRecord` | Caption cấp scene (`visual`/`audio_visual`/`summary`/`tags`); `evidence_keyframe_ids` chỉ được trỏ tới keyframe có thật trong scene |
+| `ASRSegment` | **Bản chiếu đã clip theo scene** của một segment ASR trên timeline video; luôn giữ `source_segment_id` để truy ngược segment gốc khi nó vắt qua biên scene |
+| `SceneKeyword` | Keyword tìm kiếm kèm nguồn gốc (`caption`/`ocr`/`asr`/`object`/`manual`); keyword sinh tự động **bắt buộc** có provenance |
+| `Scene` | Aggregate root: biên thời gian nửa-mở + provenance của segmentation + **nhúng trọn** danh sách `Keyframe` con + caption/ASR/keyword/embedding cấp scene |
+| `Scene.duration_frames` / `duration_sec` | Độ dài suy ra từ biên |
+| `Scene.ocr_text` | Gộp OCR từ keyframe con — **suy diễn**, không lưu thành giá trị thứ hai |
+| `Scene.asr_text` | Gộp text ASR theo thứ tự thời gian |
+| `Scene.qdrant_payload()` | Payload gọn với `entity_type: "scene"` |
+
+**Quy tắc vận hành quan trọng:** vì Scene nhúng trọn keyframe con, bản Scene
+là **bản canonical duy nhất** được publish. Pipeline sinh keyframe → gói vào
+scene → chỉ lưu/index scene; không duy trì song song file keyframe JSON rời,
+tránh hai bản sao của cùng một keyframe lệch nhau. Và như mục 4.2: scene
+manifest sau khi publish là bất biến.
 
 ## 6. Hướng dẫn sử dụng
 
@@ -288,10 +323,68 @@ Payload chỉ chứa field phục vụ **filter + trace + hiển thị kết qu�
 `pipeline_versions`. Caption đầy đủ, bbox OCR… vẫn ở metadata store chính —
 Qdrant không phải nơi lưu toàn văn.
 
-`entity_type: "keyframe"` là discriminator: sau này Scene/Video dùng chung
-collection vẫn phân biệt được loại điểm.
+`entity_type` là discriminator: Keyframe (`"keyframe"`) và Scene (`"scene"`)
+dùng chung collection vẫn phân biệt được loại điểm.
 
-### 6.5. Các lỗi thường gặp
+### 6.5. Tạo Scene hoàn chỉnh (phía pipeline)
+
+Scene gói keyframe đã tạo ở mục 6.1 cùng biên thời gian và bằng chứng cấp
+scene. Mọi ràng buộc (keyframe đúng scene, nằm trong khoảng nửa-mở, đúng thứ
+tự, ASR đúng tiền tố…) được kiểm ngay khi khởi tạo:
+
+```python
+from schemas import Scene
+from schemas.scene import ASRSegment, SceneCaptionRecord
+from schemas.common import ModelProvenance
+
+scene = Scene(
+    scene_id="L01_V001_S0003",
+    video_id="L01_V001",
+    scene_idx=3,                      # phải khớp 4 chữ số sau S trong scene_id
+    start_frame=1200,
+    end_frame_exclusive=1300,         # nửa-mở: frame 1300 thuộc scene kế tiếp
+    start_sec=40.0,
+    end_sec=43.334,
+    segmentation_provenance=ModelProvenance(
+        model_name="TransNetV2", pipeline_version="seg-1.0.0",
+    ),
+    keyframes=[kf],                   # nhúng trọn Keyframe từ mục 6.1
+    captions=[
+        SceneCaptionRecord(
+            caption_type="visual",
+            text="A news anchor introduces the segment.",
+            evidence_keyframe_ids=["L01_V001_S0003_F001234"],  # phải là con thật
+            provenance=ModelProvenance(
+                model_name="caption-model", pipeline_version="cap-1.0.0",
+            ),
+        ),
+    ],
+    asr_segments=[
+        ASRSegment(
+            segment_id="L01_V001_S0003_A0001",       # projection trong scene này
+            source_segment_id="L01_V001_ASR000123",  # segment ASR gốc của video
+            start_sec=40.2,
+            end_sec=43.334,                          # đã clip theo biên scene
+            text="Xin đừng quên nhau",
+            language="vi",
+            provenance=ModelProvenance(
+                model_name="whisper-large-v3", pipeline_version="asr-1.0.0",
+            ),
+        ),
+    ],
+)
+
+scene.duration_sec     # 3.334 — suy từ biên
+scene.ocr_text         # gộp OCR từ keyframe con (suy diễn, không lưu lại)
+scene.asr_text         # text ASR theo thứ tự thời gian
+payload = scene.qdrant_payload()   # entity_type = "scene"
+```
+
+Lưu ý về ASR: nếu một segment ASR gốc vắt qua biên hai scene thì mỗi scene giữ
+một bản chiếu đã cắt (`_A0001`, `_A0002`…) nhưng cả hai cùng trỏ về một
+`source_segment_id` — nhờ đó vẫn truy ngược được câu nói nguyên vẹn.
+
+### 6.6. Các lỗi thường gặp
 
 | Làm sai | Thông báo lỗi (tóm tắt) |
 |---|---|
@@ -304,10 +397,18 @@ collection vẫn phân biệt được loại điểm.
 | Bbox ngược (`x2 <= x1`) | `bbox requires x2 > x1 and y2 > y1` |
 | Caption `crop` không có `crop_bbox` | `crop captions require crop_bbox` |
 | `created_at` không có timezone | `created_at must include timezone information` |
+| `scene_id` không khớp `scene_idx` | `scene_id must equal L01_V001_S000x for video/scene_idx` |
+| Keyframe con thuộc scene/video khác | `keyframe ... belongs to another scene/video` |
+| Keyframe ngoài khoảng của scene (kể cả đúng biên cuối) | `keyframe ... is outside scene frame/time interval` |
+| Keyframe con trùng hoặc sai thứ tự | `keyframe_id values must be unique` / `must be ordered by frame_idx` |
+| Caption dẫn chứng keyframe không tồn tại trong scene | `scene caption references unknown keyframes` |
+| ASR projection sai scene / vượt khoảng thời gian | `ASR segment ... belongs to another scene` / `is outside scene time interval` |
+| Keyword tự động (ocr/asr/caption/object) thiếu provenance | `automatically derived keywords require provenance` |
 
-### 6.6. Dùng contract ngoài Python
+### 6.7. Dùng contract ngoài Python
 
-`contracts/keyframe.schema.json` là JSON Schema chuẩn — dùng để:
+`contracts/keyframe.schema.json` và `contracts/scene.schema.json` là JSON
+Schema chuẩn — dùng để:
 
 - Validate JSON output của notebook (ví dụ bằng `ajv` cho Node, `jsonschema`
   cho Python thuần).
@@ -315,9 +416,10 @@ collection vẫn phân biệt được loại điểm.
 - Làm hợp đồng dữ liệu giữa nhóm Offline (extraction) và Online (search/QA).
 
 Giới hạn: các kiểm tra **liên trường** (khớp `frame_idx` với `keyframe_id`,
-quan hệ scene–video) không biểu diễn được bằng JSON Schema — chỉ Pydantic
-(hoặc validator tương đương) mới bắt được. Vì vậy validate bằng JSON Schema
-là điều kiện *cần*, validate bằng `schemas.Keyframe` là điều kiện *đủ*.
+quan hệ scene–video, keyframe nằm trong khoảng scene, thứ tự thời gian…)
+không biểu diễn được bằng JSON Schema — chỉ Pydantic (hoặc validator tương
+đương) mới bắt được. Vì vậy validate bằng JSON Schema là điều kiện *cần*,
+validate bằng `schemas.Keyframe` / `schemas.Scene` là điều kiện *đủ*.
 
 ## 7. Quy trình khi sửa schema
 
@@ -343,10 +445,10 @@ là điều kiện *cần*, validate bằng `schemas.Keyframe` là điều kiệ
 
 | Entity | Trạng thái | Ghi chú |
 |---|---|---|
-| `Keyframe` | ✅ Hoàn thành (V1, 8/8 test) | `schemas/keyframe.py` |
-| `Scene` | ⏳ Tiếp theo | boundary frames, thời lượng, danh sách keyframe, manifest bất biến |
-| `Video` | ⏳ Sau Scene | fps (nguồn cho kiểm tra chéo frame/timestamp), resolution, nguồn phát hành |
-| Transcript/ASR | 💡 Dự kiến | gắn theo Video/Scene, cùng quy ước provenance |
+| `Keyframe` | ✅ Hoàn thành (V1) | `schemas/keyframe.py` |
+| `Scene` | ✅ Hoàn thành (V1) | `schemas/scene.py` — aggregate root, nhúng keyframe, ASR projection, keyword |
+| `Video` | ⏳ Tiếp theo | fps (nguồn cho kiểm tra chéo frame/timestamp), resolution, nguồn phát hành, danh sách scene |
+| Transcript/ASR gốc | 💡 Dự kiến | manifest ASR cấp video (`Ldd_Vddd_ASRdddddd`); trong scene hiện đã có bản chiếu |
 
 Mọi entity mới lặp lại đúng khung của Keyframe: kế thừa `StrictModel`,
 có `schema_version`, ID theo phân cấp, `created_at` UTC, `extensions` cho

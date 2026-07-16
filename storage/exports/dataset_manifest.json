@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0.0",
+  "dataset_id": "aic-demo-v1",
+  "build_id": "demo-001",
+  "pipeline_version": "aic-v1.0.0",
+  "video_count": 1,
+  "scene_count": 3,
+  "keyframe_count": 3,
+  "models": [],
+  "indexes": [],
+  "export_checksums": {
+    "videos.jsonl": "sha256:d3058567f3d8dcb781c5c0d4d718b7194794e23feac89e24ee737cc91f8b249e",
+    "scenes.jsonl": "sha256:743963d01720e7dc311656850919a39b4a3f000999e83b13228682a3314afc73",
+    "keyframes.jsonl": "sha256:6e5303e9eaee9050880ae329369f7fec6b58a8e363efb2378e6db3ddd4a7c0f0"
+  },
+  "created_at": "2026-07-14T15:54:41.641637Z"
+}

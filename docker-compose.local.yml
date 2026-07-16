@@ -1,0 +1,14 @@
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: online/Dockerfile
+    environment:
+      AIC_ONLINE_BACKEND: local
+      AIC_METADATA_JSONL: /app/datasection/exports/scenes.jsonl
+      AIC_LOG_LEVEL: INFO
+    volumes:
+      - ../datasection:/app/datasection:ro
+    ports:
+      - "8000:8000"
+

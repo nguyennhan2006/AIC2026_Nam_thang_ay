@@ -1,0 +1,50 @@
+name: aic-v1
+services:
+  qdrant:
+    image: qdrant/qdrant:v1.15.1
+    restart: unless-stopped
+    volumes:
+      - qdrant_data:/qdrant/storage
+    expose: ["6333"]
+    healthcheck:
+      test: ["CMD", "bash", "-c", "</dev/tcp/127.0.0.1/6333"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  worker:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.worker
+    restart: unless-stopped
+    env_file: ../.env
+    volumes:
+      - ../storage:/app/storage
+      - model_cache:/root/.cache
+    expose: ["8010"]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+
+  backend:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.backend
+    restart: unless-stopped
+    env_file: ../.env
+    environment:
+      AIC_QDRANT_URL: http://qdrant:6333
+      AIC_EMBEDDING_URL: http://worker:8010/v1/embed/text
+    volumes:
+      - ../storage:/app/storage:ro
+    ports:
+      - "${AIC_PUBLIC_PORT:-8000}:8000"
+    depends_on:
+      qdrant:
+        condition: service_healthy
+
+volumes:
+  qdrant_data:
+  model_cache:

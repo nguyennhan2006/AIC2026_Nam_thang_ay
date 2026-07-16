@@ -10,16 +10,16 @@
           "title": "X1",
           "type": "number"
         },
-        "y1": {
-          "maximum": 1.0,
-          "minimum": 0.0,
-          "title": "Y1",
-          "type": "number"
-        },
         "x2": {
           "maximum": 1.0,
           "minimum": 0.0,
           "title": "X2",
+          "type": "number"
+        },
+        "y1": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Y1",
           "type": "number"
         },
         "y2": {
@@ -42,12 +42,6 @@
       "additionalProperties": false,
       "description": "One model-generated textual view of the keyframe.",
       "properties": {
-        "language": {
-          "default": "en",
-          "minLength": 1,
-          "title": "Language",
-          "type": "string"
-        },
         "caption_type": {
           "enum": [
             "short",
@@ -56,11 +50,6 @@
             "crop"
           ],
           "title": "Caption Type",
-          "type": "string"
-        },
-        "text": {
-          "minLength": 1,
-          "title": "Text",
           "type": "string"
         },
         "confidence": {
@@ -88,8 +77,19 @@
           ],
           "default": null
         },
+        "language": {
+          "default": "en",
+          "minLength": 1,
+          "title": "Language",
+          "type": "string"
+        },
         "provenance": {
           "$ref": "#/$defs/ModelProvenance"
+        },
+        "text": {
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
         }
       },
       "required": [
@@ -111,6 +111,18 @@
           "maxItems": 8,
           "title": "Dominant Hex",
           "type": "array"
+        },
+        "histogram_uri": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Histogram Uri"
         },
         "mean_hsv": {
           "anyOf": [
@@ -143,18 +155,6 @@
           "default": null,
           "title": "Mean Hsv"
         },
-        "histogram_uri": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Histogram Uri"
-        },
         "provenance": {
           "anyOf": [
             {
@@ -174,6 +174,11 @@
       "additionalProperties": false,
       "description": "Logical embedding and every backend in which it is available.",
       "properties": {
+        "dimension": {
+          "exclusiveMinimum": 0,
+          "title": "Dimension",
+          "type": "integer"
+        },
         "embedding_name": {
           "minLength": 1,
           "title": "Embedding Name",
@@ -205,11 +210,6 @@
           ],
           "default": null,
           "title": "Model Revision"
-        },
-        "dimension": {
-          "exclusiveMinimum": 0,
-          "title": "Dimension",
-          "type": "integer"
         },
         "normalized": {
           "default": true,
@@ -253,6 +253,23 @@
       "additionalProperties": false,
       "description": "Information required to reproduce a generated model output.",
       "properties": {
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "device": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Device"
+        },
         "model_name": {
           "minLength": 1,
           "title": "Model Name",
@@ -270,6 +287,11 @@
           "default": null,
           "title": "Model Revision"
         },
+        "parameters": {
+          "additionalProperties": true,
+          "title": "Parameters",
+          "type": "object"
+        },
         "pipeline_version": {
           "minLength": 1,
           "title": "Pipeline Version",
@@ -286,28 +308,6 @@
           ],
           "default": null,
           "title": "Prompt Version"
-        },
-        "device": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Device"
-        },
-        "created_at": {
-          "format": "date-time",
-          "title": "Created At",
-          "type": "string"
-        },
-        "parameters": {
-          "additionalProperties": true,
-          "title": "Parameters",
-          "type": "object"
         }
       },
       "required": [
@@ -321,22 +321,14 @@
       "additionalProperties": false,
       "description": "A recognized text instance and its exact location in the keyframe.",
       "properties": {
-        "text": {
-          "minLength": 1,
-          "title": "Text",
-          "type": "string"
+        "bbox": {
+          "$ref": "#/$defs/BoundingBox"
         },
-        "normalized_text": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Normalized Text"
+        "confidence": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Confidence",
+          "type": "number"
         },
         "language": {
           "anyOf": [
@@ -350,17 +342,25 @@
           "default": null,
           "title": "Language"
         },
-        "confidence": {
-          "maximum": 1.0,
-          "minimum": 0.0,
-          "title": "Confidence",
-          "type": "number"
-        },
-        "bbox": {
-          "$ref": "#/$defs/BoundingBox"
+        "normalized_text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Normalized Text"
         },
         "provenance": {
           "$ref": "#/$defs/ModelProvenance"
+        },
+        "text": {
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
         }
       },
       "required": [
@@ -376,20 +376,6 @@
       "additionalProperties": false,
       "description": "A detected object used as soft search evidence, not a hard truth.",
       "properties": {
-        "label": {
-          "minLength": 1,
-          "title": "Label",
-          "type": "string"
-        },
-        "confidence": {
-          "maximum": 1.0,
-          "minimum": 0.0,
-          "title": "Confidence",
-          "type": "number"
-        },
-        "bbox": {
-          "$ref": "#/$defs/BoundingBox"
-        },
         "attributes": {
           "additionalProperties": {
             "anyOf": [
@@ -410,6 +396,20 @@
           "title": "Attributes",
           "type": "object"
         },
+        "bbox": {
+          "$ref": "#/$defs/BoundingBox"
+        },
+        "confidence": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "label": {
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
         "provenance": {
           "$ref": "#/$defs/ModelProvenance"
         }
@@ -427,9 +427,10 @@
       "additionalProperties": false,
       "description": "Optional signals used to choose or down-rank weak keyframes.",
       "properties": {
-        "sharpness": {
+        "black_frame_ratio": {
           "anyOf": [
             {
+              "maximum": 1.0,
               "minimum": 0.0,
               "type": "number"
             },
@@ -438,7 +439,7 @@
             }
           ],
           "default": null,
-          "title": "Sharpness"
+          "title": "Black Frame Ratio"
         },
         "brightness": {
           "anyOf": [
@@ -468,20 +469,6 @@
           "default": null,
           "title": "Contrast"
         },
-        "black_frame_ratio": {
-          "anyOf": [
-            {
-              "maximum": 1.0,
-              "minimum": 0.0,
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Black Frame Ratio"
-        },
         "duplicate_score": {
           "anyOf": [
             {
@@ -495,6 +482,19 @@
           ],
           "default": null,
           "title": "Duplicate Score"
+        },
+        "sharpness": {
+          "anyOf": [
+            {
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sharpness"
         }
       },
       "title": "QualitySignals",
@@ -513,14 +513,14 @@
           "title": "Backend",
           "type": "string"
         },
-        "vector_id": {
-          "minLength": 1,
-          "title": "Vector Id",
-          "type": "string"
-        },
         "index_name": {
           "minLength": 1,
           "title": "Index Name",
+          "type": "string"
+        },
+        "vector_id": {
+          "minLength": 1,
+          "title": "Vector Id",
           "type": "string"
         },
         "vector_uri": {
@@ -548,26 +548,40 @@
   "additionalProperties": false,
   "description": "Complete metadata for one searchable frame inside a scene.",
   "properties": {
-    "schema_version": {
-      "const": "1.0.0",
-      "default": "1.0.0",
-      "title": "Schema Version",
+    "captions": {
+      "items": {
+        "$ref": "#/$defs/CaptionRecord"
+      },
+      "title": "Captions",
+      "type": "array"
+    },
+    "color": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ColorFeature"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
       "type": "string"
     },
-    "keyframe_id": {
-      "pattern": "^L[0-9]{2}_V[0-9]{3}_S[0-9]{4}_F[0-9]{6}$",
-      "title": "Keyframe Id",
-      "type": "string"
+    "embedding_refs": {
+      "items": {
+        "$ref": "#/$defs/EmbeddingReference"
+      },
+      "title": "Embedding Refs",
+      "type": "array"
     },
-    "video_id": {
-      "pattern": "^L[0-9]{2}_V[0-9]{3}$",
-      "title": "Video Id",
-      "type": "string"
-    },
-    "scene_id": {
-      "pattern": "^L[0-9]{2}_V[0-9]{3}_S[0-9]{4}$",
-      "title": "Scene Id",
-      "type": "string"
+    "extensions": {
+      "additionalProperties": true,
+      "title": "Extensions",
+      "type": "object"
     },
     "frame_idx": {
       "maximum": 999999,
@@ -575,24 +589,36 @@
       "title": "Frame Idx",
       "type": "integer"
     },
-    "timestamp_sec": {
-      "minimum": 0.0,
-      "title": "Timestamp Sec",
-      "type": "number"
+    "height": {
+      "exclusiveMinimum": 0,
+      "title": "Height",
+      "type": "integer"
     },
     "image_path": {
       "title": "Image Path",
       "type": "string"
     },
-    "width": {
-      "exclusiveMinimum": 0,
-      "title": "Width",
-      "type": "integer"
+    "keyframe_id": {
+      "pattern": "^L[0-9]{2}_V[0-9]{3}_S[0-9]{4}_F[0-9]{6}$",
+      "title": "Keyframe Id",
+      "type": "string"
     },
-    "height": {
-      "exclusiveMinimum": 0,
-      "title": "Height",
-      "type": "integer"
+    "objects": {
+      "items": {
+        "$ref": "#/$defs/ObjectInstance"
+      },
+      "title": "Objects",
+      "type": "array"
+    },
+    "ocr_instances": {
+      "items": {
+        "$ref": "#/$defs/OCRInstance"
+      },
+      "title": "Ocr Instances",
+      "type": "array"
+    },
+    "quality": {
+      "$ref": "#/$defs/QualitySignals"
     },
     "roles": {
       "items": {
@@ -601,6 +627,17 @@
       "minItems": 1,
       "title": "Roles",
       "type": "array"
+    },
+    "scene_id": {
+      "pattern": "^L[0-9]{2}_V[0-9]{3}_S[0-9]{4}$",
+      "title": "Scene Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
     },
     "selection_score": {
       "anyOf": [
@@ -616,48 +653,6 @@
       "default": null,
       "title": "Selection Score"
     },
-    "quality": {
-      "$ref": "#/$defs/QualitySignals"
-    },
-    "captions": {
-      "items": {
-        "$ref": "#/$defs/CaptionRecord"
-      },
-      "title": "Captions",
-      "type": "array"
-    },
-    "ocr_instances": {
-      "items": {
-        "$ref": "#/$defs/OCRInstance"
-      },
-      "title": "Ocr Instances",
-      "type": "array"
-    },
-    "objects": {
-      "items": {
-        "$ref": "#/$defs/ObjectInstance"
-      },
-      "title": "Objects",
-      "type": "array"
-    },
-    "color": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/ColorFeature"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
-    },
-    "embedding_refs": {
-      "items": {
-        "$ref": "#/$defs/EmbeddingReference"
-      },
-      "title": "Embedding Refs",
-      "type": "array"
-    },
     "source_checksum": {
       "anyOf": [
         {
@@ -671,15 +666,20 @@
       "default": null,
       "title": "Source Checksum"
     },
-    "created_at": {
-      "format": "date-time",
-      "title": "Created At",
+    "timestamp_sec": {
+      "minimum": 0.0,
+      "title": "Timestamp Sec",
+      "type": "number"
+    },
+    "video_id": {
+      "pattern": "^L[0-9]{2}_V[0-9]{3}$",
+      "title": "Video Id",
       "type": "string"
     },
-    "extensions": {
-      "additionalProperties": true,
-      "title": "Extensions",
-      "type": "object"
+    "width": {
+      "exclusiveMinimum": 0,
+      "title": "Width",
+      "type": "integer"
     }
   },
   "required": [

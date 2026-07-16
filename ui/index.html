@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AIC 2026 Search</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main>
+    <header>
+      <p class="eyebrow">AIC 2026 · Online V1</p>
+      <h1>Multimodal Video Search</h1>
+      <p class="subtitle">KIS, AVS, chuỗi sự kiện và VQA trên cùng một luồng retrieval.</p>
+    </header>
+    <form id="search-form">
+      <label>Loại nhiệm vụ
+        <select id="task">
+          <option value="kis">KIS</option>
+          <option value="avs">AVS</option>
+          <option value="sequence">Sequence</option>
+          <option value="vqa">VQA</option>
+        </select>
+      </label>
+      <label class="query-label">Truy vấn
+        <textarea id="query" rows="4" required placeholder="Ví dụ: Người cào muối, sau đó đoàn người vẫy tay..."></textarea>
+      </label>
+      <label>Top K
+        <input id="top-k" type="number" min="1" max="100" value="10">
+      </label>
+      <label class="check"><input id="debug" type="checkbox"> Hiện query plan</label>
+      <button type="submit">Tìm kiếm</button>
+    </form>
+    <section id="status" aria-live="polite"></section>
+    <section id="results"></section>
+    <details id="debug-panel" hidden><summary>Query plan</summary><pre id="debug-output"></pre></details>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>
