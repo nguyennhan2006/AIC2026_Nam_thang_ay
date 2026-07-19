@@ -1,0 +1,563 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AIC 2026 — Kiến trúc đa cấu hình: thí nghiệm, demo, thi đấu</title>
+<script>
+  (() => {
+    let saved = null;
+    try { saved = localStorage.getItem('aic-theme'); } catch (_) {}
+    const dark = saved ? saved === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+    document.documentElement.classList.toggle('dark', dark);
+  })();
+</script>
+<style>
+  :root {
+    --bg:#f7f7f3; --surface:#fff; --surface-2:#efefe9; --ink:#151513;
+    --body:#44443f; --muted:#85857d; --line:#cecec5; --line-soft:#e5e5dd;
+    --shadow:0 10px 32px rgba(20,20,18,.11); --profile:#7c3aed;
+    --a:#2563eb; --a-soft:rgba(37,99,235,.09); --a-zone:rgba(37,99,235,.035);
+    --b:#0d9488; --b-soft:rgba(13,148,136,.09); --b-zone:rgba(13,148,136,.035);
+    --c:#16a34a; --c-soft:rgba(22,163,74,.09); --c-zone:rgba(22,163,74,.035);
+    --d:#6366f1; --d-soft:rgba(99,102,241,.10); --d-zone:rgba(99,102,241,.04);
+    --e:#d97706; --e-soft:rgba(217,119,6,.10); --e-zone:rgba(217,119,6,.04);
+    --f:#e11d48; --f-soft:rgba(225,29,72,.08); --f-zone:rgba(225,29,72,.035);
+    --g:#64748b; --g-soft:rgba(100,116,139,.09); --g-zone:rgba(100,116,139,.04);
+    --warn:#b45309; --warn-soft:#fef3c7; --ok:#15803d; --ok-soft:#dcfce7;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+    --mono:ui-monospace,"Cascadia Code","SFMono-Regular",Consolas,monospace;
+  }
+  html.dark {
+    --bg:#141413; --surface:#20201e; --surface-2:#2a2a27; --ink:#faf9f5;
+    --body:#d0d0c8; --muted:#919189; --line:#41413d; --line-soft:#2c2c29;
+    --shadow:0 12px 36px rgba(0,0,0,.35);
+    --a:#60a5fa; --a-soft:rgba(96,165,250,.13); --a-zone:rgba(96,165,250,.05);
+    --b:#2dd4bf; --b-soft:rgba(45,212,191,.12); --b-zone:rgba(45,212,191,.05);
+    --c:#4ade80; --c-soft:rgba(74,222,128,.12); --c-zone:rgba(74,222,128,.05);
+    --d:#818cf8; --d-soft:rgba(129,140,248,.14); --d-zone:rgba(129,140,248,.055);
+    --e:#fbbf24; --e-soft:rgba(251,191,36,.12); --e-zone:rgba(251,191,36,.05);
+    --f:#fb7185; --f-soft:rgba(251,113,133,.12); --f-zone:rgba(251,113,133,.05);
+    --g:#94a3b8; --g-soft:rgba(148,163,184,.12); --g-zone:rgba(148,163,184,.05);
+    --warn:#fbbf24; --warn-soft:rgba(251,191,36,.15); --ok:#86efac; --ok-soft:rgba(74,222,128,.13);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{display:flex;flex-direction:column;overflow:hidden;background:var(--bg);color:var(--body);font-family:var(--sans);-webkit-font-smoothing:antialiased}
+  button,input{font:inherit}
+
+  .topbar{flex:none;display:grid;grid-template-columns:minmax(300px,1fr) auto;gap:12px;padding:10px 16px;border-bottom:1px solid var(--line-soft);background:var(--bg)}
+  .brand h1{font-size:17px;line-height:1.25;color:var(--ink);letter-spacing:-.015em}
+  .brand .sub{margin-top:3px;font:10.5px/1.4 var(--mono);color:var(--muted)}
+  .toolbar{display:flex;align-items:center;justify-content:flex-end;gap:9px;flex-wrap:wrap}
+  .toolgroup{display:flex;align-items:center;gap:5px;padding-left:8px;border-left:1px solid var(--line-soft)}
+  .toolgroup:first-child{border-left:0;padding-left:0}
+  .tool-label{font:9.5px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-right:2px}
+  .chip,.icon-btn{border:1px solid var(--line);background:transparent;color:var(--muted);cursor:pointer;transition:.15s;border-radius:999px;font:10.5px/1 var(--mono);padding:6px 10px;white-space:nowrap}
+  .chip:hover,.icon-btn:hover{border-color:var(--muted);color:var(--ink)}
+  .chip.on{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+  .profile-chip.on{background:var(--profile);border-color:var(--profile);color:#fff}
+  .icon-btn{border-radius:7px}
+  .search{width:180px;border:1px solid var(--line);border-radius:7px;background:var(--surface);color:var(--ink);font:10.5px/1 var(--mono);padding:7px 9px;outline:none}
+  .search:focus{border-color:var(--profile);box-shadow:0 0 0 2px color-mix(in srgb,var(--profile) 20%,transparent)}
+
+  .stage{position:relative;flex:1;min-height:0;overflow:hidden}
+  .stage svg{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:grab;touch-action:none}
+  .stage.grabbing svg{cursor:grabbing}
+  .hint{position:absolute;left:15px;top:10px;pointer-events:none;font:10px/1.4 var(--mono);color:var(--muted)}
+
+  .zone rect{stroke-width:1.2;stroke-dasharray:6 5;rx:18}
+  .zone .zt{font:700 13px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase}
+  .zone .zs{font:10px/1 var(--mono);fill:var(--muted)}
+  .zA rect{fill:var(--a-zone);stroke:var(--a)} .zA .zt{fill:var(--a)}
+  .zB rect{fill:var(--b-zone);stroke:var(--b)} .zB .zt{fill:var(--b)}
+  .zC rect{fill:var(--c-zone);stroke:var(--c)} .zC .zt{fill:var(--c)}
+  .zD rect{fill:var(--d-zone);stroke:var(--d)} .zD .zt{fill:var(--d)}
+  .zE rect{fill:var(--e-zone);stroke:var(--e)} .zE .zt{fill:var(--e)}
+  .zF rect{fill:var(--f-zone);stroke:var(--f)} .zF .zt{fill:var(--f)}
+  .zG rect{fill:var(--g-zone);stroke:var(--g)} .zG .zt{fill:var(--g)}
+
+  .node{cursor:pointer;transition:opacity .18s}
+  .node .box{stroke-width:1.55;rx:12;transition:stroke .15s,fill .15s,stroke-dasharray .15s}
+  .node .title{font:700 15px/1 var(--sans);fill:var(--ink);pointer-events:none}
+  .node .line{font:10.4px/1 var(--mono);fill:var(--body);pointer-events:none}
+  .node .tagbox{fill:color-mix(in srgb,var(--profile) 13%,var(--surface));stroke:var(--profile);stroke-width:1;rx:9}
+  .node .tag{font:700 8.5px/1 var(--mono);letter-spacing:.06em;fill:var(--profile);text-anchor:middle;pointer-events:none}
+  .node.zA .box{fill:var(--a-soft);stroke:var(--a)} .node.zB .box{fill:var(--b-soft);stroke:var(--b)}
+  .node.zC .box{fill:var(--c-soft);stroke:var(--c)} .node.zD .box{fill:var(--d-soft);stroke:var(--d)}
+  .node.zE .box{fill:var(--e-soft);stroke:var(--e)} .node.zF .box{fill:var(--f-soft);stroke:var(--f)}
+  .node.zG .box{fill:var(--g-soft);stroke:var(--g)}
+  .node:hover .box,.node.sel .box{stroke:var(--profile)!important;stroke-width:2.5}
+  .node.status-benchmark .box{stroke-dasharray:5 3}
+  .node.status-planned .box{stroke-dasharray:2 4;fill:var(--surface)}
+  .node.status-gap .box{stroke:var(--warn)!important;stroke-dasharray:6 4}
+  .node.search-dim{opacity:.15}.node.search-hit .box{stroke:var(--profile)!important;stroke-width:2.8}
+
+  .edge{stroke:var(--muted);stroke-width:1.55;fill:none;marker-end:url(#arrow);transition:opacity .18s,stroke .18s}
+  .edge.dash{stroke-dasharray:5 4}
+  .elabel{font:9.5px/1 var(--mono);fill:var(--muted)}
+  .stage.flowing .edge,.stage.flowing .elabel{opacity:.1}
+  .stage.flowing .node{opacity:.2}
+  .stage.flowing .zone{opacity:.45}
+  .stage.flowing .edge.lit{opacity:1;stroke:var(--profile);marker-end:url(#arrowActive);stroke-dasharray:7 5;animation:march .9s linear infinite}
+  .stage.flowing .elabel.lit{opacity:1;fill:var(--profile)}
+  .stage.flowing .node.lit{opacity:1}
+  @keyframes march{to{stroke-dashoffset:-12}}
+  @media (prefers-reduced-motion:reduce){.stage.flowing .edge.lit{animation:none}}
+
+  .card{position:absolute;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow)}
+  #detail{display:none;right:15px;top:12px;width:390px;max-height:calc(100% - 78px);overflow:auto;padding:14px 16px}
+  #detail h3{color:var(--ink);font-size:16px;padding-right:25px}
+  #detail .meta{margin:3px 0 10px;font:10px/1.45 var(--mono);color:var(--muted)}
+  #detail .close{position:absolute;right:9px;top:7px;border:0;background:transparent;color:var(--muted);font-size:19px;cursor:pointer}
+  #detail .section{margin-top:10px;padding-top:9px;border-top:1px solid var(--line-soft)}
+  #detail .section:first-of-type{margin-top:0;padding-top:0;border-top:0}
+  #detail h4{font-size:11px;color:var(--profile);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px}
+  #detail p,#detail li{font-size:12.2px;line-height:1.55}
+  #detail ul{margin-left:17px}
+  #detail code,#profileCard code,#flowCard code{font:10.5px/1 var(--mono);color:var(--profile)}
+  #detail .ref{display:block;margin-top:8px;font:9.3px/1.45 var(--mono);color:var(--muted);word-break:break-word}
+  .status-pill{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:999px;padding:3px 7px;font:9px/1 var(--mono);margin-right:4px}
+  .status-pill.selected{border-color:var(--ok);color:var(--ok);background:var(--ok-soft)}
+  .status-pill.benchmark{border-color:var(--profile);color:var(--profile)}
+  .status-pill.planned,.status-pill.gap{border-color:var(--warn);color:var(--warn);background:var(--warn-soft)}
+
+  .leftstack{position:absolute;left:15px;bottom:15px;display:flex;flex-direction:column;gap:9px;max-width:590px}
+  #profileCard,#flowCard,#legend{position:static;padding:10px 13px}
+  #profileCard{display:grid;grid-template-columns:auto 1fr;gap:5px 12px;min-width:420px}
+  #profileCard .ptitle{grid-column:1/-1;font:700 11px/1.3 var(--mono);letter-spacing:.06em;color:var(--profile);text-transform:uppercase;margin-bottom:2px}
+  #profileCard .pk{font:9.7px/1.35 var(--mono);color:var(--muted);text-transform:uppercase}
+  #profileCard .pv{font:11px/1.35 var(--mono);color:var(--body)}
+  #flowCard{display:none}.stage.flowing #flowCard{display:block}
+  #flowCard .fname{font:700 10.5px/1.3 var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--profile);margin-bottom:5px}
+  #flowCard ol{margin-left:18px}#flowCard li{font-size:11.7px;line-height:1.5}
+  #legend{display:flex;gap:10px;flex-wrap:wrap}
+  #legend .li{display:flex;align-items:center;gap:5px;font:9.8px/1 var(--mono)}
+  #legend .sw{width:10px;height:10px;border-radius:3px;display:inline-block}
+  #legend .dash{background:transparent;border:1.5px dashed var(--profile)}
+  #legend .plan{background:transparent;border:1.5px dotted var(--warn)}
+
+  .ctrl{position:absolute;right:15px;bottom:15px;display:flex;align-items:center;gap:5px}
+  .ctrl button{height:34px;min-width:34px;padding:0 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);box-shadow:0 2px 10px rgba(0,0,0,.07);cursor:pointer;font:11px/1 var(--mono)}
+  .ctrl button:hover{border-color:var(--profile)}
+  #zoomPct{min-width:45px;text-align:center;font:10px/1 var(--mono);color:var(--muted)}
+
+  @media(max-width:1050px){
+    .topbar{grid-template-columns:1fr}.toolbar{justify-content:flex-start}.search{width:150px}
+    #detail{width:min(390px,calc(100% - 30px))}.leftstack{max-width:calc(100% - 30px)}
+  }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <h1>AIC 2026 — Kiến trúc đa cấu hình cho thí nghiệm, demo và thi đấu</h1>
+    <div class="sub">KIS · VQA · AVS | profile-aware | tài liệu + quyết định project + hiện trạng code được phân biệt rõ</div>
+  </div>
+  <div class="toolbar">
+    <div class="toolgroup" id="profileChips">
+      <span class="tool-label">Cấu hình</span>
+      <button class="chip profile-chip on" data-profile="experiment">Thí nghiệm</button>
+      <button class="chip profile-chip" data-profile="demo">Demo</button>
+      <button class="chip profile-chip" data-profile="production">Thi đấu / thực tế</button>
+    </div>
+    <div class="toolgroup" id="flowChips">
+      <span class="tool-label">Luồng</span>
+      <button class="chip on" data-flow="all">Toàn cảnh</button>
+      <button class="chip" data-flow="offline">Offline</button>
+      <button class="chip" data-flow="kis">KIS</button>
+      <button class="chip" data-flow="vqa">VQA</button>
+      <button class="chip" data-flow="avs">AVS</button>
+      <button class="chip" data-flow="infra">Hạ tầng</button>
+      <button class="chip" data-flow="gaps">Khoảng trống</button>
+    </div>
+    <div class="toolgroup">
+      <input id="searchBox" class="search" type="search" placeholder="Tìm model / module…" aria-label="Tìm model hoặc module">
+      <button class="icon-btn" id="helpBtn">Hướng dẫn</button>
+      <button class="icon-btn" id="themeToggle">Sáng / tối</button>
+    </div>
+  </div>
+</header>
+
+<main class="stage" id="stage">
+<svg id="svg" role="img" aria-label="Sơ đồ kiến trúc AIC 2026 theo cấu hình thí nghiệm, demo và thực tế">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.3" markerHeight="6.3" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--muted)"/></marker>
+    <marker id="arrowActive" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.3" markerHeight="6.3" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--profile)"/></marker>
+  </defs>
+  <g id="world">
+    <!-- zones -->
+    <g class="zone zA"><rect x="30" y="120" width="350" height="1190"/><text class="zt" x="50" y="152">A · Dữ liệu &amp; tiền xử lý</text><text class="zs" x="50" y="170">ingest → scene → keyframe → audio</text></g>
+    <g class="zone zB"><rect x="420" y="70" width="500" height="1240"/><text class="zt" x="440" y="102">B · Multimodal model workers</text><text class="zs" x="440" y="120">visual · MLLM · OCR · ASR · detection</text></g>
+    <g class="zone zC"><rect x="960" y="250" width="350" height="800"/><text class="zt" x="980" y="282">C · Chuẩn hoá metadata</text><text class="zs" x="980" y="300">schema · quality gate · provenance</text></g>
+    <g class="zone zD"><rect x="1350" y="120" width="360" height="1090"/><text class="zt" x="1370" y="152">D · Kho chỉ mục &amp; evidence</text><text class="zs" x="1370" y="170">dense · sparse · metadata lookup</text></g>
+    <g class="zone zE"><rect x="1750" y="70" width="500" height="1240"/><text class="zt" x="1770" y="102">E · Online retrieval</text><text class="zs" x="1770" y="120">query → search → fusion → rerank</text></g>
+    <g class="zone zF"><rect x="2290" y="70" width="620" height="900"/><text class="zt" x="2310" y="102">F · Task &amp; giao diện</text><text class="zs" x="2310" y="120">KIS · VQA · AVS · evidence UI</text></g>
+    <g class="zone zG"><rect x="2290" y="1010" width="620" height="390"/><text class="zt" x="2310" y="1042">G · Hạ tầng xuyên suốt</text><text class="zs" x="2310" y="1060">serving · eval · monitoring · feedback</text></g>
+
+    <!-- edges: A -->
+    <path class="edge" id="e01" d="M205,310 L205,385"/>
+    <path class="edge" id="e02" d="M205,535 L205,610"/>
+    <path class="edge" id="e03" d="M140,310 C60,345 42,600 42,860 C42,940 48,975 55,1000"/>
+    <path class="edge" id="e04" d="M355,685 C400,685 400,230 445,230"/>
+    <path class="edge" id="e05" d="M355,720 C405,720 400,440 445,440"/>
+    <path class="edge" id="e06" d="M355,755 C405,755 400,645 445,645"/>
+    <path class="edge" id="e07" d="M355,782 C405,782 400,855 445,855"/>
+    <path class="edge" id="e08" d="M355,1010 C400,1010 400,1080 445,1080"/>
+
+    <!-- B -> C -->
+    <path class="edge" id="e09" d="M895,250 C940,250 930,450 985,450"/>
+    <path class="edge" id="e10" d="M895,455 C945,455 930,500 985,500"/>
+    <path class="edge" id="e11" d="M895,660 C945,660 930,550 985,550"/>
+    <path class="edge" id="e12" d="M895,865 C945,865 930,600 985,600"/>
+    <path class="edge" id="e13" d="M895,1075 C945,1075 930,635 985,635"/>
+
+    <!-- C internal and D -->
+    <path class="edge" id="e14" d="M1145,650 L1145,720"/>
+    <path class="edge" id="e15" d="M1145,850 L1145,915"/>
+    <path class="edge" id="e16" d="M1285,745 C1335,700 1320,300 1375,300"/>
+    <path class="edge" id="e17" d="M1285,775 C1335,775 1320,600 1375,600"/>
+    <path class="edge" id="e18" d="M1285,805 C1335,830 1320,900 1375,900"/>
+
+    <!-- D/E -->
+    <path class="edge" id="e19" d="M1685,300 C1730,300 1720,485 1775,485"/>
+    <path class="edge" id="e20" d="M1685,600 C1735,600 1720,535 1775,535"/>
+    <path class="edge" id="e21" d="M1685,900 C1740,900 1720,1030 1775,1030"/>
+    <path class="edge" id="e22" d="M2000,350 L2000,385"/>
+    <path class="edge" id="e23" d="M2000,615 L2000,700"/>
+    <path class="edge" id="e24" d="M2000,840 L2000,915"/>
+    <path class="edge" id="e25" d="M2000,1080 L2000,1160"/>
+
+    <!-- E/F -->
+    <path class="edge" id="e26" d="M2225,950 C2270,915 2260,245 2315,245"/>
+    <path class="edge" id="e27" d="M2225,985 C2270,985 2260,470 2315,470"/>
+    <path class="edge" id="e28" d="M2225,1020 C2270,1050 2260,700 2315,700"/>
+    <path class="edge" id="e29" d="M2570,245 C2620,245 2608,470 2660,470"/>
+    <path class="edge" id="e30" d="M2570,490 C2612,490 2620,505 2660,505"/>
+    <path class="edge" id="e31" d="M2570,700 C2620,700 2608,545 2660,545"/>
+
+    <!-- infra dashed -->
+    <path class="edge dash" id="e32" d="M2315,1170 C2250,1345 2150,1345 1900,1345 L800,1345 C700,1345 670,1300 670,1160"/>
+    <path class="edge dash" id="e33" d="M2315,1135 C2272,1135 2260,1050 2229,1050"/>
+    <path class="edge dash" id="e34" d="M2315,1322 C2050,1430 1500,1360 1160,1028"/>
+    <path class="edge dash" id="e35" d="M2780,1095 L2780,608"/>
+
+    <text class="elabel" data-e="e04" x="390" y="342">keyframes</text>
+    <text class="elabel" data-e="e03" x="52" y="925">audio</text>
+    <text class="elabel" data-e="e16" x="1315" y="385">vectors</text>
+    <text class="elabel" data-e="e17" x="1315" y="560">text fields</text>
+    <text class="elabel" data-e="e19" x="1700" y="390">dense top-k</text>
+    <text class="elabel" data-e="e20" x="1700" y="590">sparse top-k</text>
+    <text class="elabel" data-e="e21" x="1700" y="970">evidence pack</text>
+
+    <!-- A nodes -->
+    <g class="node zA" data-k="video"><rect class="box" x="55" y="205" width="300" height="105"/><text class="title" x="75" y="240">Nguồn video &amp; manifest</text><text class="line l1" x="75" y="267"></text><text class="line l2" x="75" y="286"></text><rect class="tagbox" x="285" y="218" width="56" height="18"/><text class="tag" x="313" y="231"></text></g>
+    <g class="node zA" data-k="scene"><rect class="box" x="55" y="385" width="300" height="150"/><text class="title" x="75" y="420">Tách scene / shot</text><text class="line l1" x="75" y="449"></text><text class="line l2" x="75" y="470"></text><text class="line l3" x="75" y="491"></text><rect class="tagbox" x="285" y="398" width="56" height="18"/><text class="tag" x="313" y="411"></text></g>
+    <g class="node zA" data-k="keyframe"><rect class="box" x="55" y="610" width="300" height="180"/><text class="title" x="75" y="645">Chọn keyframe</text><text class="line l1" x="75" y="674"></text><text class="line l2" x="75" y="695"></text><text class="line l3" x="75" y="716"></text><text class="line l4" x="75" y="737"></text><rect class="tagbox" x="285" y="623" width="56" height="18"/><text class="tag" x="313" y="636"></text></g>
+    <g class="node zA" data-k="audio"><rect class="box" x="55" y="940" width="300" height="140"/><text class="title" x="75" y="975">Audio extraction &amp; VAD</text><text class="line l1" x="75" y="1004"></text><text class="line l2" x="75" y="1025"></text><text class="line l3" x="75" y="1046"></text><rect class="tagbox" x="285" y="953" width="56" height="18"/><text class="tag" x="313" y="966"></text></g>
+
+    <!-- B nodes -->
+    <g class="node zB" data-k="visual"><rect class="box" x="445" y="155" width="450" height="155"/><text class="title" x="465" y="190">Visual embedding</text><text class="line l1" x="465" y="219"></text><text class="line l2" x="465" y="240"></text><text class="line l3" x="465" y="261"></text><rect class="tagbox" x="825" y="168" width="56" height="18"/><text class="tag" x="853" y="181"></text></g>
+    <g class="node zB" data-k="caption"><rect class="box" x="445" y="360" width="450" height="170"/><text class="title" x="465" y="395">Caption &amp; semantic OCR</text><text class="line l1" x="465" y="424"></text><text class="line l2" x="465" y="445"></text><text class="line l3" x="465" y="466"></text><text class="line l4" x="465" y="487"></text><rect class="tagbox" x="825" y="373" width="56" height="18"/><text class="tag" x="853" y="386"></text></g>
+    <g class="node zB" data-k="ocr"><rect class="box" x="445" y="570" width="450" height="160"/><text class="title" x="465" y="605">OCR chính xác ký tự</text><text class="line l1" x="465" y="634"></text><text class="line l2" x="465" y="655"></text><text class="line l3" x="465" y="676"></text><rect class="tagbox" x="825" y="583" width="56" height="18"/><text class="tag" x="853" y="596"></text></g>
+    <g class="node zB" data-k="detect"><rect class="box" x="445" y="775" width="450" height="175"/><text class="title" x="465" y="810">Object · action · tracking</text><text class="line l1" x="465" y="839"></text><text class="line l2" x="465" y="860"></text><text class="line l3" x="465" y="881"></text><text class="line l4" x="465" y="902"></text><rect class="tagbox" x="825" y="788" width="56" height="18"/><text class="tag" x="853" y="801"></text></g>
+    <g class="node zB" data-k="asr"><rect class="box" x="445" y="990" width="450" height="165"/><text class="title" x="465" y="1025">ASR &amp; timestamp alignment</text><text class="line l1" x="465" y="1054"></text><text class="line l2" x="465" y="1075"></text><text class="line l3" x="465" y="1096"></text><rect class="tagbox" x="825" y="1003" width="56" height="18"/><text class="tag" x="853" y="1016"></text></g>
+
+    <!-- C nodes -->
+    <g class="node zC" data-k="metadata"><rect class="box" x="985" y="395" width="300" height="255"/><text class="title" x="1005" y="430">Metadata contract</text><text class="line l1" x="1005" y="459"></text><text class="line l2" x="1005" y="480"></text><text class="line l3" x="1005" y="501"></text><text class="line l4" x="1005" y="522"></text><text class="line l5" x="1005" y="543"></text><rect class="tagbox" x="1215" y="408" width="56" height="18"/><text class="tag" x="1243" y="421"></text></g>
+    <g class="node zC" data-k="quality"><rect class="box" x="985" y="720" width="300" height="130"/><text class="title" x="1005" y="755">Quality gate &amp; dedup</text><text class="line l1" x="1005" y="784"></text><text class="line l2" x="1005" y="805"></text><rect class="tagbox" x="1215" y="733" width="56" height="18"/><text class="tag" x="1243" y="746"></text></g>
+    <g class="node zC" data-k="orchestrate"><rect class="box" x="985" y="915" width="300" height="105"/><text class="title" x="1005" y="950">Run state &amp; versioning</text><text class="line l1" x="1005" y="979"></text><text class="line l2" x="1005" y="1000"></text><rect class="tagbox" x="1215" y="928" width="56" height="18"/><text class="tag" x="1243" y="941"></text></g>
+
+    <!-- D nodes -->
+    <g class="node zD" data-k="dense"><rect class="box" x="1375" y="220" width="310" height="160"/><text class="title" x="1395" y="255">Dense index</text><text class="line l1" x="1395" y="284"></text><text class="line l2" x="1395" y="305"></text><text class="line l3" x="1395" y="326"></text><rect class="tagbox" x="1615" y="233" width="56" height="18"/><text class="tag" x="1643" y="246"></text></g>
+    <g class="node zD" data-k="sparse"><rect class="box" x="1375" y="515" width="310" height="170"/><text class="title" x="1395" y="550">Sparse / lexical index</text><text class="line l1" x="1395" y="579"></text><text class="line l2" x="1395" y="600"></text><text class="line l3" x="1395" y="621"></text><text class="line l4" x="1395" y="642"></text><rect class="tagbox" x="1615" y="528" width="56" height="18"/><text class="tag" x="1643" y="541"></text></g>
+    <g class="node zD" data-k="evidence"><rect class="box" x="1375" y="820" width="310" height="170"/><text class="title" x="1395" y="855">Metadata DB &amp; evidence store</text><text class="line l1" x="1395" y="884"></text><text class="line l2" x="1395" y="905"></text><text class="line l3" x="1395" y="926"></text><text class="line l4" x="1395" y="947"></text><rect class="tagbox" x="1615" y="833" width="56" height="18"/><text class="tag" x="1643" y="846"></text></g>
+
+    <!-- E nodes -->
+    <g class="node zE" data-k="query"><rect class="box" x="1775" y="170" width="450" height="180"/><text class="title" x="1795" y="205">Query understanding &amp; routing</text><text class="line l1" x="1795" y="234"></text><text class="line l2" x="1795" y="255"></text><text class="line l3" x="1795" y="276"></text><text class="line l4" x="1795" y="297"></text><rect class="tagbox" x="2155" y="183" width="56" height="18"/><text class="tag" x="2183" y="196"></text></g>
+    <g class="node zE" data-k="search"><rect class="box" x="1775" y="385" width="450" height="230"/><text class="title" x="1795" y="420">Tìm kiếm đa chỉ mục song song</text><text class="line l1" x="1795" y="449"></text><text class="line l2" x="1795" y="470"></text><text class="line l3" x="1795" y="491"></text><text class="line l4" x="1795" y="512"></text><text class="line l5" x="1795" y="533"></text><rect class="tagbox" x="2155" y="398" width="56" height="18"/><text class="tag" x="2183" y="411"></text></g>
+    <g class="node zE" data-k="fusion"><rect class="box" x="1775" y="700" width="450" height="140"/><text class="title" x="1795" y="735">Fusion &amp; segment aggregation</text><text class="line l1" x="1795" y="764"></text><text class="line l2" x="1795" y="785"></text><text class="line l3" x="1795" y="806"></text><rect class="tagbox" x="2155" y="713" width="56" height="18"/><text class="tag" x="2183" y="726"></text></g>
+    <g class="node zE" data-k="rerank"><rect class="box" x="1775" y="915" width="450" height="165"/><text class="title" x="1795" y="950">Cascaded reranking</text><text class="line l1" x="1795" y="979"></text><text class="line l2" x="1795" y="1000"></text><text class="line l3" x="1795" y="1021"></text><text class="line l4" x="1795" y="1042"></text><rect class="tagbox" x="2155" y="928" width="56" height="18"/><text class="tag" x="2183" y="941"></text></g>
+    <g class="node zE" data-k="resilience"><rect class="box" x="1775" y="1160" width="450" height="110"/><text class="title" x="1795" y="1195">Timeout · cache · fail policy</text><text class="line l1" x="1795" y="1224"></text><text class="line l2" x="1795" y="1245"></text><rect class="tagbox" x="2155" y="1173" width="56" height="18"/><text class="tag" x="2183" y="1186"></text></g>
+
+    <!-- F nodes -->
+    <g class="node zF" data-k="kis"><rect class="box" x="2315" y="170" width="255" height="145"/><text class="title" x="2335" y="205">KIS</text><text class="line l1" x="2335" y="234"></text><text class="line l2" x="2335" y="255"></text><text class="line l3" x="2335" y="276"></text><rect class="tagbox" x="2500" y="183" width="56" height="18"/><text class="tag" x="2528" y="196"></text></g>
+    <g class="node zF" data-k="vqa"><rect class="box" x="2315" y="400" width="255" height="140"/><text class="title" x="2335" y="435">VQA</text><text class="line l1" x="2335" y="464"></text><text class="line l2" x="2335" y="485"></text><text class="line l3" x="2335" y="506"></text><rect class="tagbox" x="2500" y="413" width="56" height="18"/><text class="tag" x="2528" y="426"></text></g>
+    <g class="node zF" data-k="avs"><rect class="box" x="2315" y="625" width="255" height="145"/><text class="title" x="2335" y="660">AVS</text><text class="line l1" x="2335" y="689"></text><text class="line l2" x="2335" y="710"></text><text class="line l3" x="2335" y="731"></text><rect class="tagbox" x="2500" y="638" width="56" height="18"/><text class="tag" x="2528" y="651"></text></g>
+    <g class="node zF" data-k="ui"><rect class="box" x="2660" y="410" width="225" height="190"/><text class="title" x="2680" y="445">UI &amp; evidence</text><text class="line l1" x="2680" y="474"></text><text class="line l2" x="2680" y="495"></text><text class="line l3" x="2680" y="516"></text><text class="line l4" x="2680" y="537"></text><rect class="tagbox" x="2815" y="423" width="56" height="18"/><text class="tag" x="2843" y="436"></text></g>
+
+    <!-- G nodes -->
+    <g class="node zG" data-k="serving"><rect class="box" x="2315" y="1100" width="255" height="140"/><text class="title" x="2335" y="1135">Serving &amp; scheduling</text><text class="line l1" x="2335" y="1164"></text><text class="line l2" x="2335" y="1185"></text><text class="line l3" x="2335" y="1206"></text><rect class="tagbox" x="2500" y="1113" width="56" height="18"/><text class="tag" x="2528" y="1126"></text></g>
+    <g class="node zG" data-k="eval"><rect class="box" x="2315" y="1270" width="255" height="105"/><text class="title" x="2335" y="1305">Đánh giá &amp; ablation</text><text class="line l1" x="2335" y="1334"></text><text class="line l2" x="2335" y="1355"></text><rect class="tagbox" x="2500" y="1283" width="56" height="18"/><text class="tag" x="2528" y="1296"></text></g>
+    <g class="node zG" data-k="monitor"><rect class="box" x="2630" y="1100" width="255" height="275"/><text class="title" x="2650" y="1135">Logging · monitoring · feedback</text><text class="line l1" x="2650" y="1164"></text><text class="line l2" x="2650" y="1185"></text><text class="line l3" x="2650" y="1206"></text><text class="line l4" x="2650" y="1227"></text><text class="line l5" x="2650" y="1248"></text><rect class="tagbox" x="2815" y="1113" width="56" height="18"/><text class="tag" x="2843" y="1126"></text></g>
+  </g>
+</svg>
+
+<div class="hint">lăn chuột: zoom · kéo nền: pan · bấm node: chi tiết · đổi “Cấu hình” để xem đúng model thí nghiệm/demo/thi đấu</div>
+
+<div class="leftstack">
+  <section class="card" id="profileCard">
+    <div class="ptitle" id="pTitle"></div>
+    <div class="pk">Mục tiêu</div><div class="pv" id="pGoal"></div>
+    <div class="pk">Compute</div><div class="pv" id="pCompute"></div>
+    <div class="pk">Nguyên tắc</div><div class="pv" id="pPolicy"></div>
+  </section>
+  <section class="card" id="flowCard"><div class="fname" id="flowName"></div><ol id="flowSteps"></ol></section>
+  <section class="card" id="legend">
+    <span class="li"><span class="sw" style="background:var(--a)"></span>preprocess</span>
+    <span class="li"><span class="sw" style="background:var(--b)"></span>model</span>
+    <span class="li"><span class="sw" style="background:var(--d)"></span>index</span>
+    <span class="li"><span class="sw" style="background:var(--c)"></span>metadata</span>
+    <span class="li"><span class="sw" style="background:var(--e)"></span>retrieval</span>
+    <span class="li"><span class="sw" style="background:var(--f)"></span>task/UI</span>
+    <span class="li"><span class="sw" style="background:var(--g)"></span>hạ tầng</span>
+    <span class="li"><span class="sw dash"></span>benchmark</span>
+    <span class="li"><span class="sw plan"></span>planned / gap</span>
+  </section>
+</div>
+
+<aside class="card" id="detail">
+  <button class="close" id="detailClose" aria-label="Đóng">×</button>
+  <h3 id="detailTitle">Cách đọc sơ đồ</h3>
+  <div class="meta" id="detailMeta">Cấu hình đang chọn quyết định model hiển thị trong từng node.</div>
+  <div id="detailBody">
+    <div class="section"><h4>Ba lớp cần phân biệt</h4><p><b>Thí nghiệm</b> liệt kê các model phải benchmark; <b>Demo</b> là cấu hình ổn định để trình diễn end-to-end; <b>Thi đấu / thực tế</b> là cấu hình chất lượng cao, có versioning, resume, kiểm soát lỗi và evidence đầy đủ.</p></div>
+    <div class="section"><h4>Trạng thái</h4><p>Viền đứt là model/thuật toán đang benchmark. Viền chấm hoặc vàng là thành phần mục tiêu nhưng chưa được xác nhận đã nối production.</p></div>
+  </div>
+</aside>
+
+<div class="ctrl"><button id="zoomOut">−</button><span id="zoomPct">100%</span><button id="zoomIn">+</button><button id="zoomFit">Vừa màn hình</button></div>
+</main>
+
+<script>
+const PROFILE_META = {
+  experiment:{label:'THÍ NGHIỆM / BENCHMARK',color:'#7c3aed',colorDark:'#a78bfa',goal:'So sánh model, tham số và ablation; chưa xem một model là lựa chọn cuối khi chưa có metric.',compute:'Local RTX 4050 smoke test · Kaggle T4/T4x2 · A100 cho model lớn',policy:'Notebook độc lập, cùng gold input, output riêng; fail-fast, lưu config/model/prompt/version.'},
+  demo:{label:'DEMO END-TO-END',color:'#0284c7',colorDark:'#38bdf8',goal:'Chạy ổn định từ video → index → KIS/VQA/AVS trên UI local gọi backend Vast.ai.',compute:'Một GPU server Vast.ai (ưu tiên A100) + UI local; batch vừa, latency chấp nhận được',policy:'Chọn một cấu hình rõ ràng; không tự động rơi về mock/fallback. Lỗi phải hiển thị minh bạch.'},
+  production:{label:'THI ĐẤU / THỰC TẾ',color:'#dc2626',colorDark:'#f87171',goal:'Tối đa chất lượng truy hồi và độ tin cậy evidence, vẫn đáp ứng latency và khả năng khôi phục.',compute:'GPU workers tách biệt · storage/index versioned · API server · job queue/resume',policy:'Cascaded retrieval, task-aware rerank, provenance đầy đủ, timeout có trạng thái; không silent degradation.'}
+};
+
+const NODES = {
+  video:{title:'Nguồn video & manifest',zone:'A · dữ liệu',ref:'Tài liệu project: video_manifest, checksum, frame_idx canonical; hiện trạng HTML cũ có ffprobe/SHA-256.',profiles:{
+    experiment:{status:'benchmark',lines:['MP4 sample + ffprobe/hash','sweep codec/fps/resolution groups'],models:['ffmpeg/ffprobe','SHA-256','Parquet manifest']},
+    demo:{status:'selected',lines:['strict video_id + checksum','MP4/MKV/WebM ingestion'],models:['ffmpeg/ffprobe','Pydantic manifest']},
+    production:{status:'selected',lines:['manifest + quarantine lỗi','provenance + incremental ingest'],models:['ffmpeg/ffprobe','checksum store','versioned manifest']}
+  }},
+  scene:{title:'Tách scene / shot',zone:'A · preprocess',ref:'Quyết định pipeline metadata: TransNetV2; fixed-window chỉ là fallback có ghi nguồn.',profiles:{
+    experiment:{status:'benchmark',lines:['TransNetV2 vs PySceneDetect','threshold/min-length sweep','đo boundary F1 + retrieval gain'],models:['TransNetV2','PySceneDetect','fixed-window baseline']},
+    demo:{status:'selected',lines:['TransNetV2 primary','fixed-window fallback có cờ','scene manifest ổn định'],models:['TransNetV2','ffmpeg window fallback']},
+    production:{status:'selected',lines:['TransNetV2 tuned theo data','merge/split scene quá ngắn/dài','incremental scene version'],models:['TransNetV2 tuned','quality-aware postprocess']}
+  }},
+  keyframe:{title:'Chọn keyframe',zone:'A · preprocess',ref:'Project đã chốt chỉ giữ keyframe sau cosine-similarity dedup, không lưu toàn bộ frame trùng nội dung.',profiles:{
+    experiment:{status:'benchmark',lines:['1/3/5/8 frame mỗi scene','middle/uniform/boundary','cosine threshold + blur sweep','OCR hit / evidence coverage'],models:['OpenCLIP embeddings','Laplacian blur','HSV histogram']},
+    demo:{status:'selected',lines:['scene candidates','CLIP cosine dedup','giữ frame_idx + timestamp','neighbor frame cho OCR'],models:['OpenCLIP ViT-L/14','OpenCV blur score']},
+    production:{status:'selected',lines:['cosine + blur + motion','OCR/action-aware sampling','thumbnail + feature mapping','không null metadata'],models:['SigLIP2/CLIP feature gate','optical-flow/motion score']}
+  }},
+  audio:{title:'Audio extraction & VAD',zone:'A · preprocess',ref:'ASR contract cần audio 16 kHz mono, timestamp map về scene/segment.',profiles:{
+    experiment:{status:'benchmark',lines:['chunk 15/30/60 s','VAD on/off + overlap','đo WER + timestamp error'],models:['ffmpeg','Silero VAD candidate']},
+    demo:{status:'selected',lines:['ffmpeg 16 kHz mono','chunk 30 s + overlap','map transcript → scene'],models:['ffmpeg','Whisper pipeline VAD']},
+    production:{status:'selected',lines:['VAD + overlap-resolve','resume per audio chunk','speaker-ready timestamps'],models:['ffmpeg','Silero VAD','interval join']}
+  }},
+  visual:{title:'Visual embedding',zone:'B · multimodal worker',ref:'Hướng search hiện tại có nhánh cosine query-vs-keyframe; CLIP là baseline, SigLIP2/InternVideo2 là thí nghiệm nâng cấp.',profiles:{
+    experiment:{status:'benchmark',lines:['CLIP · SigLIP/SigLIP2','EVA-CLIP · InternVideo2','resolution/pooling/index ablation'],models:['OpenCLIP ViT-B/32','OpenCLIP ViT-L/14','SigLIP2','EVA-CLIP','InternVideo2']},
+    demo:{status:'selected',lines:['OpenCLIP ViT-L/14','L2 normalize · 768-d','frame → scene mean/top pooling'],models:['OpenCLIP ViT-L/14']},
+    production:{status:'selected',lines:['SigLIP2/CLIP ensemble','frame + clip-level vectors','calibrated score by query type'],models:['SigLIP2','OpenCLIP ViT-L/14','InternVideo2 candidate after ablation']}
+  }},
+  caption:{title:'Caption & semantic OCR',zone:'B · multimodal worker',ref:'Pipeline notebook của project xác định Qwen3-VL-32B-Instruct là model chuẩn cho scene clip; model nhỏ hơn chỉ dùng ablation.',profiles:{
+    experiment:{status:'benchmark',lines:['Qwen3-VL 8B/32B','Qwen2.5-VL · Florence-2','single vs multi-frame prompt','JSON factuality gate'],models:['Qwen3-VL-8B-Instruct','Qwen3-VL-32B-Instruct','Qwen2.5-VL-7B','Florence-2-large']},
+    demo:{status:'selected',lines:['Qwen3-VL-32B-Instruct','scene clip + dedup keyframes','caption/object/action/text JSON','A100 server; không auto fallback'],models:['Qwen3-VL-32B-Instruct']},
+    production:{status:'selected',lines:['Qwen3-VL-32B primary','multi-frame temporal caption','semantic OCR + uncertainty','hard-case recheck có evidence'],models:['Qwen3-VL-32B-Instruct','prompt/version registry']}
+  }},
+  ocr:{title:'OCR chính xác ký tự',zone:'B · multimodal worker',ref:'Project OCR benchmark bao gồm PaddleOCR, EasyOCR, TrOCR và VLM OCR; production cần tách exact OCR khỏi semantic OCR.',profiles:{
+    experiment:{status:'benchmark',lines:['PaddleOCR vs EasyOCR','TrOCR crop recognition','Qwen semantic OCR compare','CER/WER/exact match'],models:['PaddleOCR','EasyOCR','TrOCR','Qwen3-VL OCR']},
+    demo:{status:'selected',lines:['PaddleOCR vi+en','keyframe + neighbor frame','confidence filter + normalize'],models:['PaddleOCR']},
+    production:{status:'selected',lines:['PaddleOCR exact text','Qwen3-VL verify frame khó','bbox merge + numeric candidates'],models:['PaddleOCR','Qwen3-VL-32B semantic verification']}
+  }},
+  detect:{title:'Object · action · tracking',zone:'B · multimodal worker',ref:'Object/action metadata là nguồn tìm kiếm; tracking/re-ID cần cho VQA count/follow-up nhưng chưa phải phần đã chốt trong code hiện tại.',profiles:{
+    experiment:{status:'benchmark',lines:['YOLOv8/RT-DETR/OWLv2','Grounding DINO + Florence-2','ByteTrack/DeepSORT + OSNet','action tags: VLM vs model riêng'],models:['YOLOv8','RT-DETR','OWLv2','Grounding DINO','ByteTrack','OSNet']},
+    demo:{status:'selected',lines:['YOLOv8 closed-set','OWLv2 query/open labels','action tags từ Qwen caption','tracking chỉ bật cho VQA hard'],models:['YOLOv8','OWLv2','Qwen3-VL action tags']},
+    production:{status:'planned',lines:['YOLO + Grounding DINO','ByteTrack + OSNet re-ID','track-level count/relations','dedicated action model nếu tăng metric'],models:['YOLOv8/11','Grounding DINO','ByteTrack','OSNet']}
+  }},
+  asr:{title:'ASR & timestamp alignment',zone:'B · multimodal worker',ref:'Whisper large-v3 là lựa chọn chính; WhisperX thêm word timestamp và diarization khi thật sự cần.',profiles:{
+    experiment:{status:'benchmark',lines:['Whisper small/medium/large-v3','faster-whisper vs transformers','WhisperX/diarization ablation'],models:['Whisper small','Whisper medium','Whisper large-v3','faster-whisper','WhisperX']},
+    demo:{status:'selected',lines:['Whisper large-v3-turbo','30 s chunks + timestamps','vi/en auto language'],models:['Whisper large-v3-turbo']},
+    production:{status:'selected',lines:['Whisper large-v3','WhisperX word alignment','pyannote khi speaker cần thiết'],models:['Whisper large-v3','WhisperX','pyannote.audio optional']}
+  }},
+  metadata:{title:'Metadata contract',zone:'C · data contract',ref:'Canonical data model: Video → Scene → Keyframe, OCRInstance, ASRSegment, SceneKeyword, provenance, separate feature_store mapping.',profiles:{
+    experiment:{status:'selected',lines:['JSONL/Parquet per notebook','raw/parsed/accepted/failed','embedding/histogram separate .npy','config snapshot + run_id'],models:['Pydantic v2','JSONL','Parquet','NumPy feature store']},
+    demo:{status:'selected',lines:['Video→Scene→Keyframe strict','caption/OCR/ASR/object tables','atomic export + manifest','không null required fields'],models:['Pydantic v2','Parquet/JSONL']},
+    production:{status:'selected',lines:['stable IDs + checksums','model/prompt/index provenance','schema migration/version','reverse map index→frame_idx'],models:['Pydantic contracts','Parquet','object storage']}
+  }},
+  quality:{title:'Quality gate & dedup',zone:'C · data contract',ref:'Tài liệu yêu cầu quality_scores; hiện trạng cần hoàn thiện threshold và gate trước khi index.',profiles:{
+    experiment:{status:'benchmark',lines:['blur/motion/OCR confidence','caption factuality thresholds'],models:['OpenCV quality signals','CLIPScore/visual verification']},
+    demo:{status:'selected',lines:['reject invalid/non-null fail','cosine duplicate suppression'],models:['Pydantic validation','cosine threshold']},
+    production:{status:'selected',lines:['calibrated confidence gate','quarantine + audit reason'],models:['quality policy registry','human audit samples']}
+  }},
+  orchestrate:{title:'Run state & versioning',zone:'C · data contract',ref:'Project yêu cầu resume, model/index versions và chạy heavy workers trên Vast.ai.',profiles:{
+    experiment:{status:'selected',lines:['independent notebooks','run_id + metrics + report'],models:['Kaggle notebooks','JSON ledger']},
+    demo:{status:'selected',lines:['per-video JobLedger','idempotent stage outputs'],models:['JobLedger','atomic writes']},
+    production:{status:'planned',lines:['queue + retries + GPU slots','incremental index + rollback'],models:['Celery/RQ/Ray candidate','versioned index manager']}
+  }},
+  dense:{title:'Dense index',zone:'D · index',ref:'FAISS is v1 baseline; Qdrant/Milvus are server alternatives. Production selection must be backed by latency/recall/index-size tests.',profiles:{
+    experiment:{status:'benchmark',lines:['FAISS FlatIP/IVF-PQ/HNSW','Qdrant HNSW compare','nlist/nprobe/ef sweep'],models:['FAISS','Qdrant','Milvus candidate']},
+    demo:{status:'selected',lines:['FAISS FlatIP artifact','Qdrant cosine payload filter','index version in manifest'],models:['FAISS IndexFlatIP','Qdrant']},
+    production:{status:'selected',lines:['Qdrant HNSW or tuned FAISS','snapshot + atomic publish','frame/scene named vectors'],models:['Qdrant HNSW','FAISS IVF/HNSW after benchmark']}
+  }},
+  sparse:{title:'Sparse / lexical index',zone:'D · index',ref:'Sparse retrieval là bắt buộc cho tên riêng, số, OCR và ASR; BM25 là baseline, SPLADE/BGE-M3/ColBERT là thí nghiệm.',profiles:{
+    experiment:{status:'benchmark',lines:['BM25 · SPLADE · BGE-M3','ColBERT late interaction','field weight/k1/b sweep','VI/EN expansion test'],models:['BM25','SPLADE','BGE-M3 sparse','ColBERT']},
+    demo:{status:'selected',lines:['BM25 caption/OCR/ASR/tags','field boost + exact phrase','build from metadata artifact'],models:['BM25','Elasticsearch optional']},
+    production:{status:'selected',lines:['Elasticsearch/OpenSearch BM25','SPLADE/BGE-M3 only if gain','separate analyzers vi/en'],models:['Elasticsearch/OpenSearch','BM25','SPLADE/BGE-M3 candidate']}
+  }},
+  evidence:{title:'Metadata DB & evidence store',zone:'D · index',ref:'Evidence pack phải lookup được video_id/scene_id/frame_idx/timestamp và nén context cho rerank/VQA.',profiles:{
+    experiment:{status:'selected',lines:['Parquet/JSONL + DuckDB','candidate evidence snapshots'],models:['Parquet','DuckDB']},
+    demo:{status:'selected',lines:['Parquet + SQLite/DuckDB','thumbnail/media lookup API'],models:['Parquet','SQLite/DuckDB']},
+    production:{status:'selected',lines:['object storage + metadata DB','evidence pack cache/version','audit/debug API'],models:['Parquet/object storage','DuckDB/Postgres candidate']}
+  }},
+  query:{title:'Query understanding & routing',zone:'E · online',ref:'Canonical task set là KIS/VQA/AVS. Query schema tách visual/OCR/ASR/temporal/negative constraints và route từng index.',profiles:{
+    experiment:{status:'benchmark',lines:['rule vs structured LLM parser','Qwen2.5-7B / Qwen3 text','Gemini/Claude teacher labels','VI→EN drift evaluation'],models:['Rule planner','Qwen2.5-7B-Instruct','Qwen3-8B/14B','API teacher']},
+    demo:{status:'selected',lines:['user chọn KIS/VQA/AVS','Qwen2.5-7B strict JSON','3 query rewrites per modality','schema validation + retry'],models:['Qwen2.5-7B-Instruct','Pydantic JSON schema']},
+    production:{status:'selected',lines:['task-aware structured parser','Qwen3-14B/strong text LLM','must/nice/negative/temporal','query version + confidence'],models:['Qwen3-14B-Instruct candidate','strict schema parser']}
+  }},
+  search:{title:'Tìm kiếm đa chỉ mục song song',zone:'E · online',ref:'Hai nhánh cốt lõi: cosine visual và metadata lexical; OCR/ASR/object/action là nhánh riêng, chạy song song.',profiles:{
+    experiment:{status:'benchmark',lines:['top-k 100/300/1000','dense+sparse branch ablation','metadata early filter','latency/failure injection'],models:['FAISS/Qdrant','BM25/SPLADE','async search']},
+    demo:{status:'selected',lines:['CLIP dense + 4 BM25 fields','OCR exact + ASR lexical','async gather + explicit error'],models:['FAISS/Qdrant','BM25','FastAPI asyncio']},
+    production:{status:'selected',lines:['SigLIP/CLIP dense','Elastic sparse + OCR/ASR','object/temporal candidate refine','per-branch deadline/status'],models:['Qdrant/FAISS','Elasticsearch','async orchestration']}
+  }},
+  fusion:{title:'Fusion & segment aggregation',zone:'E · online',ref:'RRF được ưu tiên vì score giữa nhánh không cùng thang; weighted sum là baseline cần chuẩn hoá.',profiles:{
+    experiment:{status:'benchmark',lines:['weighted sum vs RRF','RRF k=20/60/100','max/top-n mean scene aggregation'],models:['Weighted sum','Reciprocal Rank Fusion']},
+    demo:{status:'selected',lines:['weighted RRF k=60','frame→scene max/top mean','matched modality evidence'],models:['RRF','segment aggregator']},
+    production:{status:'selected',lines:['dynamic weights by query','RRF + calibrated components','temporal neighborhood features'],models:['task-aware RRF','feature aggregation']}
+  }},
+  rerank:{title:'Cascaded reranking',zone:'E · online',ref:'Current code-style baseline có thể chưa có model reranker; target architecture cần tách light reranker và MLLM evidence rerank.',profiles:{
+    experiment:{status:'benchmark',lines:['BGE reranker · ColBERT','Qwen3-VL pointwise/pairwise','rules vs model vs cascade','MRR/nDCG/latency'],models:['BAAI/bge-reranker-v2-m3','ColBERT','Qwen3-VL-32B']},
+    demo:{status:'selected',lines:['BGE reranker top-100→30','task rules + OCR exact bonus','Qwen3-VL only top-10 hard'],models:['bge-reranker-v2-m3','Qwen3-VL-32B optional final pass']},
+    production:{status:'selected',lines:['cross-encoder top-300→50','Qwen3-VL evidence rerank top-20','KIS/VQA/AVS rubric riêng','temporal consistency scoring'],models:['bge-reranker-v2-m3','Qwen3-VL-32B-Instruct','temporal scorer']}
+  }},
+  resilience:{title:'Timeout · cache · fail policy',zone:'E · online',ref:'Project yêu cầu fail-fast/no silent degradation; production vẫn có thể trả partial chỉ khi response ghi rõ degraded branch.',profiles:{
+    experiment:{status:'benchmark',lines:['failure injection + load test','cache hit/latency measurement'],models:['pytest/load test','in-process cache']},
+    demo:{status:'planned',lines:['request timeout rõ ràng','không silent fallback/mock'],models:['FastAPI timeout','health/preflight']},
+    production:{status:'planned',lines:['Redis query/embed cache','branch status + circuit breaker','required branch fail-fast','rate limit + auth'],models:['Redis','circuit breaker','rate limiter']}
+  }},
+  kis:{title:'KIS',zone:'F · task',ref:'KIS cần đưa known moment lên top-1/top-5; frame_idx là tọa độ nộp chính.',profiles:{
+    experiment:{status:'benchmark',lines:['frame vs scene retrieval','temporal cue parsing','pointwise/pairwise rerank'],models:['CLIP/SigLIP','BGE reranker','Qwen evidence scorer']},
+    demo:{status:'selected',lines:['known-item signature','scene → best keyframe','top-20 + evidence'],models:['RRF + BGE reranker']},
+    production:{status:'selected',lines:['precise frame neighborhood','temporal/must-match rerank','top result explainable'],models:['BGE reranker','Qwen3-VL evidence rerank','temporal scorer']}
+  }},
+  vqa:{title:'VQA',zone:'F · task',ref:'VQA chỉ hợp lệ khi answer đúng và evidence đúng; cần answer generator và verifier tách biệt.',profiles:{
+    experiment:{status:'benchmark',lines:['evidence-only baseline','Qwen3-VL answer','count/tracking/temporal set'],models:['Evidence-only baseline','Qwen3-VL-8B/32B','rule extractors']},
+    demo:{status:'selected',lines:['retrieve top evidence','Qwen3-VL grounded answer','abstain nếu thiếu evidence'],models:['Qwen3-VL-32B-Instruct']},
+    production:{status:'selected',lines:['evidence selector + answer','independent verifier','OCR/ASR exact rule checks'],models:['Qwen3-VL-32B answer','Qwen/Qwen3 verifier','tracking/count tools']}
+  }},
+  avs:{title:'AVS',zone:'F · task',ref:'AVS cần nhiều segment đúng, relevance grading và diversity; không nên chỉ cap số scene/video.',profiles:{
+    experiment:{status:'benchmark',lines:['per-video cap vs MMR','clustering/sim threshold','grade 0–3 consistency'],models:['MMR','clustering','LLM relevance grader']},
+    demo:{status:'selected',lines:['broad top-1000 search','RRF + relevance threshold','MMR diversity'],models:['RRF','MMR','BGE reranker']},
+    production:{status:'selected',lines:['0–3 evidence grading','MMR + duplicate cluster','coverage/redundancy control'],models:['BGE/Qwen relevance grader','MMR','embedding clustering']}
+  }},
+  ui:{title:'UI & evidence',zone:'F · UI',ref:'UI local gọi API Vast.ai, cần ranked list, seek video, evidence và export.',profiles:{
+    experiment:{status:'selected',lines:['debug panel + raw scores','compare runs/ablation'],models:['HTML/JS or React','metrics viewer']},
+    demo:{status:'selected',lines:['React/Vite local UI','KIS/VQA/AVS tabs','thumbnail + video seek','export result JSON/CSV'],models:['React','Vite','FastAPI']},
+    production:{status:'selected',lines:['rank/evidence/latency view','submission export frame_idx','auth + operator controls'],models:['React/Vite','FastAPI API']}
+  }},
+  serving:{title:'Serving & scheduling',zone:'G · infra',ref:'Heavy caption/OCR/ASR/detection chạy trên Vast.ai; local UI và API tách khỏi GPU workers.',profiles:{
+    experiment:{status:'benchmark',lines:['notebook/local adapters','manual A100/T4 runs'],models:['Kaggle','local Python']},
+    demo:{status:'selected',lines:['FastAPI backend Vast.ai','direct model workers','local UI calls API'],models:['FastAPI','Uvicorn','Docker Compose']},
+    production:{status:'planned',lines:['separate GPU workers','queue + GPU scheduling','model warmup/preflight'],models:['FastAPI','Celery/RQ/Ray candidate','Docker']}
+  }},
+  eval:{title:'Đánh giá & ablation',zone:'G · infra',ref:'Mỗi module chỉ được giữ khi tăng metric cuối hoặc tăng debuggability với chi phí chấp nhận được.',profiles:{
+    experiment:{status:'selected',lines:['R@K/MRR/nDCG/mAP','CER/WER/factuality/latency'],models:['independent notebooks','gold JSONL']},
+    demo:{status:'selected',lines:['smoke + regression + load','end-to-end demo queries'],models:['pytest','load test scripts']},
+    production:{status:'selected',lines:['offline benchmark gate','per-query audit/error taxonomy'],models:['evaluation pipeline','leaderboard']}
+  }},
+  monitor:{title:'Logging · monitoring · feedback',zone:'G · infra',ref:'Run outputs hiện có JSONL/metrics/report; Prometheus/Grafana/feedback loop là phần cần bổ sung cho production.',profiles:{
+    experiment:{status:'selected',lines:['raw/parsed/accepted/failed','metrics.json/csv + report','W&B optional'],models:['JSONL','CSV','W&B optional']},
+    demo:{status:'selected',lines:['structured logs + run_id','model/index health page','no silent fallback'],models:['Python logging','health endpoints']},
+    production:{status:'planned',lines:['Prometheus/Grafana','trace query→evidence','user feedback + replay set','alert index/model mismatch'],models:['Prometheus','Grafana','OpenTelemetry candidate']}
+  }}
+};
+
+const FLOWS = {
+  offline:{name:'Offline — video đến index',nodes:['video','scene','keyframe','audio','visual','caption','ocr','detect','asr','metadata','quality','orchestrate','dense','sparse','evidence'],edges:['e01','e02','e03','e04','e05','e06','e07','e08','e09','e10','e11','e12','e13','e14','e15','e16','e17','e18'],steps:['Validate video/manifest → TransNetV2 scene boundaries.','Chọn candidate frames, cosine-dedup và quality gate.','Chạy visual, Qwen3-VL caption/semantic OCR, PaddleOCR, ASR, detection/tracking theo profile.','Chuẩn hoá metadata + provenance; publish dense/sparse/evidence artifacts.']},
+  kis:{name:'KIS — tìm known moment',nodes:['query','search','dense','sparse','evidence','fusion','rerank','kis','ui'],edges:['e19','e20','e21','e22','e23','e24','e26','e29'],steps:['Parse known-item signature, OCR/ASR/temporal constraints.','Search dense + sparse + exact fields song song.','RRF/aggregation → task-aware rerank.','Định vị best scene/keyframe/frame_idx và hiển thị evidence.']},
+  vqa:{name:'VQA — evidence-grounded answer',nodes:['query','search','dense','sparse','evidence','fusion','rerank','vqa','ui','detect'],edges:['e19','e20','e21','e22','e23','e24','e27','e30'],steps:['Phân loại answer type và evidence cần thiết.','Retrieve + rerank evidence frames/segments.','Qwen3-VL trả lời chỉ từ evidence; dùng OCR/ASR/count/track tools khi cần.','Verifier độc lập kiểm tra support hoặc abstain.']},
+  avs:{name:'AVS — tìm rộng và đa dạng',nodes:['query','search','dense','sparse','fusion','rerank','avs','ui'],edges:['e19','e20','e22','e23','e24','e28','e31'],steps:['Tách inclusion/exclusion và sinh nhiều query.','High-recall dense+sparse retrieval.','Grade relevance, threshold và đa dạng hoá bằng MMR/clustering.','Trả danh sách segment bao phủ tốt, giảm trùng.']},
+  infra:{name:'Hạ tầng xuyên suốt',nodes:['orchestrate','resilience','serving','eval','monitor','ui','rerank','asr'],edges:['e25','e32','e33','e34','e35'],steps:['GPU workers, job state, index versioning và API health.','Không silent fallback; timeout/error phải thể hiện trong response/log.','Ablation, regression, load test, metrics và feedback replay.']},
+  gaps:{name:'Khoảng trống ưu tiên',nodes:['detect','orchestrate','resilience','serving','monitor','rerank'],edges:[],steps:['Tracking/re-ID và action model chưa chốt theo metric.','Queue/retry/incremental indexing cần hoàn thiện cho chạy lớn.','Cascaded reranker và VQA verifier phải nối production, không chỉ nằm trong kế hoạch.','Redis/rate-limit/monitoring cần có trước khi coi là production.']}
+};
+
+const stage=document.getElementById('stage'), svg=document.getElementById('svg'), world=document.getElementById('world');
+const nodes=[...document.querySelectorAll('.node')], edges=[...document.querySelectorAll('.edge')], labels=[...document.querySelectorAll('.elabel')];
+const profileButtons=[...document.querySelectorAll('[data-profile]')], flowButtons=[...document.querySelectorAll('[data-flow]')];
+const safeGet=(k)=>{try{return localStorage.getItem(k)}catch(_){return null}};
+const safeSet=(k,v)=>{try{localStorage.setItem(k,v)}catch(_){}};
+let currentProfile=safeGet('aic-profile')||'experiment';
+let currentFlow='all';
+
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function statusLabel(status,profile){if(status==='benchmark')return 'BENCH';if(status==='planned')return 'PLAN';if(status==='gap')return 'GAP';return profile==='experiment'?'READY':'SELECT'}
+function applyProfile(profile){
+  currentProfile=profile; safeSet('aic-profile',profile);
+  const pm=PROFILE_META[profile]; document.documentElement.style.setProperty('--profile',document.documentElement.classList.contains('dark')?(pm.colorDark||pm.color):pm.color);
+  profileButtons.forEach(b=>b.classList.toggle('on',b.dataset.profile===profile));
+  document.getElementById('pTitle').textContent=pm.label; document.getElementById('pGoal').textContent=pm.goal; document.getElementById('pCompute').textContent=pm.compute; document.getElementById('pPolicy').textContent=pm.policy;
+  nodes.forEach(n=>{
+    const key=n.dataset.k, p=NODES[key]?.profiles[profile]; if(!p)return;
+    n.classList.remove('status-benchmark','status-planned','status-gap','status-selected'); n.classList.add('status-'+p.status);
+    [...n.querySelectorAll('.line')].forEach((el,i)=>el.textContent=p.lines[i]||'');
+    n.querySelector('.tag').textContent=statusLabel(p.status,profile);
+    n.dataset.search=(NODES[key].title+' '+p.lines.join(' ')+' '+p.models.join(' ')).toLowerCase();
+  });
+  const selected=document.querySelector('.node.sel'); if(selected)showDetail(selected.dataset.k);
+  runSearch();
+}
+
+function showDetail(key){
+  const n=NODES[key], p=n.profiles[currentProfile], pm=PROFILE_META[currentProfile]; if(!n||!p)return;
+  nodes.forEach(x=>x.classList.toggle('sel',x.dataset.k===key));
+  document.getElementById('detailTitle').textContent=n.title;
+  document.getElementById('detailMeta').textContent=n.zone+' · '+pm.label;
+  const statusClass=p.status==='selected'?'selected':p.status;
+  document.getElementById('detailBody').innerHTML=`
+    <div class="section"><h4>Trạng thái</h4><p><span class="status-pill ${statusClass}">${esc(statusLabel(p.status,currentProfile))}</span>${p.status==='benchmark'?'đang so sánh, chưa chốt':p.status==='planned'?'mục tiêu cần nối/kiểm chứng':'được chọn cho profile này'}</p></div>
+    <div class="section"><h4>Model / công nghệ</h4><ul>${p.models.map(x=>`<li><code>${esc(x)}</code></li>`).join('')}</ul></div>
+    <div class="section"><h4>Vai trò & cấu hình</h4><ul>${p.lines.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>
+    <div class="section"><h4>Ba profile của module</h4>${['experiment','demo','production'].map(k=>`<p><b>${esc(PROFILE_META[k].label)}:</b> ${esc(n.profiles[k].models.join(' · '))}</p>`).join('')}</div>
+    <span class="ref">Nguồn/giải thích: ${esc(n.ref)}</span>`;
+  document.getElementById('detail').style.display='block';
+}
+
+function setFlow(key){
+  currentFlow=key; flowButtons.forEach(b=>b.classList.toggle('on',b.dataset.flow===key));
+  edges.forEach(e=>e.classList.remove('lit')); labels.forEach(l=>l.classList.remove('lit')); nodes.forEach(n=>n.classList.remove('lit'));
+  if(key==='all'||!FLOWS[key]){stage.classList.remove('flowing');document.getElementById('flowCard').style.display='none';return}
+  const f=FLOWS[key]; stage.classList.add('flowing'); document.getElementById('flowCard').style.display='block';
+  f.edges.forEach(id=>document.getElementById(id)?.classList.add('lit')); labels.forEach(l=>{if(f.edges.includes(l.dataset.e))l.classList.add('lit')}); f.nodes.forEach(k=>document.querySelector(`.node[data-k="${k}"]`)?.classList.add('lit'));
+  document.getElementById('flowName').textContent=f.name; document.getElementById('flowSteps').innerHTML=f.steps.map(x=>`<li>${x}</li>`).join('');
+}
+
+profileButtons.forEach(b=>b.addEventListener('click',()=>applyProfile(b.dataset.profile)));
+flowButtons.forEach(b=>b.addEventListener('click',()=>setFlow(b.dataset.flow)));
+nodes.forEach(n=>n.addEventListener('click',e=>{if(didPan)return;e.stopPropagation();showDetail(n.dataset.k)}));
+document.getElementById('detailClose').addEventListener('click',()=>{document.getElementById('detail').style.display='none';nodes.forEach(n=>n.classList.remove('sel'))});
+svg.addEventListener('click',e=>{if(!didPan&&!e.target.closest('.node')){document.getElementById('detail').style.display='none';nodes.forEach(n=>n.classList.remove('sel'))}});
+
+const DEFAULT_DETAIL={t:document.getElementById('detailTitle').textContent,m:document.getElementById('detailMeta').textContent,b:document.getElementById('detailBody').innerHTML};
+document.getElementById('helpBtn').addEventListener('click',()=>{document.getElementById('detailTitle').textContent=DEFAULT_DETAIL.t;document.getElementById('detailMeta').textContent=DEFAULT_DETAIL.m;document.getElementById('detailBody').innerHTML=DEFAULT_DETAIL.b;document.getElementById('detail').style.display='block';nodes.forEach(n=>n.classList.remove('sel'))});
+document.getElementById('themeToggle').addEventListener('click',()=>{const dark=!document.documentElement.classList.contains('dark');document.documentElement.classList.toggle('dark',dark);safeSet('aic-theme',dark?'dark':'light');const pm=PROFILE_META[currentProfile];document.documentElement.style.setProperty('--profile',dark?(pm.colorDark||pm.color):pm.color)});
+function runSearch(){const q=document.getElementById('searchBox').value.trim().toLowerCase();nodes.forEach(n=>{n.classList.remove('search-dim','search-hit');if(q){const hit=(n.dataset.search||'').includes(q);n.classList.add(hit?'search-hit':'search-dim')}})}
+document.getElementById('searchBox').addEventListener('input',runSearch);
+
+const W=2940,H=1450;let scale=1,tx=0,ty=0,fitScale=1,userMoved=false;const MAXZ=3;const minZ=()=>Math.min(.35,fitScale);
+function applyTransform(){world.setAttribute('transform',`translate(${tx} ${ty}) scale(${scale})`);document.getElementById('zoomPct').textContent=Math.round(scale*100)+'%'}
+function fit(){const r=stage.getBoundingClientRect();fitScale=Math.min(r.width/W,r.height/H)*.95;scale=fitScale;tx=(r.width-W*scale)/2;ty=(r.height-H*scale)/2;userMoved=false;applyTransform()}
+function zoomAt(px,py,f){const ns=Math.min(MAXZ,Math.max(minZ(),scale*f)),k=ns/scale;tx=px-(px-tx)*k;ty=py-(py-ty)*k;scale=ns;userMoved=true;applyTransform()}
+svg.addEventListener('wheel',e=>{e.preventDefault();const r=svg.getBoundingClientRect();zoomAt(e.clientX-r.left,e.clientY-r.top,Math.exp(-e.deltaY*.0015))},{passive:false});
+const pointers=new Map();let panning=false,didPan=false,startX=0,startY=0,lastX=0,lastY=0,lastDist=0;
+svg.addEventListener('pointerdown',e=>{if(e.target.closest('.node')){didPan=false;return}svg.setPointerCapture(e.pointerId);pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});if(pointers.size===1){panning=false;didPan=false;startX=lastX=e.clientX;startY=lastY=e.clientY}else if(pointers.size===2){const[a,b]=[...pointers.values()];lastDist=Math.hypot(a.x-b.x,a.y-b.y)}});
+svg.addEventListener('pointermove',e=>{if(!pointers.has(e.pointerId))return;pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});if(pointers.size===2){const[a,b]=[...pointers.values()],d=Math.hypot(a.x-b.x,a.y-b.y),r=svg.getBoundingClientRect();if(lastDist>0)zoomAt((a.x+b.x)/2-r.left,(a.y+b.y)/2-r.top,d/lastDist);lastDist=d;didPan=true;return}if(pointers.size!==1)return;const dx=e.clientX-lastX,dy=e.clientY-lastY;if(!panning&&Math.hypot(e.clientX-startX,e.clientY-startY)>5){panning=true;didPan=true;stage.classList.add('grabbing')}if(panning){tx+=dx;ty+=dy;userMoved=true;applyTransform()}lastX=e.clientX;lastY=e.clientY});
+function endPointer(e){pointers.delete(e.pointerId);if(pointers.size<2)lastDist=0;if(!pointers.size){panning=false;stage.classList.remove('grabbing')}}
+svg.addEventListener('pointerup',endPointer);svg.addEventListener('pointercancel',endPointer);
+document.getElementById('zoomIn').addEventListener('click',()=>{const r=svg.getBoundingClientRect();zoomAt(r.width/2,r.height/2,1.25)});document.getElementById('zoomOut').addEventListener('click',()=>{const r=svg.getBoundingClientRect();zoomAt(r.width/2,r.height/2,.8)});document.getElementById('zoomFit').addEventListener('click',fit);window.addEventListener('resize',()=>{if(!userMoved)fit()});
+
+applyProfile(currentProfile);setFlow('all');requestAnimationFrame(fit);
+</script>
+</body>
+</html>
