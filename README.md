@@ -41,9 +41,11 @@ python -m offline run
 python -m offline index --encoder remote --qdrant
 ```
 
-`mock` chỉ dùng để xác nhận plumbing. Trên Vast.ai đặt
-`AIC_GPU_PROVIDER=transformers` để bật BLIP, EasyOCR, OWLv2, CLIP và Whisper;
-pin model/revision phù hợp dữ liệu và dùng đúng encoder đã tạo index.
+`mock` chỉ dùng để xác nhận plumbing. Trên Vast.ai hoặc Kaggle (T4x2) đặt
+`AIC_GPU_PROVIDER=transformers` để bật Qwen2.5-VL-7B-Instruct (caption + semantic
+OCR trong cùng model), OWLv2, CLIP và Whisper; pin model/revision phù hợp dữ liệu
+và dùng đúng encoder đã tạo index. Xem `docs/KAGGLE_OFFLINE_GUIDE.md` để chạy full
+pipeline thật trên Kaggle notebook khi máy local không đủ VRAM/RAM cho model 7B.
 
 ## Triển khai Vast.ai
 

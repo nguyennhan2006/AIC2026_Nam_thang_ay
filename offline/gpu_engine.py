@@ -1,47 +1,103 @@
-"""Optional production GPU engine loaded only on the Vast worker."""
+"""Optional production GPU engine loaded only on the Vast/Kaggle worker."""
 
 from __future__ import annotations
 
 import asyncio
 import base64
 from io import BytesIO
+import json
 import os
+import re
 from pathlib import Path
 
 
+_CAPTION_PROMPT = (
+    "Mô tả khách quan, cụ thể bằng tiếng Việt (1-2 câu) những gì nhìn thấy trong khung hình "
+    "video này: người, hành động, bối cảnh, vật thể nổi bật. Chỉ trả lời phần mô tả, không "
+    "thêm giải thích hay tiêu đề."
+)
+
+_OCR_PROMPT = (
+    "Tìm và đọc TOÀN BỘ chữ/văn bản xuất hiện rõ trong ảnh (biển hiệu, banner, phụ đề, chữ "
+    "trên giấy tờ, tiêu đề...), giữ nguyên chính xác từng ký tự kể cả dấu tiếng Việt và số. "
+    "Trả lời DUY NHẤT một JSON array, mỗi phần tử dạng "
+    '{"bbox_2d": [x1, y1, x2, y2], "text_content": "..."}, toạ độ là pixel thực trên ảnh gốc. '
+    "Nếu ảnh không có chữ nào, trả về []."
+)
+
+
+def _strip_code_fence(text: str) -> str:
+    match = re.search(r"```(?:json)?\s*(.*?)\s*```", text, re.DOTALL)
+    return match.group(1) if match else text
+
+
 class TransformersGpuEngine:
-    """Lazy model registry for caption, OCR, OWLv2, CLIP and Whisper."""
+    """Lazy model registry: Qwen2.5-VL (caption + semantic OCR), OWLv2, CLIP and Whisper."""
 
     def __init__(self) -> None:
         self.device = int(os.getenv("AIC_GPU_DEVICE", "0"))
-        self._caption = self._ocr = self._object = self._clip = self._asr = None
+        self._qwen = self._object = self._clip = self._asr = None
 
     @staticmethod
     def _image(request):
         from PIL import Image
         return Image.open(BytesIO(base64.b64decode(request.image_base64))).convert("RGB")
 
+    def _load_qwen(self):
+        if self._qwen is None:
+            import torch
+            from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration
+            name = os.getenv("AIC_CAPTION_MODEL", "Qwen/Qwen2.5-VL-7B-Instruct")
+            cuda = torch.cuda.is_available()
+            # float16 (not bf16) for broad GPU compat (e.g. Kaggle T4 has no fast bf16);
+            # device_map="auto" shards across all visible GPUs (e.g. Kaggle T4x2 ~32GB combined).
+            model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
+                name, torch_dtype=torch.float16 if cuda else torch.float32,
+                device_map="auto" if cuda else "cpu",
+            )
+            processor = AutoProcessor.from_pretrained(name)
+            self._qwen = (model, processor, name)
+        return self._qwen
+
+    def _qwen_generate(self, image, prompt: str, max_new_tokens: int) -> str:
+        import torch
+        from qwen_vl_utils import process_vision_info
+        model, processor, _ = self._load_qwen()
+        messages = [{"role": "user", "content": [{"type": "image", "image": image}, {"type": "text", "text": prompt}]}]
+        chat_text = processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+        image_inputs, video_inputs = process_vision_info(messages)
+        inputs = processor(text=[chat_text], images=image_inputs, videos=video_inputs, padding=True, return_tensors="pt").to(model.device)
+        with torch.inference_mode():
+            generated = model.generate(**inputs, max_new_tokens=max_new_tokens)
+        trimmed = [out[len(inp):] for inp, out in zip(inputs.input_ids, generated)]
+        return processor.batch_decode(trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]
+
     def _caption_sync(self, request) -> dict:
-        from transformers import pipeline
-        if self._caption is None:
-            self._caption = pipeline("image-to-text", model=os.getenv("AIC_CAPTION_MODEL", "Salesforce/blip-image-captioning-base"), device=self.device)
-        rows = self._caption(self._image(request), max_new_tokens=int(os.getenv("AIC_CAPTION_MAX_TOKENS", "80")))
-        return {"captions": [{"text": row["generated_text"], "language": "en", "confidence": None} for row in rows]}
+        image = self._image(request)
+        text = self._qwen_generate(image, _CAPTION_PROMPT, int(os.getenv("AIC_CAPTION_MAX_TOKENS", "120"))).strip()
+        return {"captions": [{"text": text, "language": "vi", "confidence": None}]}
 
     def _ocr_sync(self, request) -> dict:
-        import easyocr
-        import numpy as np
         image = self._image(request)
-        if self._ocr is None:
-            self._ocr = easyocr.Reader(os.getenv("AIC_OCR_LANGUAGES", "vi,en").split(","), gpu=True)
         width, height = image.size
+        raw = _strip_code_fence(self._qwen_generate(image, _OCR_PROMPT, 512).strip())
+        try:
+            items = json.loads(raw)
+        except json.JSONDecodeError:
+            items = []
         instances = []
-        for polygon, text, score in self._ocr.readtext(np.asarray(image)):
-            xs, ys = [p[0] for p in polygon], [p[1] for p in polygon]
+        for item in items if isinstance(items, list) else []:
+            text = str(item.get("text_content", "")).strip()
+            box = item.get("bbox_2d")
+            if not text or not (isinstance(box, list) and len(box) == 4):
+                continue
+            x1, y1, x2, y2 = box
             instances.append({
-                "text": text, "normalized_text": text.casefold(), "language": None,
-                "confidence": float(score),
-                "bbox": {"x1": max(0, min(xs))/width, "y1": max(0, min(ys))/height, "x2": min(width, max(xs))/width, "y2": min(height, max(ys))/height},
+                "text": text, "normalized_text": text.casefold(), "language": None, "confidence": 0.75,
+                "bbox": {
+                    "x1": max(0.0, min(1.0, x1 / width)), "y1": max(0.0, min(1.0, y1 / height)),
+                    "x2": max(0.0, min(1.0, x2 / width)), "y2": max(0.0, min(1.0, y2 / height)),
+                },
             })
         return {"instances": instances}
 

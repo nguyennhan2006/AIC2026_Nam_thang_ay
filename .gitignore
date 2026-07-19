@@ -35,3 +35,6 @@ datasets/
 *.faiss
 
 # Contract artifacts in contracts/ MUST stay tracked (do not ignore *.json).
+
+# ---- Local secrets/config ----
+.env
