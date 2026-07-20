@@ -72,6 +72,11 @@ backend Vast.ai và token Online nếu bật.
 7. `docs/07_ACCEPTANCE_AND_LIMITATIONS.md`
 8. `docs/08_FILE_GUIDE.md`
 
+Chạy & dùng bản hiện tại (setup, kết nối UI↔backend đúng cách, test API, sự cố
+thường gặp): `docs/12_USER_GUIDE.md`. Model thật trên Kaggle:
+`docs/KAGGLE_OFFLINE_GUIDE.md`. Thiết kế profile thi đấu (A100, chưa code):
+`docs/11_SERVER_IMPLEMENTATION.md`.
+
 ## Lệnh kiểm tra
 
 ```bash

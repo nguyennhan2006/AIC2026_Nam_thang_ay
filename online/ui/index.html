@@ -39,7 +39,19 @@
       <button type="button" id="health">Kiểm tra server</button>
     </form>
     <section id="status" aria-live="polite"></section>
-    <section id="results"></section>
+    <div class="layout">
+      <section id="results"></section>
+      <aside id="tray">
+        <h2>Đã chọn <span id="tray-count">(0)</span></h2>
+        <p class="tray-hint">Tick vào kết quả để đưa vào đây, rồi lọc lại hoặc xuất CSV nộp bài.</p>
+        <ol id="tray-list"></ol>
+        <div class="tray-actions">
+          <button type="button" id="tray-refine" disabled>Tìm lại chỉ trong các video đã chọn</button>
+          <button type="button" id="tray-export" disabled>Xuất CSV nộp bài</button>
+          <button type="button" id="tray-clear" disabled>Xoá hết</button>
+        </div>
+      </aside>
+    </div>
     <details id="debug-panel" hidden><summary>Query plan</summary><pre id="debug-output"></pre></details>
   </main>
   <script src="app.js"></script>
