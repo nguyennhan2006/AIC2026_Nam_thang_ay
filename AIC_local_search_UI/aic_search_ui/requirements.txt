@@ -1,0 +1,5 @@
+streamlit>=1.50,<2
+pandas>=2.0
+
+# Chỉ cần nếu muốn bật Hybrid BM25 + FAISS bằng câu mô tả hình ảnh.
+open-clip-torch>=3.0

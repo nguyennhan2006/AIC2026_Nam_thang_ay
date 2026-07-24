@@ -1,0 +1,3 @@
+# Install a CUDA-enabled PyTorch build first, then install these packages.
+open_clip_torch
+
