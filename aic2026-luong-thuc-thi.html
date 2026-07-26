@@ -1,0 +1,540 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AIC 2026 — Sơ đồ luồng thực thi (code hiện tại, branch server_implementation)</title>
+<script>
+  (() => {
+    let saved = null;
+    try { saved = localStorage.getItem('aic-flow-theme'); } catch (_) {}
+    const dark = saved ? saved === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+    document.documentElement.classList.toggle('dark', dark);
+  })();
+</script>
+<style>
+  :root {
+    --bg:#f7f7f3; --surface:#fff; --surface-2:#efefe9; --ink:#151513;
+    --body:#44443f; --muted:#85857d; --line:#cecec5; --line-soft:#e5e5dd;
+    --shadow:0 10px 32px rgba(20,20,18,.11); --accent:#2563eb;
+    --a:#2563eb; --a-soft:rgba(37,99,235,.09); --a-zone:rgba(37,99,235,.035);
+    --b:#0d9488; --b-soft:rgba(13,148,136,.09); --b-zone:rgba(13,148,136,.035);
+    --c:#16a34a; --c-soft:rgba(22,163,74,.09); --c-zone:rgba(22,163,74,.035);
+    --d:#6366f1; --d-soft:rgba(99,102,241,.10); --d-zone:rgba(99,102,241,.04);
+    --e:#d97706; --e-soft:rgba(217,119,6,.10); --e-zone:rgba(217,119,6,.04);
+    --f:#e11d48; --f-soft:rgba(225,29,72,.08); --f-zone:rgba(225,29,72,.035);
+    --g:#64748b; --g-soft:rgba(100,116,139,.09); --g-zone:rgba(100,116,139,.04);
+    --warn:#b45309; --warn-soft:#fef3c7; --ok:#15803d; --ok-soft:#dcfce7;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+    --mono:ui-monospace,"Cascadia Code","SFMono-Regular",Consolas,monospace;
+  }
+  html.dark {
+    --bg:#141413; --surface:#20201e; --surface-2:#2a2a27; --ink:#faf9f5;
+    --body:#d0d0c8; --muted:#919189; --line:#41413d; --line-soft:#2c2c29;
+    --shadow:0 12px 36px rgba(0,0,0,.35);
+    --a:#60a5fa; --a-soft:rgba(96,165,250,.13); --a-zone:rgba(96,165,250,.05);
+    --b:#2dd4bf; --b-soft:rgba(45,212,191,.12); --b-zone:rgba(45,212,191,.05);
+    --c:#4ade80; --c-soft:rgba(74,222,128,.12); --c-zone:rgba(74,222,128,.05);
+    --d:#818cf8; --d-soft:rgba(129,140,248,.14); --d-zone:rgba(129,140,248,.055);
+    --e:#fbbf24; --e-soft:rgba(251,191,36,.12); --e-zone:rgba(251,191,36,.05);
+    --f:#fb7185; --f-soft:rgba(251,113,133,.12); --f-zone:rgba(251,113,133,.05);
+    --g:#94a3b8; --g-soft:rgba(148,163,184,.12); --g-zone:rgba(148,163,184,.05);
+    --warn:#fbbf24; --warn-soft:rgba(251,191,36,.15); --ok:#86efac; --ok-soft:rgba(74,222,128,.13);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{display:flex;flex-direction:column;overflow:hidden;background:var(--bg);color:var(--body);font-family:var(--sans);-webkit-font-smoothing:antialiased}
+  button,input{font:inherit}
+
+  .topbar{flex:none;display:grid;grid-template-columns:minmax(300px,1fr) auto;gap:12px;padding:10px 16px;border-bottom:1px solid var(--line-soft);background:var(--bg)}
+  .brand h1{font-size:16px;line-height:1.25;color:var(--ink);letter-spacing:-.01em}
+  .brand .sub{margin-top:3px;font:10.5px/1.4 var(--mono);color:var(--muted)}
+  .toolbar{display:flex;align-items:center;justify-content:flex-end;gap:9px;flex-wrap:wrap}
+  .toolgroup{display:flex;align-items:center;gap:5px;padding-left:8px;border-left:1px solid var(--line-soft)}
+  .toolgroup:first-child{border-left:0;padding-left:0}
+  .tool-label{font:9.5px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-right:2px}
+  .chip,.icon-btn{border:1px solid var(--line);background:transparent;color:var(--muted);cursor:pointer;transition:.15s;border-radius:999px;font:10.5px/1 var(--mono);padding:6px 10px;white-space:nowrap}
+  .chip:hover,.icon-btn:hover{border-color:var(--muted);color:var(--ink)}
+  .chip.on{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+  .icon-btn{border-radius:7px}
+  .search{width:190px;border:1px solid var(--line);border-radius:7px;background:var(--surface);color:var(--ink);font:10.5px/1 var(--mono);padding:7px 9px;outline:none}
+  .search:focus{border-color:var(--accent);box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 20%,transparent)}
+
+  .stage{position:relative;flex:1;min-height:0;overflow:hidden}
+  .stage svg{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:grab;touch-action:none}
+  .stage.grabbing svg{cursor:grabbing}
+  .hint{position:absolute;left:15px;top:10px;pointer-events:none;font:10px/1.4 var(--mono);color:var(--muted)}
+
+  .zone rect{stroke-width:1.2;stroke-dasharray:6 5;rx:18}
+  .zone .zt{font:700 13px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase}
+  .zone .zs{font:10px/1 var(--mono);fill:var(--muted)}
+  .zA rect{fill:var(--a-zone);stroke:var(--a)} .zA .zt{fill:var(--a)}
+  .zB rect{fill:var(--b-zone);stroke:var(--b)} .zB .zt{fill:var(--b)}
+  .zC rect{fill:var(--c-zone);stroke:var(--c)} .zC .zt{fill:var(--c)}
+  .zD rect{fill:var(--d-zone);stroke:var(--d)} .zD .zt{fill:var(--d)}
+  .zE rect{fill:var(--e-zone);stroke:var(--e)} .zE .zt{fill:var(--e)}
+  .zF rect{fill:var(--f-zone);stroke:var(--f)} .zF .zt{fill:var(--f)}
+  .zG rect{fill:var(--g-zone);stroke:var(--g)} .zG .zt{fill:var(--g)}
+
+  .node{cursor:pointer;transition:opacity .18s}
+  .node .box{stroke-width:1.55;rx:12;transition:stroke .15s,fill .15s,stroke-dasharray .15s}
+  .node .title{font:700 13.5px/1 var(--sans);fill:var(--ink);pointer-events:none}
+  .node .line{font:9.6px/1 var(--mono);fill:var(--body);pointer-events:none}
+  .node .fileline{font:9px/1 var(--mono);font-style:italic;fill:var(--muted);pointer-events:none}
+  .node .tagbox{fill:color-mix(in srgb,var(--accent) 13%,var(--surface));stroke:var(--accent);stroke-width:1;rx:9}
+  .node .tag{font:700 7.6px/1 var(--mono);letter-spacing:.04em;fill:var(--accent);text-anchor:middle;pointer-events:none}
+  .node.zA .box{fill:var(--a-soft);stroke:var(--a)} .node.zB .box{fill:var(--b-soft);stroke:var(--b)}
+  .node.zC .box{fill:var(--c-soft);stroke:var(--c)} .node.zD .box{fill:var(--d-soft);stroke:var(--d)}
+  .node.zE .box{fill:var(--e-soft);stroke:var(--e)} .node.zF .box{fill:var(--f-soft);stroke:var(--f)}
+  .node.zG .box{fill:var(--g-soft);stroke:var(--g)}
+  .node:hover .box,.node.sel .box{stroke:var(--accent)!important;stroke-width:2.5}
+  .node.status-gap .box{stroke:var(--warn)!important;stroke-dasharray:6 4}
+  .node.status-gap .tagbox{stroke:var(--warn);fill:var(--warn-soft)} .node.status-gap .tag{fill:var(--warn)}
+  .node.search-dim{opacity:.15}.node.search-hit .box{stroke:var(--accent)!important;stroke-width:2.8}
+
+  .edge{stroke:var(--muted);stroke-width:1.5;fill:none;marker-end:url(#arrow);transition:opacity .18s,stroke .18s}
+  .edge.dash{stroke-dasharray:5 4}
+  .elabel{font:9.5px/1 var(--mono);fill:var(--muted)}
+  .stage.flowing .edge,.stage.flowing .elabel{opacity:.1}
+  .stage.flowing .node{opacity:.2}
+  .stage.flowing .zone{opacity:.45}
+  .stage.flowing .edge.lit{opacity:1;stroke:var(--accent);marker-end:url(#arrowActive);stroke-dasharray:7 5;animation:march .9s linear infinite}
+  .stage.flowing .elabel.lit{opacity:1;fill:var(--accent)}
+  .stage.flowing .node.lit{opacity:1}
+  @keyframes march{to{stroke-dashoffset:-12}}
+  @media (prefers-reduced-motion:reduce){.stage.flowing .edge.lit{animation:none}}
+
+  .card{position:absolute;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow)}
+  #detail{display:none;right:15px;top:12px;width:400px;max-height:calc(100% - 78px);overflow:auto;padding:14px 16px}
+  #detail h3{color:var(--ink);font-size:16px;padding-right:25px;font-family:var(--mono)}
+  #detail .meta{margin:3px 0 10px;font:10px/1.45 var(--mono);color:var(--muted)}
+  #detail .close{position:absolute;right:9px;top:7px;border:0;background:transparent;color:var(--muted);font-size:19px;cursor:pointer}
+  #detail .section{margin-top:10px;padding-top:9px;border-top:1px solid var(--line-soft)}
+  #detail .section:first-of-type{margin-top:0;padding-top:0;border-top:0}
+  #detail h4{font-size:11px;color:var(--accent);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px}
+  #detail p,#detail li{font-size:12.2px;line-height:1.55}
+  #detail ul{margin-left:17px}
+  #detail code{font:10.5px/1 var(--mono);color:var(--accent)}
+  #detail .fileref{display:block;margin-top:2px;font:10.5px/1.5 var(--mono);color:var(--muted);word-break:break-word}
+  .status-pill{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:999px;padding:3px 7px;font:9px/1 var(--mono);margin-right:4px}
+  .status-pill.gap{border-color:var(--warn);color:var(--warn);background:var(--warn-soft)}
+  .status-pill.ok{border-color:var(--ok);color:var(--ok);background:var(--ok-soft)}
+
+  .leftstack{position:absolute;left:15px;bottom:15px;display:flex;flex-direction:column;gap:9px;max-width:600px}
+  #flowCard,#legend{position:static;padding:10px 13px}
+  #flowCard{display:none}.stage.flowing #flowCard{display:block}
+  #flowCard .fname{font:700 10.5px/1.3 var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--accent);margin-bottom:5px}
+  #flowCard ol{margin-left:18px}#flowCard li{font-size:11.7px;line-height:1.5}
+  #legend{display:flex;gap:10px;flex-wrap:wrap}
+  #legend .li{display:flex;align-items:center;gap:5px;font:9.8px/1 var(--mono)}
+  #legend .sw{width:10px;height:10px;border-radius:3px;display:inline-block}
+  #legend .warn{background:transparent;border:1.5px dashed var(--warn)}
+
+  .ctrl{position:absolute;right:15px;bottom:15px;display:flex;align-items:center;gap:5px}
+  .ctrl button{height:34px;min-width:34px;padding:0 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);box-shadow:0 2px 10px rgba(0,0,0,.07);cursor:pointer;font:11px/1 var(--mono)}
+  .ctrl button:hover{border-color:var(--accent)}
+  #zoomPct{min-width:45px;text-align:center;font:10px/1 var(--mono);color:var(--muted)}
+
+  @media(max-width:1050px){
+    .topbar{grid-template-columns:1fr}.toolbar{justify-content:flex-start}.search{width:150px}
+    #detail{width:min(400px,calc(100% - 30px))}.leftstack{max-width:calc(100% - 30px)}
+  }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <h1>AIC 2026 — Luồng thực thi thật (branch <code style="font-family:var(--mono)">server_implementation</code>)</h1>
+    <div class="sub">Mọi node = 1 file:hàm thật trong code hôm nay · viền vàng đứt = có code nhưng CHƯA nối vào production</div>
+  </div>
+  <div class="toolbar">
+    <div class="toolgroup" id="flowChips">
+      <span class="tool-label">Luồng</span>
+      <button class="chip on" data-flow="all">Toàn cảnh</button>
+      <button class="chip" data-flow="offline">Offline</button>
+      <button class="chip" data-flow="kis">KIS</button>
+      <button class="chip" data-flow="sequence">Sequence</button>
+      <button class="chip" data-flow="avs">AVS</button>
+      <button class="chip" data-flow="vqa">VQA</button>
+      <button class="chip" data-flow="ui">UI</button>
+      <button class="chip" data-flow="gaps">Chưa wired</button>
+    </div>
+    <div class="toolgroup">
+      <input id="searchBox" class="search" type="search" placeholder="Tìm hàm / file…" aria-label="Tìm hàm hoặc file">
+      <button class="icon-btn" id="helpBtn">Hướng dẫn</button>
+      <button class="icon-btn" id="themeToggle">Sáng / tối</button>
+    </div>
+  </div>
+</header>
+
+<main class="stage" id="stage">
+<svg id="svg" role="img" aria-label="Sơ đồ luồng thực thi code AIC 2026">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.3" markerHeight="6.3" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--muted)"/></marker>
+    <marker id="arrowActive" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.3" markerHeight="6.3" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--accent)"/></marker>
+  </defs>
+  <g id="world">
+    <!-- zones -->
+    <g class="zone zA"><rect x="30" y="40" width="340" height="1155"/><text class="zt" x="50" y="74">A · Offline: video → metadata</text><text class="zs" x="50" y="94">offline/pipeline.py · media.py · state.py</text></g>
+    <g class="zone zB"><rect x="425" y="40" width="340" height="980"/><text class="zt" x="445" y="74">B · GPU worker &amp; engine</text><text class="zs" x="445" y="94">offline/worker.py · gpu_engine.py · providers.py</text></g>
+    <g class="zone zC"><rect x="820" y="40" width="340" height="805"/><text class="zt" x="840" y="74">C · Export &amp; index</text><text class="zs" x="840" y="94">datasection/exporter.py · offline/indexing.py</text></g>
+    <g class="zone zD"><rect x="1215" y="40" width="340" height="630"/><text class="zt" x="1235" y="74">D · Online bootstrap</text><text class="zs" x="1235" y="94">online/config.py · adapters/json_metadata.py · api/container.py</text></g>
+    <g class="zone zE"><rect x="1610" y="40" width="340" height="1155"/><text class="zt" x="1630" y="74">E · Retrieval pipeline</text><text class="zs" x="1630" y="94">online/services/*.py</text></g>
+    <g class="zone zF"><rect x="2005" y="40" width="340" height="805"/><text class="zt" x="2025" y="74">F · API &amp; UI</text><text class="zs" x="2025" y="94">online/api/routes.py · online/ui/app.js</text></g>
+    <g class="zone zG"><rect x="2400" y="40" width="340" height="1155"/><text class="zt" x="2420" y="74">G · Có code, chưa wired + tooling</text><text class="zs" x="2420" y="94">online/adapters,services · scripts/*.py</text></g>
+
+    <!-- within-zone chain edges -->
+    <path class="edge" id="e1" d="M200,290 L200,315"/>
+    <path class="edge" id="e2" d="M200,465 L200,490"/>
+    <path class="edge" id="e3" d="M200,640 L200,665"/>
+    <path class="edge" id="e4" d="M200,815 L200,840"/>
+    <path class="edge" id="e5" d="M200,990 L200,1015"/>
+
+    <path class="edge" id="e6" d="M595,290 L595,315"/>
+    <path class="edge" id="e7" d="M595,465 L595,490"/>
+    <path class="edge" id="e8" d="M595,640 L595,665"/>
+    <path class="edge" id="e9" d="M595,815 L595,840"/>
+
+    <path class="edge" id="e10" d="M990,290 L990,315"/>
+    <path class="edge" id="e11" d="M990,465 L990,490"/>
+    <path class="edge" id="e12" d="M990,640 L990,665"/>
+
+    <path class="edge" id="e13" d="M1385,290 L1385,315"/>
+    <path class="edge" id="e14" d="M1385,465 L1385,490"/>
+
+    <path class="edge" id="e15" d="M1780,290 L1780,315"/>
+    <path class="edge" id="e16" d="M1780,465 L1780,490"/>
+    <path class="edge" id="e17" d="M1780,640 L1780,665"/>
+    <path class="edge" id="e18" d="M1780,815 L1780,840"/>
+    <path class="edge" id="e19" d="M1780,990 L1780,1015"/>
+
+    <path class="edge" id="e20" d="M2175,290 L2175,315"/>
+    <path class="edge" id="e21" d="M2175,465 L2175,490"/>
+
+    <!-- cross-zone edges -->
+    <path class="edge" id="e22" d="M350,740 C400,740 400,215 445,215"/>
+    <path class="edge" id="e23" d="M350,1090 C650,1090 650,215 840,215"/>
+    <path class="edge dash" id="e24" d="M1140,390 L1235,390"/>
+    <path class="edge" id="e25" d="M1535,565 C1580,565 1580,215 1630,215"/>
+    <path class="edge" id="e26" d="M1930,915 C1980,915 1980,215 2025,215"/>
+    <path class="edge" id="e27" d="M1930,1090 C1980,1090 1980,215 2025,215"/>
+    <path class="edge dash" id="e28" d="M2420,915 C2000,915 1600,390 1140,390"/>
+    <path class="edge dash" id="e29" d="M2420,1090 C2000,1090 1600,215 1140,215"/>
+
+    <text class="elabel" data-e="e22" x="365" y="705">gọi worker</text>
+    <text class="elabel" data-e="e23" x="500" y="1075">export_dataset</text>
+    <text class="elabel" data-e="e24" x="1150" y="382">đọc scenes.jsonl</text>
+    <text class="elabel" data-e="e25" x="1545" y="530">wire retrievers</text>
+    <text class="elabel" data-e="e26" x="1945" y="880">SearchResponse</text>
+    <text class="elabel" data-e="e28" x="1750" y="900">eval đọc export</text>
+    <text class="elabel" data-e="e29" x="1750" y="1075">seed ghi đè export</text>
+
+    <!-- Zone A nodes -->
+    <g class="node zA" data-k="A1"><rect class="box" x="50" y="140" width="300" height="150"/><text class="title" x="70" y="170">Probe &amp; validate video</text><text class="fileline" x="70" y="188"></text><text class="line l1" x="70" y="206"></text><text class="line l2" x="70" y="224"></text><text class="line l3" x="70" y="242"></text><rect class="tagbox" x="270" y="150" width="70" height="18"/><text class="tag" x="305" y="163"></text></g>
+    <g class="node zA" data-k="A2"><rect class="box" x="50" y="315" width="300" height="150"/><text class="title" x="70" y="345">Cắt scene đều (uniform)</text><text class="fileline" x="70" y="363"></text><text class="line l1" x="70" y="381"></text><text class="line l2" x="70" y="399"></text><text class="line l3" x="70" y="417"></text><rect class="tagbox" x="270" y="325" width="70" height="18"/><text class="tag" x="305" y="338"></text></g>
+    <g class="node zA" data-k="A3"><rect class="box" x="50" y="490" width="300" height="150"/><text class="title" x="70" y="520">Chọn &amp; trích keyframe</text><text class="fileline" x="70" y="538"></text><text class="line l1" x="70" y="556"></text><text class="line l2" x="70" y="574"></text><text class="line l3" x="70" y="592"></text><rect class="tagbox" x="270" y="500" width="70" height="18"/><text class="tag" x="305" y="513"></text></g>
+    <g class="node zA" data-k="A4"><rect class="box" x="50" y="665" width="300" height="150"/><text class="title" x="70" y="695">Enrich keyframe</text><text class="fileline" x="70" y="713"></text><text class="line l1" x="70" y="731"></text><text class="line l2" x="70" y="749"></text><text class="line l3" x="70" y="767"></text><rect class="tagbox" x="270" y="675" width="70" height="18"/><text class="tag" x="305" y="688"></text></g>
+    <g class="node zA" data-k="A5"><rect class="box" x="50" y="840" width="300" height="150"/><text class="title" x="70" y="870">ASR &amp; gán về scene</text><text class="fileline" x="70" y="888"></text><text class="line l1" x="70" y="906"></text><text class="line l2" x="70" y="924"></text><text class="line l3" x="70" y="942"></text><rect class="tagbox" x="270" y="850" width="70" height="18"/><text class="tag" x="305" y="863"></text></g>
+    <g class="node zA" data-k="A6"><rect class="box" x="50" y="1015" width="300" height="150"/><text class="title" x="70" y="1045">JobLedger resume</text><text class="fileline" x="70" y="1063"></text><text class="line l1" x="70" y="1081"></text><text class="line l2" x="70" y="1099"></text><text class="line l3" x="70" y="1117"></text><rect class="tagbox" x="270" y="1025" width="70" height="18"/><text class="tag" x="305" y="1038"></text></g>
+
+    <!-- Zone B nodes -->
+    <g class="node zB" data-k="B1"><rect class="box" x="445" y="140" width="300" height="150"/><text class="title" x="465" y="170">Worker HTTP gateway</text><text class="fileline" x="465" y="188"></text><text class="line l1" x="465" y="206"></text><text class="line l2" x="465" y="224"></text><text class="line l3" x="465" y="242"></text><rect class="tagbox" x="665" y="150" width="70" height="18"/><text class="tag" x="700" y="163"></text></g>
+    <g class="node zB" data-k="B2"><rect class="box" x="445" y="315" width="300" height="150"/><text class="title" x="465" y="345">MockInferenceProvider</text><text class="fileline" x="465" y="363"></text><text class="line l1" x="465" y="381"></text><text class="line l2" x="465" y="399"></text><text class="line l3" x="465" y="417"></text><rect class="tagbox" x="665" y="325" width="70" height="18"/><text class="tag" x="700" y="338"></text></g>
+    <g class="node zB" data-k="B3"><rect class="box" x="445" y="490" width="300" height="150"/><text class="title" x="465" y="520">RemoteInferenceProvider</text><text class="fileline" x="465" y="538"></text><text class="line l1" x="465" y="556"></text><text class="line l2" x="465" y="574"></text><text class="line l3" x="465" y="592"></text><rect class="tagbox" x="665" y="500" width="70" height="18"/><text class="tag" x="700" y="513"></text></g>
+    <g class="node zB" data-k="B4"><rect class="box" x="445" y="665" width="300" height="150"/><text class="title" x="465" y="695">Qwen2.5-VL (caption+OCR)</text><text class="fileline" x="465" y="713"></text><text class="line l1" x="465" y="731"></text><text class="line l2" x="465" y="749"></text><text class="line l3" x="465" y="767"></text><rect class="tagbox" x="665" y="675" width="70" height="18"/><text class="tag" x="700" y="688"></text></g>
+    <g class="node zB" data-k="B5"><rect class="box" x="445" y="840" width="300" height="150"/><text class="title" x="465" y="870">OWLv2 · CLIP · Whisper</text><text class="fileline" x="465" y="888"></text><text class="line l1" x="465" y="906"></text><text class="line l2" x="465" y="924"></text><text class="line l3" x="465" y="942"></text><rect class="tagbox" x="665" y="850" width="70" height="18"/><text class="tag" x="700" y="863"></text></g>
+
+    <!-- Zone C nodes -->
+    <g class="node zC" data-k="C1"><rect class="box" x="840" y="140" width="300" height="150"/><text class="title" x="860" y="170">export_dataset</text><text class="fileline" x="860" y="188"></text><text class="line l1" x="860" y="206"></text><text class="line l2" x="860" y="224"></text><text class="line l3" x="860" y="242"></text><rect class="tagbox" x="1060" y="150" width="70" height="18"/><text class="tag" x="1095" y="163"></text></g>
+    <g class="node zC" data-k="C2"><rect class="box" x="840" y="315" width="300" height="150"/><text class="title" x="860" y="345">verify_export (gate)</text><text class="fileline" x="860" y="363"></text><text class="line l1" x="860" y="381"></text><text class="line l2" x="860" y="399"></text><text class="line l3" x="860" y="417"></text><rect class="tagbox" x="1060" y="325" width="70" height="18"/><text class="tag" x="1095" y="338"></text></g>
+    <g class="node zC" data-k="C3"><rect class="box" x="840" y="490" width="300" height="150"/><text class="title" x="860" y="520">Local index (FAISS/JSON)</text><text class="fileline" x="860" y="538"></text><text class="line l1" x="860" y="556"></text><text class="line l2" x="860" y="574"></text><text class="line l3" x="860" y="592"></text><rect class="tagbox" x="1060" y="500" width="70" height="18"/><text class="tag" x="1095" y="513"></text></g>
+    <g class="node zC" data-k="C4"><rect class="box" x="840" y="665" width="300" height="150"/><text class="title" x="860" y="695">QdrantIndexer</text><text class="fileline" x="860" y="713"></text><text class="line l1" x="860" y="731"></text><text class="line l2" x="860" y="749"></text><text class="line l3" x="860" y="767"></text><rect class="tagbox" x="1060" y="675" width="70" height="18"/><text class="tag" x="1095" y="688"></text></g>
+
+    <!-- Zone D nodes -->
+    <g class="node zD" data-k="D1"><rect class="box" x="1235" y="140" width="300" height="150"/><text class="title" x="1255" y="170">Settings.from_env</text><text class="fileline" x="1255" y="188"></text><text class="line l1" x="1255" y="206"></text><text class="line l2" x="1255" y="224"></text><text class="line l3" x="1255" y="242"></text><rect class="tagbox" x="1455" y="150" width="70" height="18"/><text class="tag" x="1490" y="163"></text></g>
+    <g class="node zD" data-k="D2"><rect class="box" x="1235" y="315" width="300" height="150"/><text class="title" x="1255" y="345">JsonlSceneRepository.load</text><text class="fileline" x="1255" y="363"></text><text class="line l1" x="1255" y="381"></text><text class="line l2" x="1255" y="399"></text><text class="line l3" x="1255" y="417"></text><rect class="tagbox" x="1455" y="325" width="70" height="18"/><text class="tag" x="1490" y="338"></text></g>
+    <g class="node zD" data-k="D3"><rect class="box" x="1235" y="490" width="300" height="150"/><text class="title" x="1255" y="520">build_container</text><text class="fileline" x="1255" y="538"></text><text class="line l1" x="1255" y="556"></text><text class="line l2" x="1255" y="574"></text><text class="line l3" x="1255" y="592"></text><rect class="tagbox" x="1455" y="500" width="70" height="18"/><text class="tag" x="1490" y="513"></text></g>
+
+    <!-- Zone E nodes -->
+    <g class="node zE" data-k="E1"><rect class="box" x="1630" y="140" width="300" height="150"/><text class="title" x="1650" y="170">RuleBasedQueryPlanner.plan</text><text class="fileline" x="1650" y="188"></text><text class="line l1" x="1650" y="206"></text><text class="line l2" x="1650" y="224"></text><text class="line l3" x="1650" y="242"></text><rect class="tagbox" x="1850" y="150" width="70" height="18"/><text class="tag" x="1885" y="163"></text></g>
+    <g class="node zE" data-k="E2"><rect class="box" x="1630" y="315" width="300" height="150"/><text class="title" x="1650" y="345">Retrieve song song</text><text class="fileline" x="1650" y="363"></text><text class="line l1" x="1650" y="381"></text><text class="line l2" x="1650" y="399"></text><text class="line l3" x="1650" y="417"></text><rect class="tagbox" x="1850" y="325" width="70" height="18"/><text class="tag" x="1885" y="338"></text></g>
+    <g class="node zE" data-k="E3"><rect class="box" x="1630" y="490" width="300" height="150"/><text class="title" x="1650" y="520">weighted_rrf (fusion)</text><text class="fileline" x="1650" y="538"></text><text class="line l1" x="1650" y="556"></text><text class="line l2" x="1650" y="574"></text><text class="line l3" x="1650" y="592"></text><rect class="tagbox" x="1850" y="500" width="70" height="18"/><text class="tag" x="1885" y="513"></text></g>
+    <g class="node zE" data-k="E4"><rect class="box" x="1630" y="665" width="300" height="150"/><text class="title" x="1650" y="695">_hydrate + best-keyframe</text><text class="fileline" x="1650" y="713"></text><text class="line l1" x="1650" y="731"></text><text class="line l2" x="1650" y="749"></text><text class="line l3" x="1650" y="767"></text><rect class="tagbox" x="1850" y="675" width="70" height="18"/><text class="tag" x="1885" y="688"></text></g>
+    <g class="node zE" data-k="E5"><rect class="box" x="1630" y="840" width="300" height="150"/><text class="title" x="1650" y="870">Rẽ nhánh theo task</text><text class="fileline" x="1650" y="888"></text><text class="line l1" x="1650" y="906"></text><text class="line l2" x="1650" y="924"></text><text class="line l3" x="1650" y="942"></text><rect class="tagbox" x="1850" y="850" width="70" height="18"/><text class="tag" x="1885" y="863"></text></g>
+    <g class="node zE" data-k="E6"><rect class="box" x="1630" y="1015" width="300" height="150"/><text class="title" x="1650" y="1045">VQAService.answer</text><text class="fileline" x="1650" y="1063"></text><text class="line l1" x="1650" y="1081"></text><text class="line l2" x="1650" y="1099"></text><text class="line l3" x="1650" y="1117"></text><rect class="tagbox" x="1850" y="1025" width="70" height="18"/><text class="tag" x="1885" y="1038"></text></g>
+
+    <!-- Zone F nodes -->
+    <g class="node zF" data-k="F1"><rect class="box" x="2025" y="140" width="300" height="150"/><text class="title" x="2045" y="170">FastAPI routes + middleware</text><text class="fileline" x="2045" y="188"></text><text class="line l1" x="2045" y="206"></text><text class="line l2" x="2045" y="224"></text><text class="line l3" x="2045" y="242"></text><rect class="tagbox" x="2245" y="150" width="70" height="18"/><text class="tag" x="2280" y="163"></text></g>
+    <g class="node zF" data-k="F2"><rect class="box" x="2025" y="315" width="300" height="150"/><text class="title" x="2045" y="345">UI: runSearch + sceneCard</text><text class="fileline" x="2045" y="363"></text><text class="line l1" x="2045" y="381"></text><text class="line l2" x="2045" y="399"></text><text class="line l3" x="2045" y="417"></text><rect class="tagbox" x="2245" y="325" width="70" height="18"/><text class="tag" x="2280" y="338"></text></g>
+    <g class="node zF" data-k="F3"><rect class="box" x="2025" y="490" width="300" height="150"/><text class="title" x="2045" y="520">UI: icon-bar chi tiết</text><text class="fileline" x="2045" y="538"></text><text class="line l1" x="2045" y="556"></text><text class="line l2" x="2045" y="574"></text><text class="line l3" x="2045" y="592"></text><rect class="tagbox" x="2245" y="500" width="70" height="18"/><text class="tag" x="2280" y="513"></text></g>
+    <g class="node zF" data-k="F4"><rect class="box" x="2025" y="665" width="300" height="150"/><text class="title" x="2045" y="695">UI: khay chọn + CSV</text><text class="fileline" x="2045" y="713"></text><text class="line l1" x="2045" y="731"></text><text class="line l2" x="2045" y="749"></text><text class="line l3" x="2045" y="767"></text><rect class="tagbox" x="2245" y="675" width="70" height="18"/><text class="tag" x="2280" y="688"></text></g>
+
+    <!-- Zone G nodes -->
+    <g class="node zG status-gap" data-k="G1"><rect class="box" x="2420" y="140" width="300" height="150"/><text class="title" x="2440" y="170">OcrFuzzyRetriever</text><text class="fileline" x="2440" y="188"></text><text class="line l1" x="2440" y="206"></text><text class="line l2" x="2440" y="224"></text><text class="line l3" x="2440" y="242"></text><rect class="tagbox" x="2640" y="150" width="70" height="18"/><text class="tag" x="2675" y="163"></text></g>
+    <g class="node zG status-gap" data-k="G2"><rect class="box" x="2420" y="315" width="300" height="150"/><text class="title" x="2440" y="345">PreparedQueryPlanner</text><text class="fileline" x="2440" y="363"></text><text class="line l1" x="2440" y="381"></text><text class="line l2" x="2440" y="399"></text><text class="line l3" x="2440" y="417"></text><rect class="tagbox" x="2640" y="325" width="70" height="18"/><text class="tag" x="2675" y="338"></text></g>
+    <g class="node zG status-gap" data-k="G3"><rect class="box" x="2420" y="490" width="300" height="150"/><text class="title" x="2440" y="520">QueryExpansionRetriever</text><text class="fileline" x="2440" y="538"></text><text class="line l1" x="2440" y="556"></text><text class="line l2" x="2440" y="574"></text><text class="line l3" x="2440" y="592"></text><rect class="tagbox" x="2640" y="500" width="70" height="18"/><text class="tag" x="2675" y="513"></text></g>
+    <g class="node zG status-gap" data-k="G4"><rect class="box" x="2420" y="665" width="300" height="150"/><text class="title" x="2440" y="695">rules bonus/penalty</text><text class="fileline" x="2440" y="713"></text><text class="line l1" x="2440" y="731"></text><text class="line l2" x="2440" y="749"></text><text class="line l3" x="2440" y="767"></text><rect class="tagbox" x="2640" y="675" width="70" height="18"/><text class="tag" x="2675" y="688"></text></g>
+    <g class="node zG" data-k="G5"><rect class="box" x="2420" y="840" width="300" height="150"/><text class="title" x="2440" y="870">eval_kis.py</text><text class="fileline" x="2440" y="888"></text><text class="line l1" x="2440" y="906"></text><text class="line l2" x="2440" y="924"></text><text class="line l3" x="2440" y="942"></text><rect class="tagbox" x="2640" y="850" width="70" height="18"/><text class="tag" x="2675" y="863"></text></g>
+    <g class="node zG" data-k="G6"><rect class="box" x="2420" y="1015" width="300" height="150"/><text class="title" x="2440" y="1045">seed_demo / preflight / smoke</text><text class="fileline" x="2440" y="1063"></text><text class="line l1" x="2440" y="1081"></text><text class="line l2" x="2440" y="1099"></text><text class="line l3" x="2440" y="1117"></text><rect class="tagbox" x="2640" y="1025" width="70" height="18"/><text class="tag" x="2675" y="1038"></text></g>
+  </g>
+</svg>
+
+<div class="hint">lăn chuột: zoom · kéo nền: pan · bấm node: chi tiết hàm/logic · chọn "Luồng" để xem đúng đường đi thực thi</div>
+
+<div class="leftstack">
+  <section class="card" id="flowCard"><div class="fname" id="flowName"></div><ol id="flowSteps"></ol></section>
+  <section class="card" id="legend">
+    <span class="li"><span class="sw" style="background:var(--a)"></span>offline</span>
+    <span class="li"><span class="sw" style="background:var(--b)"></span>gpu worker</span>
+    <span class="li"><span class="sw" style="background:var(--c)"></span>export/index</span>
+    <span class="li"><span class="sw" style="background:var(--d)"></span>bootstrap</span>
+    <span class="li"><span class="sw" style="background:var(--e)"></span>retrieval</span>
+    <span class="li"><span class="sw" style="background:var(--f)"></span>api/ui</span>
+    <span class="li"><span class="sw" style="background:var(--g)"></span>tooling</span>
+    <span class="li"><span class="sw warn"></span>có code, chưa wired production</span>
+  </section>
+</div>
+
+<aside class="card" id="detail">
+  <button class="close" id="detailClose" aria-label="Đóng">×</button>
+  <h3 id="detailTitle">Cách đọc sơ đồ</h3>
+  <div class="meta" id="detailMeta">Sơ đồ này mô tả code THẬT đang có trên branch server_implementation — không phải kế hoạch.</div>
+  <div id="detailBody">
+    <div class="section"><h4>Khác với aic2026-tong-quan.html</h4><p>File đó so sánh 3 profile (thí nghiệm/demo/thực tế) ở mức model/kỹ thuật. File này chỉ có <b>một</b> lớp nội dung: đúng những gì <code>offline/</code>, <code>online/</code>, <code>scripts/</code> đang làm hôm nay, tới mức tên hàm.</p></div>
+    <div class="section"><h4>Viền vàng đứt (zone G, 4 node đầu)</h4><p>Module đã có code + test qua <code>eval_kis.py</code> nhưng <b>không</b> được <code>online/api/container.py</code> (composition root) lắp vào — API thật hiện chỉ chạy dense + 4×BM25 + rule planner.</p></div>
+  </div>
+</aside>
+
+<div class="ctrl"><button id="zoomOut">−</button><span id="zoomPct">100%</span><button id="zoomIn">+</button><button id="zoomFit">Vừa màn hình</button></div>
+</main>
+
+<script>
+const NODES = {
+  A1:{title:'Probe & validate video',zone:'A · offline',file:'offline/media.py::FFmpegMedia.probe + pipeline.py::process_video',
+    lines:['ffprobe -show_streams -show_format → MediaInfo(fps,frame_count,duration,w,h,codec,audio)','video_id phải khớp regex ^L\\d{2}_V\\d{3}$, raise nếu sai','JobLedger.write(video_id,"probe","running") trước khi probe'],
+    tag:'FFPROBE'},
+  A2:{title:'Cắt scene đều (uniform)',zone:'A · offline',file:'offline/pipeline.py::process_video (vòng for)',
+    lines:['scene_frames = round(AIC_SCENE_SECONDS * fps), mặc định 8s','loop range(0, frame_count, scene_frames), interval [start,end)','scene_id = f"{video_id}_S{scene_idx:04d}"'],
+    tag:'UNIFORM 8s'},
+  A3:{title:'Chọn & trích keyframe',zone:'A · offline',file:'offline/pipeline.py::process_video + media.py::extract_frame',
+    lines:['vị trí = start + round((i+1)*(end-start)/(k+1)), k=AIC_KEYFRAMES_PER_SCENE','ffmpeg -vf select=eq(n,idx) -frames:v 1, ghi tmp rồi rename atomic','skip nếu ảnh đã tồn tại (idempotent, resume-friendly)'],
+    tag:'FFMPEG'},
+  A4:{title:'Enrich keyframe',zone:'A · offline',file:'offline/pipeline.py::_keyframe',
+    lines:['1) provider.image("caption", frame) — PHẢI chạy trước','2) token ≥4 ký tự trong caption → candidate_labels (casefold, top 32)','3) asyncio.gather(ocr(frame), object(frame, candidate_labels))'],
+    tag:'SONG SONG'},
+  A5:{title:'ASR & gán về scene',zone:'A · offline',file:'offline/pipeline.py::process_video (audio_present block)',
+    lines:['chỉ chạy nếu info.audio_present: provider.video("asr", relative_source)','cắt mỗi segment vào [scene.start_sec, scene.end_sec), bỏ segment rỗng','segment_id = f"{scene_id}_A{idx:04d}", source_segment_id giữ gốc'],
+    tag:'NẾU CÓ AUDIO'},
+  A6:{title:'JobLedger resume',zone:'A · offline',file:'offline/state.py::JobLedger.write',
+    lines:['1 file JSON/video, stage: probe→enrich→complete|failed','ghi atomic: tmp + fsync + rename (không bao giờ ghi dở)','completed_scenes theo dõi tiến độ; lỗi ghi kèm error message'],
+    tag:'RESUME'},
+
+  B1:{title:'Worker HTTP gateway',zone:'B · gpu worker',file:'offline/worker.py::create_worker',
+    lines:['FastAPI cổng 8010: /v1/inference/{caption|ocr|object|embedding}, /v1/inference/asr, /v1/embed/text','Bearer token qua secrets.compare_digest (constant-time)','asyncio.Semaphore(AIC_GPU_CONCURRENCY) giới hạn song song'],
+    tag:'CỔNG 8010'},
+  B2:{title:'MockInferenceProvider',zone:'B · gpu worker',file:'offline/providers.py::MockInferenceProvider',
+    lines:['caption = f"Khung hình {frame.stem}" (xác định, không phải model thật)','ocr/object trả rỗng; asr trả segments: []','embedding = SHA256(bytes ảnh) → vector 256-d xác định'],
+    tag:'MẶC ĐỊNH'},
+  B3:{title:'RemoteInferenceProvider',zone:'B · gpu worker',file:'offline/providers.py::RemoteInferenceProvider._post',
+    lines:['base64 ảnh + header Idempotency-Key = task:sha256(payload)','retry CHỈ lỗi transient: HTTP 5xx/429, URLError, timeout','backoff = min(8s, 0.5×2^attempt) + jitter ngẫu nhiên'],
+    tag:'RETRY'},
+  B4:{title:'Qwen2.5-VL (caption+OCR)',zone:'B · gpu worker',file:'offline/gpu_engine.py::_load_qwen/_qwen_generate/_caption_sync/_ocr_sync',
+    lines:['Qwen2_5_VLForConditionalGeneration, device_map="auto", torch.float16','chat template qua AutoProcessor + qwen_vl_utils.process_vision_info','OCR: prompt JSON {bbox_2d,text_content}, tự chuẩn hoá bbox theo w/h ảnh'],
+    tag:'GPU THẬT'},
+  B5:{title:'OWLv2 · CLIP · Whisper',zone:'B · gpu worker',file:'offline/gpu_engine.py::_object_sync/_image_embedding_sync/_asr_sync',
+    lines:['OWLv2 zero-shot-object-detection, threshold=AIC_OBJECT_THRESHOLD (0.15)','CLIP ViT-L/14 get_image/text_features, L2-normalize (v/‖v‖₂)','Whisper large-v3-turbo, chunk_length_s=30, return_timestamps=True'],
+    tag:'GPU THẬT'},
+
+  C1:{title:'export_dataset',zone:'C · export/index',file:'datasection/exporter.py::export_dataset',
+    lines:['Video.model_validate() lại toàn bộ + raise nếu trùng video/scene/keyframe_id','đối chiếu (manifest.video_count,scene_count,keyframe_count) với dữ liệu thật','atomic_jsonl: ghi tmp → fsync → rename, sort_keys=True (deterministic)'],
+    tag:'ATOMIC'},
+  C2:{title:'verify_export (gate)',zone:'C · export/index',file:'datasection/exporter.py::verify_export',
+    lines:['so khớp sha256 từng file JSONL với manifest.export_checksums','đếm dòng theo model Pydantic thật (Video/Scene/Keyframe), không chỉ đếm text','raise ValueError nếu lệch checksum hoặc số dòng — dùng ở scripts/preflight.py'],
+    tag:'GATE'},
+  C3:{title:'Local index (FAISS/JSON)',zone:'C · export/index',file:'offline/indexing.py::scene_rows(_remote)/build_local_index',
+    lines:['scene_rows_remote(): mean-pool CLIP vector các keyframe rồi renormalize','build_local_index(): FAISS IndexFlatIP nếu import được, luôn kèm JSON fallback','file ra: scenes.faiss + scenes.ids.json + scenes.json (portable)'],
+    tag:'FAISS/JSON'},
+  C4:{title:'QdrantIndexer',zone:'C · export/index',file:'offline/indexing.py::QdrantIndexer',
+    lines:['provision(): named vector "visual" Cosine + payload index (video_id,scene_idx,has_ocr,has_asr)','upsert(): batch 128, point_id = uuid5(NAMESPACE_URL,"aic2026:v1:"+scene_id)','gọi qua: python -m offline index --encoder remote --qdrant'],
+    tag:'TÙY CHỌN'},
+
+  D1:{title:'Settings.from_env',zone:'D · bootstrap',file:'online/config.py::Settings.from_env',
+    lines:['backend = "local" | "qdrant" (raise nếu giá trị khác)','backend=qdrant bắt buộc AIC_QDRANT_URL + AIC_EMBEDDING_URL','đọc toàn bộ AIC_CORS_ORIGINS, AIC_ONLINE_API_KEY, AIC_CANDIDATE_LIMIT, AIC_RRF_K'],
+    tag:'ENV'},
+  D2:{title:'JsonlSceneRepository.load',zone:'D · bootstrap',file:'online/adapters/json_metadata.py::JsonlSceneRepository.load/project_scene',
+    lines:['đọc scenes.jsonl 1 LẦN lúc FastAPI lifespan khởi động','đổi file/metadata sau đó KHÔNG tự reload — phải restart uvicorn','project_scene(): gom caption/ocr/asr/keyword/object_labels phẳng vào SceneDocument'],
+    tag:'1 LẦN/BOOT'},
+  D3:{title:'build_container',zone:'D · bootstrap',file:'online/api/container.py::build_container',
+    lines:['backend=local → HashingTextEncoder + InMemoryVectorStore, build vector NGAY từ caption+keyword text','backend=qdrant → RemoteTextEncoder (CLIP text thật) + QdrantVectorStore','luôn dựng 4 LexicalRetriever độc lập: caption/ocr/asr/keyword'],
+    tag:'COMPOSITION ROOT'},
+
+  E1:{title:'RuleBasedQueryPlanner.plan',zone:'E · retrieval',file:'online/services/query_planner.py::RuleBasedQueryPlanner.plan',
+    lines:['NFC normalize + gộp space; tách exact_phrases trong ngoặc kép','SEQUENCE: tách event theo marker "sau đó/tiếp theo/rồi/then/next/finally"','modality_weights mặc định; OCR→2.0 nếu có ngoặc kép/hint chữ, ASR→1.7 nếu hint nói'],
+    tag:'RULE-BASED'},
+  E2:{title:'Retrieve song song',zone:'E · retrieval',file:'online/services/search.py::SearchService._retrieve',
+    lines:['asyncio.gather(*[retriever.search(plan) for retriever in self.retrievers])','mỗi BM25Index lấy limit×2 rồi filter (video_ids/scene_ids/has_ocr/has_asr/time)','retriever tự skip nếu modality_weights[self.modality] ≤ 0'],
+    tag:'ASYNCIO.GATHER'},
+  E3:{title:'weighted_rrf (fusion)',zone:'E · retrieval',file:'online/services/fusion.py::weighted_rrf',
+    lines:['score(scene) = Σ weight(modality) / (rrf_k + rank), rrf_k mặc định 60','gom component_scores theo source, matched_modalities, evidence (matched_text)','tie-break DETERMINISTIC theo scene_id, rank lại từ 1'],
+    tag:'RRF k=60'},
+  E4:{title:'_hydrate + best-keyframe',zone:'E · retrieval',file:'online/services/search.py::SearchService._hydrate',
+    lines:['best_idx = token-overlap cao nhất giữa query và keyframe_evidence[i].text','fallback nếu không có text: keyframe gần midpoint scene nhất','build SearchHit đầy đủ (evidence[:10], component_scores, best_timestamp_sec)'],
+    tag:'TOKEN OVERLAP'},
+  E5:{title:'Rẽ nhánh theo task',zone:'E · retrieval',file:'online/services/search.py::search + temporal.py::link_event_hits',
+    lines:['KIS/VQA: cắt candidates[:top_k] trực tiếp, không hậu xử lý thêm','AVS: _diversify_avs() cap CỨNG 3 scene/video (không phải MMR/clustering)','SEQUENCE: mỗi event retrieve+hydrate riêng rồi beam-link (scene_idx tăng nghiêm ngặt)'],
+    tag:'KIS/AVS/SEQ'},
+  E6:{title:'VQAService.answer',zone:'E · retrieval',file:'online/services/vqa.py::VQAService.answer/EvidenceOnlyAnswerGenerator',
+    lines:['search nội bộ với TaskType.VQA, top_k=top_k_evidence (mặc định 5)','repository.get_many(scene_ids) hydrate context đầy đủ','EvidenceOnlyAnswerGenerator: nối "[scene_id] text" cắt 500 ký tự/scene — KHÔNG LLM'],
+    tag:'KHÔNG LLM'},
+
+  F1:{title:'FastAPI routes + middleware',zone:'F · api/ui',file:'online/api/routes.py + app.py',
+    lines:['/v1/health, /v1/search/{kis,avs,sequence}, /v1/vqa, /v1/scenes/{id}, /v1/media/{path}','CORSMiddleware theo AIC_CORS_ORIGINS; api_key_guard kiểm Bearer nếu bật','/v1/media sandbox: chỉ phục vụ file trong processed/ hoặc raw/videos/'],
+    tag:'8 ROUTE'},
+  F2:{title:'UI: runSearch + sceneCard',zone:'F · api/ui',file:'online/ui/app.js::runSearch/sceneCard',
+    lines:['fetch đúng endpoint theo #task, render lưới .card-grid (3-5 cột responsive)','hitsById Map lưu hit đầy đủ để checkbox/icon tra cứu lại không cần fetch thêm','debug=true → hiện query_plan (modality_weights, exact_phrases,...) trong panel riêng'],
+    tag:'FETCH'},
+  F3:{title:'UI: icon-bar chi tiết',zone:'F · api/ui',file:'online/ui/app.js (resultsBox click delegation, icon-bar)',
+    lines:['6 icon/card: 📊 lý do khớp · 📝 Caption · 🔤 OCR · 🎙 ASR · 🏷 Keyword · 🎬 video','4 icon giữa gọi GET /v1/scenes/{id} qua getSceneDetail(), cache theo sceneDetailCache Map','bấm lại cùng icon → đóng panel; bấm icon khác → thay nội dung panel'],
+    tag:'MỚI THÊM'},
+  F4:{title:'UI: khay chọn + CSV',zone:'F · api/ui',file:'online/ui/app.js (selection tray)',
+    lines:['toggleSelect() lưu vào localStorage — khay sống sót qua NHIỀU lần search khác nhau','trayExport: parse frame_idx bằng regex /_F(\\d+)$/ trên best_keyframe_id, không cần fps','trayRefine: runSearch({filters:{video_ids}}) — dùng thẳng SearchFilters có sẵn ở backend'],
+    tag:'MỚI THÊM'},
+
+  G1:{title:'OcrFuzzyRetriever',zone:'G · chưa wired',file:'online/adapters/ocr_fuzzy.py',
+    lines:['normalize_vi (NFD bỏ dấu, đ→d, casefold) + prefilter trigram (giữ top limit×10)','score = 0.55×token-containment (difflib ratio≥0.8) + 0.45×partial-phrase','CHỈ chạy qua scripts/eval_kis.py --mode ocr_only|fusion, không có trong container.py'],
+    tag:'CHƯA WIRED'},
+  G2:{title:'PreparedQueryPlanner',zone:'G · chưa wired',file:'online/services/query_prep.py',
+    lines:['tách target_query (nhánh dense) / ocr_query (cụm ngoặc kép) / context','cùng output QueryPlan như RuleBasedQueryPlanner nên thay được ngay lập tức','chỉ dùng khi eval_kis chạy với cờ --use-query-prep'],
+    tag:'CHƯA WIRED'},
+  G3:{title:'QueryExpansionRetriever',zone:'G · chưa wired',file:'online/services/query_expansion.py',
+    lines:['lexicon ~70 cụm tiếng Việt (đã bỏ dấu) → term tiếng Anh, greedy match cụm dài trước','trần max_terms=6, chỉ wrap nhánh BM25 caption/keyword','chỉ dùng khi eval_kis chạy với cờ --use-expansion; không có dịch máy thật'],
+    tag:'CHƯA WIRED'},
+  G4:{title:'rules bonus/penalty',zone:'G · chưa wired',file:'online/services/rules.py',
+    lines:['+0.020 OCR exact, +0.010 OCR partial (≥60% từ), +0.004/object (trần 0.012)','+0.003/keyword (trần 0.009), −0.015 penalty nếu có ngoặc kép mà không khớp gì','áp SAU weighted_rrf; chỉ dùng khi eval_kis chạy với cờ --use-rules'],
+    tag:'CHƯA WIRED'},
+  G5:{title:'eval_kis.py',zone:'G · tooling',file:'scripts/eval_kis.py',
+    lines:['Recall@{1,5,20,50,100}, MRR, video-Recall@100 trên 4 mode (metadata_only/vector_only/ocr_only/fusion)','định nghĩa "hit-in-interval": đúng scene_id HOẶC đúng video + giao interval thời gian','nguyên tắc: không kết luận cải tiến nào tốt hơn khi chưa chạy lại bảng này'],
+    tag:'ĐO METRIC'},
+  G6:{title:'seed_demo / preflight / smoke_e2e',zone:'G · tooling',file:'scripts/seed_demo.py, preflight.py, smoke_e2e.py',
+    lines:['seed_demo: sinh data giả CỐ ĐỊNH, GHI ĐÈ hoàn toàn storage/exports/*','⚠ bẫy đã gặp thật: unittest suite gọi seed_demo() làm fixture — mất data thật nếu chạy sau khi offline run','preflight: verify_export + kiểm backend/manifest health trước khi bật online'],
+    tag:'BẪY: GHI ĐÈ'},
+};
+
+const FLOWS = {
+  offline:{name:'Offline — video đến index',
+    nodes:['A1','A2','A3','A4','A5','A6','B1','B2','B3','B4','B5','C1','C2','C3','C4'],
+    edges:['e1','e2','e3','e4','e5','e6','e7','e8','e9','e10','e11','e12','e22','e23'],
+    steps:['Probe ffprobe, validate video_id, cắt scene đều theo AIC_SCENE_SECONDS.',
+      'Trích keyframe bằng ffmpeg; enrich TUẦN TỰ caption trước rồi (ocr‖object) song song qua worker.',
+      'Nếu có audio: ASR nguyên video rồi cắt segment theo biên scene.',
+      'export_dataset ghi atomic → verify_export gate → build_local_index (FAISS/JSON, tuỳ chọn Qdrant).']},
+  kis:{name:'KIS — tìm known moment',
+    nodes:['D1','D2','D3','E1','E2','E3','E4','E5','F1','F2'],
+    edges:['e13','e14','e24','e25','e15','e16','e17','e18','e26','e20'],
+    steps:['Container dựng 1 lần lúc khởi động: encoder+vector store theo backend, 4 BM25.',
+      'RuleBasedQueryPlanner tách exact_phrases, gán modality_weights.',
+      'Retrieve song song (dense+4×BM25) rồi weighted_rrf.',
+      '_hydrate chọn best-keyframe bằng token-overlap, cắt top_k, trả UI.']},
+  sequence:{name:'Sequence — chuỗi sự kiện có thứ tự',
+    nodes:['D1','D2','D3','E1','E2','E3','E4','E5','F1','F2'],
+    edges:['e13','e14','e24','e25','e15','e16','e17','e18','e26','e20'],
+    steps:['Planner tách nhiều event theo marker temporal (sau đó/tiếp theo/rồi...).',
+      'Mỗi event retrieve + fuse ĐỘC LẬP ra 1 danh sách hit riêng (không dùng chung candidate).',
+      'link_event_hits: beam search nối scene cùng video, scene_idx phải tăng nghiêm ngặt.',
+      'Score chuỗi = Σ điểm hit − 0.002×khoảng-cách-giây; trả nhiều SequenceHit xếp hạng.']},
+  avs:{name:'AVS — tìm rộng và đa dạng',
+    nodes:['D1','D2','D3','E1','E2','E3','E4','E5','F1','F2'],
+    edges:['e13','e14','e24','e25','e15','e16','e17','e18','e26','e20'],
+    steps:['Dùng CHUNG pipeline hybrid với KIS — không có bước mở rộng truy vấn riêng cho AVS.',
+      'candidate_limit=100 mặc định, weighted RRF giống hệt KIS.',
+      '_diversify_avs: cap CỨNG tối đa 3 scene/video (không phải MMR/clustering/threshold).',
+      'Trả danh sách đã đa dạng hoá theo video, giữ thứ tự điểm.']},
+  vqa:{name:'VQA — evidence-grounded answer',
+    nodes:['D1','D2','D3','E1','E2','E3','E4','E6','F1','F2'],
+    edges:['e13','e14','e24','e25','e15','e16','e17','e19','e27','e20'],
+    steps:['Search nội bộ với TaskType.VQA, lấy top_k_evidence (mặc định 5, tối đa 20).',
+      'repository.get_many() hydrate context đầy đủ (caption/ocr/asr/keyword) theo scene_id.',
+      'EvidenceOnlyAnswerGenerator: nối bằng chứng thô, KHÔNG có LLM sinh câu trả lời.',
+      'Trả evidence-first để chống hallucination; confidence luôn None hoặc 0.0.']},
+  ui:{name:'UI — tương tác người dùng',
+    nodes:['F1','F2','F3','F4'],
+    edges:['e20','e21'],
+    steps:['runSearch() gọi đúng endpoint theo #task, cache toàn bộ hit vào hitsById.',
+      '6 icon mở panel theo yêu cầu: 4 icon giữa gọi /v1/scenes/{id}, cache sceneDetailCache.',
+      'Checkbox chọn kết quả → khay bên phải, lưu localStorage sống sót qua nhiều lần search.',
+      'Khay: xuất CSV (frame_idx parse từ best_keyframe_id) hoặc tìm lại giới hạn filters.video_ids.']},
+  gaps:{name:'Khoảng trống: có code, chưa chạy production',
+    nodes:['G1','G2','G3','G4'],
+    edges:[],
+    steps:['OcrFuzzyRetriever, PreparedQueryPlanner, QueryExpansionRetriever, rules bonus/penalty: đã code, có test qua eval_kis.py.',
+      'KHÔNG module nào trong 4 module này được container.py (composition root) lắp vào — API thật chỉ có dense+4BM25+rule planner.',
+      'Muốn dùng thật: thêm cờ env vào container.py, nhưng PHẢI chạy eval_kis ablation trước để chứng minh tăng metric.',
+      'Đây là khoảng trống thật giữa "có code" và "chạy trong production" — đừng nhầm hai khái niệm này.']},
+};
+
+const stage=document.getElementById('stage'), svg=document.getElementById('svg'), world=document.getElementById('world');
+const nodes=[...document.querySelectorAll('.node')], edges=[...document.querySelectorAll('.edge')], labels=[...document.querySelectorAll('.elabel')];
+const flowButtons=[...document.querySelectorAll('[data-flow]')];
+let currentFlow='all';
+
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+
+function renderNodes(){
+  nodes.forEach(n=>{
+    const key=n.dataset.k, data=NODES[key]; if(!data)return;
+    [...n.querySelectorAll('.line')].forEach((el,i)=>el.textContent=data.lines[i]||'');
+    const fileEl=n.querySelector('.fileline'); if(fileEl) fileEl.textContent=data.file;
+    n.querySelector('.tag').textContent=data.tag;
+    n.dataset.search=(data.title+' '+data.file+' '+data.lines.join(' ')+' '+data.tag).toLowerCase();
+  });
+}
+renderNodes();
+
+function showDetail(key){
+  const n=NODES[key]; if(!n)return;
+  nodes.forEach(x=>x.classList.toggle('sel',x.dataset.k===key));
+  document.getElementById('detailTitle').textContent=n.title;
+  document.getElementById('detailMeta').textContent=n.zone;
+  const isGap = document.querySelector(`.node[data-k="${key}"]`)?.classList.contains('status-gap');
+  document.getElementById('detailBody').innerHTML=`
+    <div class="section">${isGap?'<span class="status-pill gap">CHƯA WIRED</span>':'<span class="status-pill ok">ĐANG CHẠY</span>'}<span class="fileref">${esc(n.file)}</span></div>
+    <div class="section"><h4>Logic</h4><ul>${n.lines.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`;
+  document.getElementById('detail').style.display='block';
+}
+
+function setFlow(key){
+  currentFlow=key; flowButtons.forEach(b=>b.classList.toggle('on',b.dataset.flow===key));
+  edges.forEach(e=>e.classList.remove('lit')); labels.forEach(l=>l.classList.remove('lit')); nodes.forEach(n=>n.classList.remove('lit'));
+  if(key==='all'||!FLOWS[key]){stage.classList.remove('flowing');document.getElementById('flowCard').style.display='none';return}
+  const f=FLOWS[key]; stage.classList.add('flowing'); document.getElementById('flowCard').style.display='block';
+  f.edges.forEach(id=>document.getElementById(id)?.classList.add('lit')); labels.forEach(l=>{if(f.edges.includes(l.dataset.e))l.classList.add('lit')}); f.nodes.forEach(k=>document.querySelector(`.node[data-k="${k}"]`)?.classList.add('lit'));
+  document.getElementById('flowName').textContent=f.name; document.getElementById('flowSteps').innerHTML=f.steps.map(x=>`<li>${x}</li>`).join('');
+}
+
+flowButtons.forEach(b=>b.addEventListener('click',()=>setFlow(b.dataset.flow)));
+nodes.forEach(n=>n.addEventListener('click',e=>{if(didPan)return;e.stopPropagation();showDetail(n.dataset.k)}));
+document.getElementById('detailClose').addEventListener('click',()=>{document.getElementById('detail').style.display='none';nodes.forEach(n=>n.classList.remove('sel'))});
+svg.addEventListener('click',e=>{if(!didPan&&!e.target.closest('.node')){document.getElementById('detail').style.display='none';nodes.forEach(n=>n.classList.remove('sel'))}});
+
+const DEFAULT_DETAIL={t:document.getElementById('detailTitle').textContent,m:document.getElementById('detailMeta').textContent,b:document.getElementById('detailBody').innerHTML};
+document.getElementById('helpBtn').addEventListener('click',()=>{document.getElementById('detailTitle').textContent=DEFAULT_DETAIL.t;document.getElementById('detailMeta').textContent=DEFAULT_DETAIL.m;document.getElementById('detailBody').innerHTML=DEFAULT_DETAIL.b;document.getElementById('detail').style.display='block';nodes.forEach(n=>n.classList.remove('sel'))});
+document.getElementById('themeToggle').addEventListener('click',()=>{const dark=!document.documentElement.classList.contains('dark');document.documentElement.classList.toggle('dark',dark);try{localStorage.setItem('aic-flow-theme',dark?'dark':'light');}catch(_){}});
+function runSearch(){const q=document.getElementById('searchBox').value.trim().toLowerCase();nodes.forEach(n=>{n.classList.remove('search-dim','search-hit');if(q){const hit=(n.dataset.search||'').includes(q);n.classList.add(hit?'search-hit':'search-dim')}})}
+document.getElementById('searchBox').addEventListener('input',runSearch);
+
+const W=2770,H=1260;let scale=1,tx=0,ty=0,fitScale=1,userMoved=false;const MAXZ=3;const minZ=()=>Math.min(.35,fitScale);
+function applyTransform(){world.setAttribute('transform',`translate(${tx} ${ty}) scale(${scale})`);document.getElementById('zoomPct').textContent=Math.round(scale*100)+'%'}
+function fit(){const r=stage.getBoundingClientRect();fitScale=Math.min(r.width/W,r.height/H)*.95;scale=fitScale;tx=(r.width-W*scale)/2;ty=(r.height-H*scale)/2;userMoved=false;applyTransform()}
+function zoomAt(px,py,f){const ns=Math.min(MAXZ,Math.max(minZ(),scale*f)),k=ns/scale;tx=px-(px-tx)*k;ty=py-(py-ty)*k;scale=ns;userMoved=true;applyTransform()}
+svg.addEventListener('wheel',e=>{e.preventDefault();const r=svg.getBoundingClientRect();zoomAt(e.clientX-r.left,e.clientY-r.top,Math.exp(-e.deltaY*.0015))},{passive:false});
+const pointers=new Map();let panning=false,didPan=false,startX=0,startY=0,lastX=0,lastY=0,lastDist=0;
+svg.addEventListener('pointerdown',e=>{if(e.target.closest('.node')){didPan=false;return}svg.setPointerCapture(e.pointerId);pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});if(pointers.size===1){panning=false;didPan=false;startX=lastX=e.clientX;startY=lastY=e.clientY}else if(pointers.size===2){const[a,b]=[...pointers.values()];lastDist=Math.hypot(a.x-b.x,a.y-b.y)}});
+svg.addEventListener('pointermove',e=>{if(!pointers.has(e.pointerId))return;pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});if(pointers.size===2){const[a,b]=[...pointers.values()],d=Math.hypot(a.x-b.x,a.y-b.y),r=svg.getBoundingClientRect();if(lastDist>0)zoomAt((a.x+b.x)/2-r.left,(a.y+b.y)/2-r.top,d/lastDist);lastDist=d;didPan=true;return}if(pointers.size!==1)return;const dx=e.clientX-lastX,dy=e.clientY-lastY;if(!panning&&Math.hypot(e.clientX-startX,e.clientY-startY)>5){panning=true;didPan=true;stage.classList.add('grabbing')}if(panning){tx+=dx;ty+=dy;userMoved=true;applyTransform()}lastX=e.clientX;lastY=e.clientY});
+function endPointer(e){pointers.delete(e.pointerId);if(pointers.size<2)lastDist=0;if(!pointers.size){panning=false;stage.classList.remove('grabbing')}}
+svg.addEventListener('pointerup',endPointer);svg.addEventListener('pointercancel',endPointer);
+document.getElementById('zoomIn').addEventListener('click',()=>{const r=svg.getBoundingClientRect();zoomAt(r.width/2,r.height/2,1.25)});document.getElementById('zoomOut').addEventListener('click',()=>{const r=svg.getBoundingClientRect();zoomAt(r.width/2,r.height/2,.8)});document.getElementById('zoomFit').addEventListener('click',fit);window.addEventListener('resize',()=>{if(!userMoved)fit()});
+
+setFlow('all');requestAnimationFrame(fit);
+</script>
+</body>
+</html>

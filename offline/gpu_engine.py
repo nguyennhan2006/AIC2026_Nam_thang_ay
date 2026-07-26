@@ -48,14 +48,15 @@ class TransformersGpuEngine:
             import torch
             from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration
             name = os.getenv("AIC_CAPTION_MODEL", "Qwen/Qwen2.5-VL-7B-Instruct")
+            revision = os.getenv("AIC_CAPTION_MODEL_REVISION") or None
             cuda = torch.cuda.is_available()
             # float16 (not bf16) for broad GPU compat (e.g. Kaggle T4 has no fast bf16);
             # device_map="auto" shards across all visible GPUs (e.g. Kaggle T4x2 ~32GB combined).
             model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
-                name, torch_dtype=torch.float16 if cuda else torch.float32,
+                name, revision=revision, torch_dtype=torch.float16 if cuda else torch.float32,
                 device_map="auto" if cuda else "cpu",
             )
-            processor = AutoProcessor.from_pretrained(name)
+            processor = AutoProcessor.from_pretrained(name, revision=revision)
             self._qwen = (model, processor, name)
         return self._qwen
 
@@ -105,7 +106,12 @@ class TransformersGpuEngine:
         from transformers import pipeline
         labels = request.candidate_labels or ["person", "vehicle", "building", "animal", "sign", "food"]
         if self._object is None:
-            self._object = pipeline("zero-shot-object-detection", model=os.getenv("AIC_OBJECT_MODEL", "google/owlv2-base-patch16-ensemble"), device=self.device)
+            self._object = pipeline(
+                "zero-shot-object-detection",
+                model=os.getenv("AIC_OBJECT_MODEL", "google/owlv2-base-patch16-ensemble"),
+                revision=os.getenv("AIC_OBJECT_MODEL_REVISION") or None,
+                device=self.device,
+            )
         image = self._image(request)
         width, height = image.size
         rows = self._object(image, candidate_labels=labels, threshold=float(os.getenv("AIC_OBJECT_THRESHOLD", "0.15")))
@@ -126,7 +132,12 @@ class TransformersGpuEngine:
         from transformers import CLIPModel, CLIPProcessor
         if self._clip is None:
             name = os.getenv("AIC_EMBEDDING_MODEL", "openai/clip-vit-large-patch14")
-            self._clip = (CLIPModel.from_pretrained(name).to(self.device), CLIPProcessor.from_pretrained(name), name)
+            revision = os.getenv("AIC_EMBEDDING_MODEL_REVISION") or None
+            self._clip = (
+                CLIPModel.from_pretrained(name, revision=revision).to(self.device),
+                CLIPProcessor.from_pretrained(name, revision=revision),
+                name,
+            )
         model, processor, name = self._clip
         inputs = processor(images=self._image(request), return_tensors="pt").to(self.device)
         with torch.inference_mode():
@@ -140,7 +151,12 @@ class TransformersGpuEngine:
         from transformers import CLIPModel, CLIPProcessor
         if self._clip is None:
             name = os.getenv("AIC_EMBEDDING_MODEL", "openai/clip-vit-large-patch14")
-            self._clip = (CLIPModel.from_pretrained(name).to(self.device), CLIPProcessor.from_pretrained(name), name)
+            revision = os.getenv("AIC_EMBEDDING_MODEL_REVISION") or None
+            self._clip = (
+                CLIPModel.from_pretrained(name, revision=revision).to(self.device),
+                CLIPProcessor.from_pretrained(name, revision=revision),
+                name,
+            )
         model, processor, name = self._clip
         inputs = processor(text=[text], return_tensors="pt", padding=True).to(self.device)
         with torch.inference_mode():
@@ -156,7 +172,12 @@ class TransformersGpuEngine:
         if root != target and root not in target.parents:
             raise ValueError("video_uri escapes AIC_DATA_ROOT")
         if self._asr is None:
-            self._asr = pipeline("automatic-speech-recognition", model=os.getenv("AIC_ASR_MODEL", "openai/whisper-large-v3-turbo"), device=self.device)
+            self._asr = pipeline(
+                "automatic-speech-recognition",
+                model=os.getenv("AIC_ASR_MODEL", "openai/whisper-large-v3-turbo"),
+                revision=os.getenv("AIC_ASR_MODEL_REVISION") or None,
+                device=self.device,
+            )
         result = self._asr(str(target), return_timestamps=True, chunk_length_s=30)
         segments = []
         for chunk in result.get("chunks", []):

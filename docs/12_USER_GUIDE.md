@@ -7,6 +7,11 @@ Tài liệu này là hướng dẫn **thực hành** — chạy được gì hô
 chưa code); chạy model thật trên Kaggle xem
 [KAGGLE_OFFLINE_GUIDE.md](KAGGLE_OFFLINE_GUIDE.md).
 
+Có **2 bản UI song song**, cùng tính năng/API/format CSV, khác kiến trúc frontend:
+`online/ui/` (vanilla JS, không cần Node.js, backend tự phục vụ tại `/ui/`) và
+`online/ui-react/` (React/Vite, đang xây song song, cần `npm install` — xem mục 5).
+Chưa chốt bản nào thay thế bản nào; dùng bản nào cũng được.
+
 ## 1. Cài đặt môi trường local
 
 ```bash
@@ -81,7 +86,51 @@ khớp một trong hai quy tắc trên — sửa ô Backend (cách A) hoặc s�
 `AIC_ONLINE_API_KEY` (nếu bật) yêu cầu header `Authorization: Bearer <key>` cho
 mọi `/v1/*` trừ `/v1/health` — nhập vào ô "API token" của UI.
 
-## 5. Dùng UI
+## 5. Backend trên server xa (Vast.ai) + UI chạy trên máy local
+
+Kịch bản thi đấu thật: GPU/backend chạy trên máy thuê (Vast.ai), thao tác viên ngồi
+máy local. Khác mục 4 ở chỗ đây là 2 máy vật lý khác nhau — luôn là **cách B (UI tách
+rời)**, không có "cách A cùng origin" để chọn.
+
+### Bước 1 — Trên server
+
+1. Thuê máy, làm theo checklist `docs/05_VAST_DEPLOYMENT.md` (driver GPU, disk, port).
+2. Set `AIC_CORS_ORIGINS` **trước khi khởi động** khớp đúng origin UI sẽ mở ở máy
+   local (đổi sau phải restart, không hot-reload biến env):
+   - Dùng UI cũ qua `run_local_ui.sh` (cổng 5173): giá trị mặc định
+     `http://localhost:5173,http://127.0.0.1:5173` đã đúng, không cần sửa.
+   - Dùng UI React qua `npm run dev` (Vite cũng mặc định cổng 5173): **cùng giá trị
+     trên** — nhưng KHÔNG chạy đồng thời cả 2 UI cùng lúc (đụng cổng 5173); chỉ chạy 1
+     trong 2, chọn ở Bước 2.
+3. Khởi động: `./scripts/run_backend.sh` (nghe `0.0.0.0:8000`) hoặc qua
+   `infra/docker-compose.vast.yml`. Public cổng qua giao diện port-forward của
+   Vast.ai (không public thêm cổng nào khác — xem `docs/05` mục Network).
+4. Xác nhận từ máy local: `curl https://<host-vast>:<port>/v1/health`.
+
+### Bước 2 — Trên máy local, chọn 1 trong 2 UI
+
+| UI | Lệnh | Khi nào dùng |
+|---|---|---|
+| Cũ (vanilla JS, `online/ui/`) | `./scripts/run_local_ui.sh` → mở `http://localhost:5173` | Không cần Node.js, đã verify đúng format CSV BTC, dùng ngay được |
+| Mới (React/Vite, `online/ui-react/`) | `cd online/ui-react && npm install && npm run dev` → mở URL Vite in ra (mặc định `http://localhost:5173`) | Đang phát triển song song mục 2 nhánh của repo — cùng tính năng, cùng format CSV, khác kiến trúc frontend. Muốn bản build ổn định thay vì dev server: `npm run build` rồi phục vụ thư mục `dist/` (vd `npx serve dist -l 5173`) |
+
+### Bước 3 — Trỏ UI vào server xa
+
+Ô **"Backend Vast.ai"** trong UI: điền đúng URL public của server
+(`https://<host-vast>:<port>`, **không phải** `localhost`/`127.0.0.1`). Nếu server bật
+`AIC_ONLINE_API_KEY`, điền cùng giá trị vào ô **"API token"**.
+
+### Lưu ý
+
+- TLS bắt buộc nếu public qua internet thật (token gõ trên UI local đi qua mạng thật,
+  không dùng token yếu) — xem `docs/05` mục Network.
+- Lỗi `Access-Control-Allow-Origin`: 99% do origin UI thực tế mở ≠ giá trị đã
+  whitelist trong `AIC_CORS_ORIGINS` trên server — sửa xong **phải restart backend**.
+- 2 UI dùng chung `localStorage` theo **origin trình duyệt**, không theo mã nguồn —
+  đổi từ UI cũ sang UI mới ở cùng `http://localhost:5173` sẽ thấy lại đúng khay chọn/
+  API base đã lưu trước đó (cùng origin, cùng key `aic_*`), miễn không đổi cổng.
+
+## 6. Dùng UI
 
 1. Chọn **Loại nhiệm vụ** (KIS/AVS/Sequence/VQA), gõ **Truy vấn**, bấm Tìm kiếm.
 2. Mỗi kết quả là 1 card trong lưới 3–5 cột/hàng:
@@ -95,12 +144,17 @@ mọi `/v1/*` trừ `/v1/health` — nhập vào ô "API token" của UI.
    (lưu `localStorage`) để gom shortlist dần trong lúc thi.
    - **"Tìm lại chỉ trong các video đã chọn"**: search lại đúng câu truy vấn hiện
      tại nhưng giới hạn `filters.video_ids` theo các video đã chọn.
-   - **"Xuất CSV nộp bài"**: tải file `rank,video_id,frame_idx,timestamp_sec,
-     scene_id,score` — `frame_idx` lấy trực tiếp từ `best_keyframe_id`
-     (dạng `..._F001080` → `1080`), không cần biết `fps`.
+   - **"Xuất CSV nộp bài"**: xuất **đúng format chính thức BTC** (KHÔNG phải CSV
+     debug) — KIS/AVS/Sequence: mỗi dòng `<video_id>, <frame_idx>`; VQA: mỗi dòng
+     `<video_id>, <frame_idx>, "<answer>"` (ô "Câu trả lời VQA" trong khay chỉ hiện
+     khi chọn task VQA, bắt buộc điền trước khi xuất, ≤100 ký tự). Không có dòng
+     header, tối đa 100 dòng — vượt quá thì nút xuất tự khoá, phải bỏ bớt.
+     `frame_idx` lấy trực tiếp từ `best_keyframe_id` (dạng `..._F001080` →
+     `1080`), không cần biết `fps`. **Mỗi file CSV chỉ ứng với một câu truy vấn**
+     — xuất xong bấm "Xoá hết" trước khi làm câu tiếp theo.
    - **"Xoá hết"**: xoá khay, không xoá kết quả tìm kiếm đang hiển thị.
 
-## 6. Test trực tiếp qua API (không cần UI)
+## 7. Test trực tiếp qua API (không cần UI)
 
 ```bash
 # health
@@ -136,7 +190,7 @@ curl -o frame.jpg http://127.0.0.1:8000/v1/media/processed/keyframes/L01_V001/fr
 "start_sec_gte":0,"end_sec_lte":120}` (xem `SearchFilters` trong
 [online/domain/models.py](../online/domain/models.py)).
 
-## 7. Đánh giá chất lượng (bắt buộc trước khi kết luận cải tiến nào tốt hơn)
+## 8. Đánh giá chất lượng (bắt buộc trước khi kết luận cải tiến nào tốt hơn)
 
 ```bash
 python -m scripts.eval_kis --metadata storage/exports/scenes.jsonl \
@@ -148,7 +202,7 @@ In ra Recall@{1,5,20,50,100}, MRR, video-Recall@100 cho 4 mode
 `--use-query-prep --use-rules --use-expansion`. Không tự kết luận model/rule nào
 tốt hơn nếu chưa chạy lại bảng này.
 
-## 8. Biến môi trường hay dùng
+## 9. Biến môi trường hay dùng
 
 | Biến | Mặc định | Ý nghĩa |
 |---|---|---|
@@ -163,11 +217,12 @@ tốt hơn nếu chưa chạy lại bảng này.
 | `AIC_CAPTION_MODEL` | `Qwen/Qwen2.5-VL-7B-Instruct` | dùng chung cho caption **và** semantic OCR |
 | `AIC_SCENE_SECONDS` | 8 | độ dài scene (uniform-cut) |
 
-## 9. Sự cố thường gặp
+## 10. Sự cố thường gặp
 
 | Hiện tượng | Nguyên nhân | Cách xử lý |
 |---|---|---|
-| `Access-Control-Allow-Origin` khi bấm Tìm kiếm | origin trang UI ≠ giá trị ô Backend | Xem mục 4 |
+| `Access-Control-Allow-Origin` khi bấm Tìm kiếm | origin trang UI ≠ giá trị ô Backend | Xem mục 4 (cùng máy) hoặc mục 5 (server xa) |
+| Chạy `npm run dev` cho UI React nhưng vẫn thấy khay/API base của UI cũ (hoặc ngược lại) | 2 UI dùng chung `localStorage` theo origin trình duyệt — bình thường nếu cùng mở `http://localhost:5173` | Không phải lỗi; xoá `localStorage` thủ công nếu muốn tách hẳn 2 bản |
 | `404 no scene matched the query` | Query không khớp field nào đã index (bình thường nếu caption còn là mock placeholder) | Dùng query khớp `examples/kis_groundtruth*.jsonl`, hoặc chạy pipeline model thật |
 | `503 vector backend is not ready` ở `/v1/health` | `AIC_ONLINE_BACKEND=qdrant` nhưng Qdrant chưa chạy/chưa healthy | Kiểm tra `docker compose` Qdrant, hoặc chuyển tạm `AIC_ONLINE_BACKEND=local` |
 | `scene_count` không đổi sau khi chạy `offline run` mới | Backend chỉ load `scenes.jsonl` lúc khởi động (lifespan), không tự reload | Restart uvicorn |
