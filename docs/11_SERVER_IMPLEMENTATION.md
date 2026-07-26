@@ -65,8 +65,8 @@ tiên" của sơ đồ).
 | Dense index | Qdrant **HNSW tuned**, snapshot + atomic publish, frame/scene named vectors | Qdrant default + FAISS Flat | §4.D13 |
 | Sparse index | **Elasticsearch/OpenSearch** BM25, analyzer vi/en riêng, SPLADE/BGE-M3 chỉ khi tăng metric | BM25 in-memory | §4.D14 |
 | Evidence store | object storage + metadata DB (DuckDB/Postgres), evidence pack cache, audit API | JSONL in-RAM | §4.D15 |
-| Query parser | **Qwen3-14B** task-aware, must/nice/negative/temporal, query version + confidence | rule-based | §4.E16 |
-| Search | dense SigLIP/CLIP + Elastic sparse, object/temporal refine, **per-branch deadline/status** | gather all-or-fail | §4.E17 |
+| Query parser | **Qwen3-14B** task-aware, must/nice/negative/temporal, query version + confidence | rule-based; `PreparedQueryPlanner` (target/ocr/context) wired sau cờ `AIC_ENABLE_QUERY_PREP`, mặc định tắt, chờ ablation | §4.E16 |
+| Search | dense SigLIP/CLIP + Elastic sparse, object/temporal refine, **per-branch deadline/status** | gather all-or-fail; OCR-fuzzy/expansion/rules wired sau cờ env (`AIC_ENABLE_OCR_FUZZY`/`_EXPANSION`/`_RULES`), mặc định tắt — xem docs/15_RESEARCH_AGENDA.md | §4.E17 |
 | Fusion | dynamic weights theo query type, RRF + calibrated components, temporal neighborhood | RRF weight tĩnh | §4.E18 |
 | Rerank | cross-encoder **top-300→50**, Qwen3-VL evidence rerank **top-20**, rubric riêng KIS/VQA/AVS, temporal consistency | protocol rỗng | §4.E19 |
 | Resilience | **Redis cache, circuit breaker, required-branch fail-fast, rate limit** (*planned*) | không có | §4.E20 |

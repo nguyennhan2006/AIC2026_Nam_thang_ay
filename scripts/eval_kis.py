@@ -75,10 +75,10 @@ from online.adapters.encoders import HashingTextEncoder, RemoteTextEncoder
 from online.adapters.json_metadata import JsonlSceneRepository
 from online.adapters.ocr_fuzzy import OcrFuzzyRetriever
 from online.adapters.vector_stores import InMemoryVectorStore, QdrantVectorStore
-from online.domain.models import Candidate, QueryPlan, SearchRequest, TaskType
+from online.domain.models import SearchRequest, TaskType
 from online.services.query_expansion import QueryExpansionRetriever
 from online.services.query_prep import PreparedQueryPlanner
-from online.services.rules import RuleConfig, apply_bonus_penalty
+from online.services.rules import RuleConfig
 from online.services.search import SearchService
 
 
@@ -128,31 +128,6 @@ def is_interval_hit(hit, gt: GroundTruthItem) -> bool:
     # So sánh strict (interval nửa mở): scene liền kề luôn chạm biên scene
     # đúng (end_sec == start_sec kế tiếp) — chạm biên KHÔNG được tính là hit.
     return hit.start_sec < gt.end_sec and hit.end_sec > gt.start_sec
-
-
-class RuledSearchService(SearchService):
-    """SearchService + bonus/penalty rules chen giữa fusion và hydrate."""
-
-    rule_config = RuleConfig()
-
-    async def _retrieve(self, plan: QueryPlan, limit: int) -> list[Candidate]:
-        candidates = await super()._retrieve(plan, limit)
-        documents = {
-            doc.scene_id: doc
-            for doc in await self.repository.get_many(
-                [candidate.scene_id for candidate in candidates]
-            )
-        }
-        exact_phrases = [
-            phrase for event in plan.events for phrase in event.exact_phrases
-        ]
-        return apply_bonus_penalty(
-            candidates,
-            documents,
-            exact_phrases=exact_phrases,
-            query=plan.normalized_query,
-            config=self.rule_config,
-        )
 
 
 async def build_dense(repository: JsonlSceneRepository, backend: str) -> DenseRetriever:
@@ -224,12 +199,12 @@ async def build_service(
         retrievers.append(await OcrFuzzyRetriever.build(repository))
 
     planner = PreparedQueryPlanner() if use_query_prep else None
-    service_cls = RuledSearchService if use_rules else SearchService
-    return service_cls(
+    return SearchService(
         repository,
         retrievers,
         planner=planner,
         candidate_limit=candidate_limit,
+        rule_config=RuleConfig() if use_rules else None,
     )
 
 

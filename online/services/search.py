@@ -20,6 +20,7 @@ from online.domain.models import (
 from online.ports.interfaces import Retriever, SceneRepository
 from online.services.fusion import weighted_rrf
 from online.services.query_planner import RuleBasedQueryPlanner
+from online.services.rules import RuleConfig, apply_bonus_penalty
 from online.services.temporal import link_event_hits
 
 
@@ -32,6 +33,7 @@ class SearchService:
         planner: RuleBasedQueryPlanner | None = None,
         candidate_limit: int = 100,
         rrf_k: int = 60,
+        rule_config: RuleConfig | None = None,
     ) -> None:
         if not retrievers:
             raise ValueError("at least one retriever is required")
@@ -40,16 +42,37 @@ class SearchService:
         self.planner = planner or RuleBasedQueryPlanner()
         self.candidate_limit = candidate_limit
         self.rrf_k = rrf_k
+        # Phương án E (bonus/penalty sau RRF), optional — None giữ nguyên hành vi
+        # cũ; xem online/services/rules.py và docs/15_RESEARCH_AGENDA.md mục 5.
+        self.rule_config = rule_config
 
     async def _retrieve(self, plan: QueryPlan, limit: int) -> list[Candidate]:
         lists = await asyncio.gather(
             *(item.search(plan, limit=limit) for item in self.retrievers)
         )
-        return weighted_rrf(
+        candidates = weighted_rrf(
             lists,
             plan.modality_weights,
             rrf_k=self.rrf_k,
             limit=limit,
+        )
+        if self.rule_config is None:
+            return candidates
+        documents = {
+            document.scene_id: document
+            for document in await self.repository.get_many(
+                [candidate.scene_id for candidate in candidates]
+            )
+        }
+        exact_phrases = [
+            phrase for event in plan.events for phrase in event.exact_phrases
+        ]
+        return apply_bonus_penalty(
+            candidates,
+            documents,
+            exact_phrases=exact_phrases,
+            query=plan.normalized_query,
+            config=self.rule_config,
         )
 
     async def _hydrate(self, candidates: list[Candidate], query: str = "") -> list[SearchHit]:

@@ -1,0 +1,37 @@
+experiment_id: EXP-YYYYMMDD-001
+title: ""
+owner: ""
+status: planned  # planned|running|accepted|rejected|inconclusive
+hypothesis: ""
+
+dataset:
+  version: ""
+  split: dev
+  query_groups: []
+  query_count: 0
+
+baseline:
+  config: ""
+variant:
+  config: ""
+
+versions:
+  model: {}
+  index: {}
+  prompt: {}
+
+metrics:
+  primary: []
+  latency: []
+  system: []
+
+results:
+  baseline: {}
+  variant: {}
+  per_query_json: ""
+
+acceptance_condition: ""
+conclusion: ""
+regressions: []
+artifacts: []
+run_at: null

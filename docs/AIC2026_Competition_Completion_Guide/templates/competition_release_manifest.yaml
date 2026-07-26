@@ -1,0 +1,63 @@
+release_id: aic2026_competition_rc1
+status: draft
+created_at: YYYY-MM-DDTHH:MM:SS+07:00
+approved_by:
+  technical_lead: null
+  operator_lead: null
+
+dataset:
+  version: pending
+  checksum: pending
+  video_count: 0
+
+schemas:
+  metadata: v1
+  search: SearchRequestV2
+  candidate: CandidateV2
+  submission: pending_official_rule
+
+models:
+  caption:
+    name: pending
+    revision: pending
+  query_parser:
+    name: pending
+    revision: pending
+  reranker_text:
+    name: pending
+    revision: pending
+  reranker_vlm:
+    name: pending
+    revision: pending
+
+indexes:
+  dense_frame:
+    build_id: pending
+    encoder: pending
+    dimension: 0
+    alias: aic_frames_active
+  dense_scene:
+    build_id: pending
+    encoder: pending
+  sparse:
+    build_id: pending
+    analyzer: pending
+
+builds:
+  backend: pending
+  frontend: pending
+  worker: pending
+
+competition:
+  server_url: pending_official_rule
+  contract_version: pending_official_rule
+  token_verified: false
+
+preflight:
+  status: not_run
+  report_path: null
+
+drills:
+  functional: not_run
+  failure_injection: not_run
+  full_simulation: not_run

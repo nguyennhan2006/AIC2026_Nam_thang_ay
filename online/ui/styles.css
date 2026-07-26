@@ -72,7 +72,10 @@ details summary { cursor:pointer; color:#9ac9ff; font-size:.85rem; }
 }
 #tray h2 { margin:0; font-size:1rem; }
 #tray span { color:#63d5b5; }
+#tray span.over-limit { color:#e57373; font-weight:700; }
 .tray-hint { color:#7f8fa8; font-size:.8rem; margin:8px 0 12px; }
+.tray-answer { display:block; font-size:.8rem; color:#7f8fa8; margin:0 0 12px; }
+.tray-answer input { width:100%; margin-top:4px; padding:8px 10px; border-radius:8px; border:1px solid #344b67; background:#0d1929; color:#e8eef7; font-size:.85rem; }
 #tray-list { list-style:none; margin:0; padding:0; display:grid; gap:8px; }
 #tray-list li { display:flex; justify-content:space-between; align-items:center; gap:8px; padding:8px 10px; border-radius:9px; background:#122238; font-size:.82rem; }
 #tray-list li div { display:grid; gap:2px; min-width:0; }

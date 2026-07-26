@@ -42,8 +42,11 @@
     <div class="layout">
       <section id="results"></section>
       <aside id="tray">
-        <h2>Đã chọn <span id="tray-count">(0)</span></h2>
-        <p class="tray-hint">Tick vào kết quả để đưa vào đây, rồi lọc lại hoặc xuất CSV nộp bài.</p>
+        <h2>Đã chọn <span id="tray-count">(0/100)</span></h2>
+        <p class="tray-hint">Tick vào kết quả để đưa vào đây, rồi lọc lại hoặc xuất CSV nộp bài. Mỗi file CSV chỉ nộp cho MỘT câu truy vấn (đúng quy chế BTC) — xuất xong hãy bấm "Xoá hết" trước khi làm câu tiếp theo.</p>
+        <label id="tray-answer-wrap" class="tray-answer" hidden>Câu trả lời VQA (áp dụng cho mọi dòng khi xuất)
+          <input type="text" id="tray-answer" maxlength="100" placeholder="Tối đa 100 ký tự, VI hoặc EN">
+        </label>
         <ol id="tray-list"></ol>
         <div class="tray-actions">
           <button type="button" id="tray-refine" disabled>Tìm lại chỉ trong các video đã chọn</button>

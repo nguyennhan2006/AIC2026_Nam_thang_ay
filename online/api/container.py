@@ -8,8 +8,12 @@ from online.adapters.bm25 import LexicalRetriever
 from online.adapters.dense_retriever import DenseRetriever
 from online.adapters.encoders import HashingTextEncoder, RemoteTextEncoder
 from online.adapters.json_metadata import JsonlSceneRepository
+from online.adapters.ocr_fuzzy import OcrFuzzyRetriever
 from online.adapters.vector_stores import InMemoryVectorStore, QdrantVectorStore
 from online.config import Settings
+from online.services.query_expansion import QueryExpansionRetriever
+from online.services.query_prep import PreparedQueryPlanner
+from online.services.rules import RuleConfig
 from online.services.search import SearchService
 from online.services.vqa import VQAService
 
@@ -25,10 +29,13 @@ class AppContainer:
 
 async def build_container(settings: Settings) -> AppContainer:
     repository = await JsonlSceneRepository.load(settings.metadata_jsonl)
-    lexical = [
-        await LexicalRetriever.build(field, repository)
-        for field in ("caption", "ocr", "asr", "keyword")
-    ]
+    lexical = []
+    for field in ("caption", "ocr", "asr", "keyword"):
+        retriever = await LexicalRetriever.build(field, repository)
+        # Phương án K: chỉ wrap caption/keyword — OCR/ASR phải giữ nguyên văn.
+        if settings.enable_expansion and field in ("caption", "keyword"):
+            retriever = QueryExpansionRetriever(retriever)
+        lexical.append(retriever)
 
     if settings.backend == "qdrant":
         encoder = RemoteTextEncoder(
@@ -65,11 +72,16 @@ async def build_container(settings: Settings) -> AppContainer:
         vector_store = InMemoryVectorStore(rows)
 
     retrievers = [DenseRetriever(encoder, vector_store), *lexical]
+    if settings.enable_ocr_fuzzy:
+        retrievers.append(await OcrFuzzyRetriever.build(repository))
+
     search_service = SearchService(
         repository,
         retrievers,
+        planner=PreparedQueryPlanner() if settings.enable_query_prep else None,
         candidate_limit=settings.candidate_limit,
         rrf_k=settings.rrf_k,
+        rule_config=RuleConfig() if settings.enable_rules else None,
     )
     return AppContainer(
         settings=settings,

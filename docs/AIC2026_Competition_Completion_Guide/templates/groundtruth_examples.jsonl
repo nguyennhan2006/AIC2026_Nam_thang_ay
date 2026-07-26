@@ -1,0 +1,3 @@
+{"query_id":"KIS_001","task":"KIS","query":"...","primary_positives":[{"video_id":"L01_V001","start_sec":12.0,"end_sec":18.0}],"secondary_positives":[],"hard_negatives":[],"groups":["visual","action"],"ambiguous":false}
+{"query_id":"VQA_001","task":"VQA","question":"...","answer":"6","answer_type":"count","evidence":[{"video_id":"L01_V002","start_sec":30.0,"end_sec":35.0}],"groups":["count","temporal"],"ambiguous":false}
+{"query_id":"AVS_001","task":"AVS","query":"...","relevant_segments":[{"video_id":"L01_V003","start_sec":40.0,"end_sec":55.0,"grade":3}],"groups":["activity","diversity"],"ambiguous":false}

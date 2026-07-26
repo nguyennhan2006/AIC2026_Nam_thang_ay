@@ -10,8 +10,22 @@ const trayCount = document.querySelector("#tray-count");
 const trayRefine = document.querySelector("#tray-refine");
 const trayExport = document.querySelector("#tray-export");
 const trayClear = document.querySelector("#tray-clear");
+const trayAnswerWrap = document.querySelector("#tray-answer-wrap");
+const trayAnswerInput = document.querySelector("#tray-answer");
+const taskSelect = document.querySelector("#task");
+const MAX_SUBMISSION_ROWS = 100; // giới hạn cứng của BTC — mỗi file CSV nộp bài tối đa 100 dòng.
 apiBaseInput.value = localStorage.getItem("aic_api_base") || "http://localhost:8000";
 apiTokenInput.value = localStorage.getItem("aic_api_token") || "";
+trayAnswerInput.value = localStorage.getItem("aic_tray_answer") || "";
+trayAnswerInput.addEventListener("input", () => {
+  localStorage.setItem("aic_tray_answer", trayAnswerInput.value);
+});
+
+function updateTrayAnswerVisibility() {
+  trayAnswerWrap.hidden = taskSelect.value !== "vqa";
+}
+taskSelect.addEventListener("change", updateTrayAnswerVisibility);
+updateTrayAnswerVisibility();
 
 function apiBase() { return apiBaseInput.value.trim().replace(/\/$/, ""); }
 function headers() {
@@ -46,9 +60,11 @@ function persistSelection() {
 
 function renderTray() {
   const items = [...selection.values()];
-  trayCount.textContent = `(${items.length})`;
+  trayCount.textContent = `(${items.length}/${MAX_SUBMISSION_ROWS})`;
+  trayCount.classList.toggle("over-limit", items.length > MAX_SUBMISSION_ROWS);
   const hasItems = items.length > 0;
-  trayRefine.disabled = trayExport.disabled = trayClear.disabled = !hasItems;
+  trayRefine.disabled = trayClear.disabled = !hasItems;
+  trayExport.disabled = !hasItems || items.length > MAX_SUBMISSION_ROWS;
   trayList.innerHTML = items.map(item => `
     <li>
       <div>
@@ -85,28 +101,48 @@ function toggleSelect(sceneId, checked) {
   syncCardSelectedState(sceneId, checked);
 }
 
-function csvEscape(value) {
-  const text = String(value ?? "");
-  return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
-}
-
+// Format nộp bài chính thức BTC AIC 2026 (KHÔNG phải CSV debug):
+//   KIS/AVS : <video_id>, <frame_idx>                  — không header, tối đa 100 dòng
+//   VQA     : <video_id>, <frame_idx>, "<answer>"       — answer <=100 ký tự, giữ nguyên cho mọi dòng
+// Mỗi file chỉ ứng với MỘT câu truy vấn — xem tray-hint. Không dùng csvEscape/quote kiểu
+// RFC4180 thông thường: khớp đúng ví dụ BTC (dấu phẩy + khoảng trắng, answer luôn có ngoặc kép).
 trayExport.addEventListener("click", () => {
-  const rows = [["rank", "video_id", "frame_idx", "timestamp_sec", "scene_id", "score"]];
-  [...selection.values()].forEach((item, i) => {
+  const items = [...selection.values()];
+  if (items.length === 0) return;
+  if (items.length > MAX_SUBMISSION_ROWS) {
+    statusBox.textContent = `Đang chọn ${items.length} dòng, vượt giới hạn ${MAX_SUBMISSION_ROWS} — bỏ bớt trước khi xuất.`;
+    return;
+  }
+  const task = taskSelect.value;
+  let answer = "";
+  if (task === "vqa") {
+    answer = trayAnswerInput.value.trim();
+    if (!answer) {
+      statusBox.textContent = "Nhập câu trả lời VQA trước khi xuất CSV.";
+      trayAnswerInput.focus();
+      return;
+    }
+    if (answer.length > 100) {
+      statusBox.textContent = "Câu trả lời VQA vượt quá 100 ký tự.";
+      trayAnswerInput.focus();
+      return;
+    }
+  }
+  const lines = items.map(item => {
     const frameMatch = /_F(\d+)$/.exec(item.best_keyframe_id || "");
-    rows.push([
-      i + 1, item.video_id, frameMatch ? Number(frameMatch[1]) : "",
-      Number(item.best_timestamp_sec ?? item.start_sec).toFixed(3), item.scene_id, item.score.toFixed(5),
-    ]);
+    const frameIdx = frameMatch ? Number(frameMatch[1]) : "";
+    return task === "vqa"
+      ? `${item.video_id}, ${frameIdx}, "${answer.replace(/"/g, '""')}"`
+      : `${item.video_id}, ${frameIdx}`;
   });
-  const csv = rows.map(row => row.map(csvEscape).join(",")).join("\n");
-  const blob = new Blob([csv], {type: "text/csv;charset=utf-8"});
+  const blob = new Blob([lines.join("\n")], {type: "text/csv;charset=utf-8"});
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = `aic2026_submission_${new Date().toISOString().replace(/[:.]/g, "-")}.csv`;
+  link.download = `aic2026_${task}_${new Date().toISOString().replace(/[:.]/g, "-")}.csv`;
   link.click();
   URL.revokeObjectURL(url);
+  statusBox.textContent = `Đã xuất ${lines.length} dòng (${task.toUpperCase()}).`;
 });
 
 trayClear.addEventListener("click", () => {

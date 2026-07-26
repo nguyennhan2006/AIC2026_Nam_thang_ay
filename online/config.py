@@ -14,6 +14,13 @@ def _env_int(name: str, default: int) -> int:
     return value
 
 
+def _env_bool(name: str, default: bool) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
 @dataclass(frozen=True, slots=True)
 class Settings:
     """Validated runtime settings for local or Qdrant-backed operation."""
@@ -35,6 +42,10 @@ class Settings:
     data_root: Path
     cors_origins: tuple[str, ...]
     api_key: str | None
+    enable_ocr_fuzzy: bool
+    enable_query_prep: bool
+    enable_expansion: bool
+    enable_rules: bool
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -72,4 +83,8 @@ class Settings:
             data_root=Path(os.getenv("AIC_DATA_ROOT", "storage")).resolve(),
             cors_origins=tuple(x.strip() for x in os.getenv("AIC_CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").split(",") if x.strip()),
             api_key=os.getenv("AIC_ONLINE_API_KEY"),
+            enable_ocr_fuzzy=_env_bool("AIC_ENABLE_OCR_FUZZY", False),
+            enable_query_prep=_env_bool("AIC_ENABLE_QUERY_PREP", False),
+            enable_expansion=_env_bool("AIC_ENABLE_EXPANSION", False),
+            enable_rules=_env_bool("AIC_ENABLE_RULES", False),
         )
