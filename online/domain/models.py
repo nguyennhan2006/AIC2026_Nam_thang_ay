@@ -5,11 +5,10 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import Field, model_validator
 
-
-class StrictModel(BaseModel):
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+from online.domain.base import StrictModel  # noqa: F401 - re-export cho chỗ import cũ
+from online.domain.search_config import SearchOptions
 
 
 class TaskType(StrEnum):
@@ -52,6 +51,9 @@ class SearchRequest(StrictModel):
     top_k: int = Field(default=20, ge=1, le=200)
     filters: SearchFilters = Field(default_factory=SearchFilters)
     debug: bool = False
+    # Search Mixing Console (W0) — None = hành vi search hiện tại, không đổi mặc
+    # định. Chưa đọc bởi SearchService/container.py (đó là W3/W5).
+    search_options: SearchOptions | None = None
 
 
 class QueryEvent(StrictModel):
