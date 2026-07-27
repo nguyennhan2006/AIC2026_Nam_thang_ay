@@ -26,6 +26,16 @@ class OfflineSettings:
     keyframes_per_scene: int
     pipeline_version: str
     provider: str
+    # Clip pooling (Search Mixing Console W1) — sliding window bên trong một scene.
+    # Có default để không phá các chỗ dựng OfflineSettings trực tiếp (không qua
+    # from_env()) từ trước khi có clip pooling, vd tests/test_offline.py.
+    clip_duration_sec: float = 4.0
+    clip_stride_sec: float = 2.0
+    clip_min_tail_sec: float = 1.0
+    clip_max_sampled_frames: int = 4
+    clip_empty_window_policy: str = "nearest_scene_keyframe"
+    clip_fallback_max_distance_sec: float = 6.0
+    clip_config_id: str = "clip-v1"
 
     @classmethod
     def from_env(cls) -> "OfflineSettings":
@@ -36,6 +46,9 @@ class OfflineSettings:
         gpu_url = os.getenv("AIC_GPU_URL")
         if provider == "remote" and not gpu_url:
             raise ValueError("AIC_GPU_URL is required for remote provider")
+        empty_window_policy = os.getenv("AIC_CLIP_EMPTY_WINDOW_POLICY", "nearest_scene_keyframe")
+        if empty_window_policy not in {"nearest_scene_keyframe", "skip"}:
+            raise ValueError("AIC_CLIP_EMPTY_WINDOW_POLICY must be nearest_scene_keyframe or skip")
         return cls(
             data_root=root,
             input_dir=Path(os.getenv("AIC_INPUT_DIR", str(root / "raw/videos"))),
@@ -49,4 +62,11 @@ class OfflineSettings:
             keyframes_per_scene=_positive("AIC_KEYFRAMES_PER_SCENE", "1", int),
             pipeline_version=os.getenv("AIC_PIPELINE_VERSION", "aic-v1.0.0"),
             provider=provider,
+            clip_duration_sec=_positive("AIC_CLIP_DURATION_SEC", "4", float),
+            clip_stride_sec=_positive("AIC_CLIP_STRIDE_SEC", "2", float),
+            clip_min_tail_sec=_positive("AIC_CLIP_MIN_TAIL_SEC", "1", float),
+            clip_max_sampled_frames=_positive("AIC_CLIP_MAX_SAMPLED_FRAMES", "4", int),
+            clip_empty_window_policy=empty_window_policy,
+            clip_fallback_max_distance_sec=_positive("AIC_CLIP_FALLBACK_MAX_DISTANCE_SEC", "6", float),
+            clip_config_id=os.getenv("AIC_CLIP_CONFIG_ID", "clip-v1"),
         )

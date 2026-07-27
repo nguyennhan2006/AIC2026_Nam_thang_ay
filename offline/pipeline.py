@@ -8,14 +8,17 @@ import hashlib
 import math
 from pathlib import Path
 import re
+import warnings
 
 from datasection.exporter import export_dataset
 from datasection.schemas import (
-    ASRSegment, BoundingBox, CaptionRecord, ColorFeature, DatasetManifest, Keyframe,
+    ASRSegment, BoundingBox, CaptionRecord, ClipSegment, ColorFeature, DatasetManifest, Keyframe,
     ModelArtifact, ModelProvenance, NamedColorRatio, ObjectInstance, OCRInstance, Scene,
     SceneCaptionRecord, SceneKeyword, Video,
 )
+from offline.clip_pooling import build_clip_segment, build_clip_windows, select_clip_frames
 from offline.config import OfflineSettings
+from offline.embedding_reader import MemoizedEmbeddingReader, ProviderEmbeddingReader
 from offline.media import FFmpegMedia
 from offline.providers import MockInferenceProvider, RemoteInferenceProvider
 from offline.state import JobLedger
@@ -142,10 +145,33 @@ class OfflinePipeline:
                     ))
                 enriched_scenes.append(scene.model_copy(update={"asr_segments": projected}))
             scenes = enriched_scenes
+        embedding_reader = MemoizedEmbeddingReader(ProviderEmbeddingReader(self.provider, self.settings.data_root))
+        clips: list[ClipSegment] = []
+        for scene in scenes:
+            windows = build_clip_windows(
+                scene, info.fps, self.settings.clip_duration_sec, self.settings.clip_stride_sec, self.settings.clip_min_tail_sec,
+            )
+            for window in windows:
+                selected = select_clip_frames(
+                    scene, window, self.settings.clip_max_sampled_frames,
+                    self.settings.clip_fallback_max_distance_sec, self.settings.clip_empty_window_policy,
+                )
+                if selected is None:
+                    warnings.warn(
+                        f"skipping clip window {scene.scene_id} [{window.start_sec:.2f}s-{window.end_sec:.2f}s]: "
+                        "no keyframe within fallback distance", stacklevel=2,
+                    )
+                    continue
+                clips.append(await build_clip_segment(
+                    scene, window, selected, embedding_reader, self.settings.data_root,
+                    self.settings.clip_config_id, self.provenance("embedding"),
+                    self.provider.model_name, self.provider.revision,
+                ))
         video = Video(
             video_id=video_id, source_path=relative_source, source_checksum=_checksum(source), fps=info.fps,
             frame_count=info.frame_count, duration_sec=info.frame_count / info.fps, width=info.width, height=info.height,
             codec=info.codec, audio_present=info.audio_present, probe_provenance=self.provenance("ffprobe"), scenes=scenes,
+            clips=clips,
         )
         self.ledger.write(video_id, "complete", "succeeded", scene_count=len(scenes))
         return video
@@ -166,6 +192,7 @@ class OfflinePipeline:
             pipeline_version=self.settings.pipeline_version, video_count=len(videos),
             scene_count=sum(len(item.scenes) for item in videos),
             keyframe_count=sum(len(scene.keyframes) for item in videos for scene in item.scenes),
+            clip_count=sum(len(item.clips) for item in videos),
             models=[ModelArtifact(task=task, model_name=self.provider.model_name, revision=self.provider.revision) for task in ("caption", "ocr", "object", "asr", "embedding", "color")],
         )
         return await asyncio.to_thread(export_dataset, videos, self.settings.export_dir, manifest)

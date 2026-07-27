@@ -1,5 +1,6 @@
 """Public metadata contracts for AIC 2026 Version 1."""
 
+from .clip import ClipSegment
 from .common import BoundingBox, EmbeddingReference, ModelProvenance, VectorLocation
 from .keyframe import (
     CaptionRecord,
@@ -19,6 +20,7 @@ __all__ = [
     "BoundingBox",
     "ASRSegment",
     "CaptionRecord",
+    "ClipSegment",
     "ColorFeature",
     "EmbeddingReference",
     "Keyframe",

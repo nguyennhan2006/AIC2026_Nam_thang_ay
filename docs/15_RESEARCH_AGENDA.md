@@ -75,6 +75,23 @@ smoke-test, không đủ để chốt production default. Mở rộng GT là vi�
     Đo: chạy song song cả hai trên corpus enrich thật, so eval_kis trước khi cắt hẳn
     BM25 in-memory.
 
+## Clip embedding density — Search Mixing Console W1 (clip pooling)
+
+12. **Clip embedding density**: baseline V1 (`offline/clip_pooling.py`) pool embedding
+    của keyframe **có sẵn** trong scene (không extract frame mới); với
+    `AIC_KEYFRAMES_PER_SCENE=1` mặc định, phần lớn clip suy biến còn 1 frame — pooling
+    không tạo thêm tín hiệu temporal nào so với chính scene đó. Cần ablation trước khi
+    coi baseline này là đủ cho `dense_visual_clip`/action search:
+    - So sánh 1/3/5 keyframe/scene (`AIC_KEYFRAMES_PER_SCENE`) × baseline pooling hiện
+      tại, đo Recall@K cho action-query riêng (câu hỏi có động từ/hành động) so với
+      câu hỏi tĩnh, cộng Recall@K chung của `dense_visual_clip`.
+    - So sánh với dedicated clip frame sampling (extract thêm frame trong từng clip
+      window thay vì tái dùng keyframe scene) — cùng metric ở trên.
+    - Đo thêm chi phí: thời gian offline processing, số lần gọi encoder, kích thước
+      index — vì dedicated sampling sẽ tăng cả ba so với baseline tái dùng keyframe.
+    Chỉ chuyển sang dedicated clip sampling khi ablation cho thấy Recall@K tăng đủ để
+    bù chi phí đo được ở trên — không đoán, đo bằng `eval_kis.py`.
+
 ## Cách ghi lại kết quả
 
 Mọi lần chạy ablation nên dùng `--json <path>` của `eval_kis.py` để lưu vết (mode,

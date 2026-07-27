@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 from typing import Iterable
 
-from datasection.schemas import DatasetManifest, Keyframe, Scene, Video
+from datasection.schemas import ClipSegment, DatasetManifest, Keyframe, Scene, Video
 
 
 def sha256_file(path: Path) -> str:
@@ -34,15 +34,17 @@ def export_dataset(videos: list[Video], output_dir: Path, manifest: DatasetManif
     validated = [Video.model_validate(item) for item in videos]
     scenes: list[Scene] = [scene for video in validated for scene in video.scenes]
     keyframes = [frame for scene in scenes for frame in scene.keyframes]
+    clips: list[ClipSegment] = [clip for video in validated for clip in video.clips]
     for label, values in (
         ("video_id", [item.video_id for item in validated]),
         ("scene_id", [item.scene_id for item in scenes]),
         ("keyframe_id", [item.keyframe_id for item in keyframes]),
+        ("clip_id", [item.clip_id for item in clips]),
     ):
         if len(values) != len(set(values)):
             raise ValueError(f"duplicate {label} in export")
-    if (manifest.video_count, manifest.scene_count, manifest.keyframe_count) != (
-        len(validated), len(scenes), len(keyframes)
+    if (manifest.video_count, manifest.scene_count, manifest.keyframe_count, manifest.clip_count) != (
+        len(validated), len(scenes), len(keyframes), len(clips)
     ):
         raise ValueError("manifest counts do not match exported entities")
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -50,6 +52,7 @@ def export_dataset(videos: list[Video], output_dir: Path, manifest: DatasetManif
         "videos.jsonl": [item.model_dump(mode="json") for item in validated],
         "scenes.jsonl": [item.model_dump(mode="json") for item in scenes],
         "keyframes.jsonl": [item.model_dump(mode="json") for item in keyframes],
+        "clips.jsonl": [item.model_dump(mode="json") for item in clips],
     }
     checksums: dict[str, str] = {}
     for name, rows in files.items():
@@ -70,7 +73,7 @@ def verify_export(output_dir: Path) -> DatasetManifest:
         if sha256_file(output_dir / name) != checksum:
             raise ValueError(f"checksum mismatch: {name}")
     counts = {}
-    models = {"videos.jsonl": Video, "scenes.jsonl": Scene, "keyframes.jsonl": Keyframe}
+    models = {"videos.jsonl": Video, "scenes.jsonl": Scene, "keyframes.jsonl": Keyframe, "clips.jsonl": ClipSegment}
     for name, model in models.items():
         count = 0
         with (output_dir / name).open(encoding="utf-8") as handle:
@@ -83,6 +86,7 @@ def verify_export(output_dir: Path) -> DatasetManifest:
         counts["videos.jsonl"] != manifest.video_count
         or counts["scenes.jsonl"] != manifest.scene_count
         or counts["keyframes.jsonl"] != manifest.keyframe_count
+        or counts["clips.jsonl"] != manifest.clip_count
     ):
         raise ValueError("export row counts do not match manifest")
     return manifest

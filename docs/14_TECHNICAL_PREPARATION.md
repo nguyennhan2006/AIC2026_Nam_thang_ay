@@ -90,3 +90,28 @@ Tại thời điểm chuyển sang façade, `rg "from schemas\.|import schemas\b
 ngoài version control (vd trên máy Kaggle) vẫn trỏ vào đây. Chỉ xoá khi:
 1. Chạy lại `rg "from schemas\.|import schemas\b"` vẫn rỗng sau một khoảng thời gian.
 2. Xác nhận không notebook/script rời nào (kể cả trên Kaggle) còn import `schemas.*`.
+
+## TECH-DEBT: chưa có persistent frame-embedding cache
+
+**Phát hiện lúc nào**: khi viết `offline/embedding_reader.py` cho clip pooling
+(Search Mixing Console W1). `ProviderEmbeddingReader` gọi lại
+`provider.image("embedding", ...)` cho mỗi keyframe cần dùng — không có nơi nào lưu
+embedding của một keyframe sau khi tính xong, kể cả `Keyframe.embedding_refs` (field
+này tồn tại trong schema nhưng chưa được `offline/pipeline.py` populate cho keyframe
+visual embedding).
+
+**Hệ quả hiện tại**: `offline/indexing.py::scene_rows_remote` (dựng vector scene) và
+clip pooling (dựng vector clip) đều tự gọi lại encoder cho cùng một keyframe thay vì
+tái dùng — với `MemoizedEmbeddingReader` chỉ cache trong phạm vi một lần `process_video`
+(không cache giữa scene-indexing và clip-pooling, không cache giữa các lần chạy khác
+nhau). Baseline V1 chấp nhận việc này (đúng quyết định của user khi duyệt clip pooling:
+"MemoizedEmbeddingReader tránh recompute trong cùng run, persistent frame cache để
+thành tech debt riêng") — không phải bug, nhưng sẽ tốn thêm lời gọi encoder không cần
+thiết khi event/temporal search (W1 bước sau) cũng cần cùng loại vector.
+
+**Việc cần làm sau (chưa làm)**: lưu embedding keyframe xuống một vị trí ổn định
+(file hoặc index) và populate `Keyframe.embedding_refs` ngay lúc enrich keyframe
+trong `offline/pipeline.py`, để scene pooling, clip pooling và event aggregation sau
+này đọc lại cùng vector đã lưu thay vì tính lại mỗi lần. Nghiệm thu: đo số lần gọi
+`provider.image("embedding", ...)` trước/sau trên cùng một video — phải giảm khi
+chạy lại toàn bộ pipeline (scene index + clip pooling) trên dữ liệu đã enrich.

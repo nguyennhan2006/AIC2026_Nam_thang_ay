@@ -7,6 +7,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import Field, field_validator, model_validator
 
+from .clip import ClipSegment
 from .common import ModelProvenance, RelativeArtifactPath, SHA256Checksum, StrictModel, VideoId, utc_now
 from .scene import Scene
 
@@ -27,6 +28,9 @@ class Video(StrictModel):
     audio_present: bool = False
     probe_provenance: ModelProvenance
     scenes: list[Scene] = Field(default_factory=list)
+    # Clip không nhét vào Scene: clip/scene có lifecycle và index khác nhau (đổi
+    # scene boundary không nên buộc rebuild toàn bộ clip) — xem datasection/schemas/clip.py.
+    clips: list[ClipSegment] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=utc_now)
     extensions: dict[str, Any] = Field(default_factory=dict)
 
@@ -62,7 +66,28 @@ class Video(StrictModel):
             ids.add(scene.scene_id)
             previous_end_frame = scene.end_frame_exclusive
             previous_end_sec = scene.end_sec
+        scene_by_id = {scene.scene_id: scene for scene in self.scenes}
+        clip_ids: set[str] = set()
+        for clip in self.clips:
+            if clip.video_id != self.video_id:
+                raise ValueError(f"clip {clip.clip_id} belongs to another video")
+            if clip.clip_id in clip_ids:
+                raise ValueError("clip IDs must be unique")
+            scene = scene_by_id.get(clip.scene_id)
+            if scene is None:
+                raise ValueError(f"clip {clip.clip_id} references unknown scene {clip.scene_id}")
+            if clip.start_frame < scene.start_frame or clip.end_frame > scene.end_frame_exclusive:
+                raise ValueError(f"clip {clip.clip_id} exceeds its scene's frame range")
+            known_frame_ids = {frame.keyframe_id for frame in scene.keyframes}
+            unknown = set(clip.sampled_frame_ids) - known_frame_ids
+            if unknown:
+                raise ValueError(f"clip {clip.clip_id} references keyframes outside its scene: {sorted(unknown)}")
+            clip_ids.add(clip.clip_id)
         return self
+
+    @property
+    def clip_count(self) -> int:
+        return len(self.clips)
 
     @property
     def scene_count(self) -> int:
