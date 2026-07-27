@@ -23,6 +23,8 @@ class MockInferenceProvider:
             return {"instances": []}
         if task == "object":
             return {"objects": []}
+        if task == "color":
+            return {"dominant_colors": [], "hsv_histogram": [], "mean_hsv": None, "regions": {}}
         if task == "embedding":
             digest = hashlib.sha256(path.read_bytes()).digest()
             vector = [((digest[i % len(digest)] / 255.0) * 2 - 1) for i in range(256)]

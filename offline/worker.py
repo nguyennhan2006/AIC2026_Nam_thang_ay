@@ -94,7 +94,7 @@ def create_worker() -> FastAPI:
 
     @app.post("/v1/inference/{task}", dependencies=[Depends(authorize)])
     async def infer_image(task: str, request: ImageRequest) -> dict:
-        if task not in {"caption", "ocr", "object", "embedding"}:
+        if task not in {"caption", "ocr", "object", "embedding", "color"}:
             raise HTTPException(404, "unsupported image task")
         async with semaphore:
             return await engine.image(task, request)

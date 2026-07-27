@@ -127,6 +127,74 @@ class TransformersGpuEngine:
             objects.append({"label": row["label"], "confidence": float(row["score"]), "bbox": {"x1": x1/width, "y1": y1/height, "x2": x2/width, "y2": y2/height}, "attributes": {"label_source": "caption+fallback"}})
         return {"objects": objects}
 
+    # Baseline color_search (Search Mixing Console W1) — pure CPU (PIL+numpy, không
+    # cần model/GPU). Hue bucket cố định, mean_hsv là trung bình số học đơn giản (không
+    # phải circular mean) — đủ cho baseline, tinh chỉnh sau qua calibration, không đổi
+    # contract ColorFeature (datasection/schemas/keyframe.py).
+    _HUE_NAMES = (
+        ("red", 0.0, 15.0), ("orange", 15.0, 45.0), ("yellow", 45.0, 65.0),
+        ("green", 65.0, 170.0), ("cyan", 170.0, 200.0), ("blue", 200.0, 255.0),
+        ("purple", 255.0, 290.0), ("pink", 290.0, 330.0), ("red", 330.0, 360.0),
+    )
+
+    @classmethod
+    def _name_pixels(cls, hue, sat, val):
+        """Trả về mảng tên màu (str) cho từng pixel: đen/trắng/xám theo value khi
+        saturation thấp, ngược lại theo hue bucket."""
+        import numpy as np
+        names = np.empty(hue.shape, dtype=object)
+        low_sat = sat < 0.15
+        names[low_sat & (val < 0.2)] = "black"
+        names[low_sat & (val >= 0.85)] = "white"
+        names[low_sat & (val >= 0.2) & (val < 0.85)] = "gray"
+        colored = ~low_sat
+        for name, lo, hi in cls._HUE_NAMES:
+            names[colored & (hue >= lo) & (hue < hi)] = name
+        return names
+
+    def _color_sync(self, request) -> dict:
+        import numpy as np
+        image = self._image(request)
+        hsv = np.asarray(image.convert("HSV"), dtype=np.float32)
+        hue = hsv[..., 0].ravel() / 255.0 * 360.0
+        sat = hsv[..., 1].ravel() / 255.0
+        val = hsv[..., 2].ravel() / 255.0
+
+        bins = int(os.getenv("AIC_COLOR_HIST_BINS", "16"))
+        raw_hist, _ = np.histogram(hue, bins=bins, range=(0.0, 360.0))
+        total = float(raw_hist.sum())
+        hsv_histogram = (raw_hist / total).tolist() if total > 0 else [0.0] * bins
+
+        names = self._name_pixels(hue, sat, val)
+        unique, counts = np.unique(names, return_counts=True)
+        pixel_count = float(names.size)
+        dominant_colors = sorted(
+            ({"name": str(name), "ratio": round(float(count) / pixel_count, 4)} for name, count in zip(unique, counts)),
+            key=lambda item: -item["ratio"],
+        )[:8]
+
+        height = hsv.shape[0]
+        band = max(1, height // 3)
+        regions = {}
+        for region_name, band_slice in (("upper", slice(0, band)), ("center", slice(band, 2 * band)), ("lower", slice(2 * band, height))):
+            band_names = self._name_pixels(
+                hsv[band_slice, :, 0].ravel() / 255.0 * 360.0,
+                hsv[band_slice, :, 1].ravel() / 255.0,
+                hsv[band_slice, :, 2].ravel() / 255.0,
+            )
+            if band_names.size == 0:
+                continue
+            band_unique, band_counts = np.unique(band_names, return_counts=True)
+            top = str(band_unique[np.argmax(band_counts)])
+            regions[region_name] = [top]
+
+        return {
+            "dominant_colors": dominant_colors,
+            "hsv_histogram": hsv_histogram,
+            "mean_hsv": [round(float(hue.mean()), 2), round(float(sat.mean()), 4), round(float(val.mean()), 4)],
+            "regions": regions,
+        }
+
     def _image_embedding_sync(self, request) -> dict:
         import torch
         from transformers import CLIPModel, CLIPProcessor
@@ -187,7 +255,7 @@ class TransformersGpuEngine:
         return {"segments": segments}
 
     async def image(self, task: str, request) -> dict:
-        functions = {"caption": self._caption_sync, "ocr": self._ocr_sync, "object": self._object_sync, "embedding": self._image_embedding_sync}
+        functions = {"caption": self._caption_sync, "ocr": self._ocr_sync, "object": self._object_sync, "embedding": self._image_embedding_sync, "color": self._color_sync}
         return await asyncio.to_thread(functions[task], request)
 
     async def text_embedding(self, text: str) -> dict:

@@ -113,7 +113,8 @@
             "object",
             "asr",
             "embedding",
-            "reranker"
+            "reranker",
+            "color"
           ],
           "title": "Task",
           "type": "string"

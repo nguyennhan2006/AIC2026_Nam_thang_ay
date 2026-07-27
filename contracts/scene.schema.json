@@ -196,8 +196,16 @@
     },
     "ColorFeature": {
       "additionalProperties": false,
-      "description": "Compact color metadata suitable for filtering and result explanation.",
+      "description": "Compact color metadata suitable for filtering and result explanation.\n\nBaseline for the \"color_search\" branch (Search Mixing Console W1) — HSV\nhistogram + named dominant colors, optionally broken down by coarse region\n(vd \"upper\"/\"center\"/\"lower\"). Region model tối ưu hơn để sau (calibration,\nregion-aware model) không đổi contract này.",
       "properties": {
+        "dominant_colors": {
+          "items": {
+            "$ref": "#/$defs/NamedColorRatio"
+          },
+          "maxItems": 8,
+          "title": "Dominant Colors",
+          "type": "array"
+        },
         "dominant_hex": {
           "items": {
             "type": "string"
@@ -217,6 +225,14 @@
           ],
           "default": null,
           "title": "Histogram Uri"
+        },
+        "hsv_histogram": {
+          "items": {
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "title": "Hsv Histogram",
+          "type": "array"
         },
         "mean_hsv": {
           "anyOf": [
@@ -259,6 +275,20 @@
             }
           ],
           "default": null
+        },
+        "regions": {
+          "additionalProperties": {
+            "items": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "propertyNames": {
+            "minLength": 1
+          },
+          "title": "Regions",
+          "type": "object"
         }
       },
       "title": "ColorFeature",
@@ -561,6 +591,29 @@
         "pipeline_version"
       ],
       "title": "ModelProvenance",
+      "type": "object"
+    },
+    "NamedColorRatio": {
+      "additionalProperties": false,
+      "description": "One named color and the fraction of the keyframe (or region) it covers.",
+      "properties": {
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "ratio": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Ratio",
+          "type": "number"
+        }
+      },
+      "required": [
+        "name",
+        "ratio"
+      ],
+      "title": "NamedColorRatio",
       "type": "object"
     },
     "OCRInstance": {

@@ -1,32 +1,6 @@
-"""Public metadata contracts for AIC 2026 Version 1."""
+"""Compatibility façade — nguồn sự thật đã chuyển sang `datasection.schemas`.
+Xem `schemas/common.py` cho lý do và điều kiện xoá hẳn package này.
+"""
 
-from .common import BoundingBox, EmbeddingReference, ModelProvenance, VectorLocation
-from .keyframe import (
-    CaptionRecord,
-    ColorFeature,
-    Keyframe,
-    KeyframeRole,
-    ObjectInstance,
-    OCRInstance,
-    QualitySignals,
-)
-from .scene import ASRSegment, Scene, SceneCaptionRecord, SceneKeyword, TransitionType
-
-__all__ = [
-    "BoundingBox",
-    "ASRSegment",
-    "CaptionRecord",
-    "ColorFeature",
-    "EmbeddingReference",
-    "Keyframe",
-    "KeyframeRole",
-    "ModelProvenance",
-    "ObjectInstance",
-    "OCRInstance",
-    "QualitySignals",
-    "Scene",
-    "SceneCaptionRecord",
-    "SceneKeyword",
-    "TransitionType",
-    "VectorLocation",
-]
+from datasection.schemas import *  # noqa: F401,F403
+from datasection.schemas import __all__  # noqa: F401

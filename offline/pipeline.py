@@ -11,9 +11,9 @@ import re
 
 from datasection.exporter import export_dataset
 from datasection.schemas import (
-    ASRSegment, BoundingBox, CaptionRecord, DatasetManifest, Keyframe, ModelArtifact,
-    ModelProvenance, ObjectInstance, OCRInstance, Scene, SceneCaptionRecord,
-    SceneKeyword, Video,
+    ASRSegment, BoundingBox, CaptionRecord, ColorFeature, DatasetManifest, Keyframe,
+    ModelArtifact, ModelProvenance, NamedColorRatio, ObjectInstance, OCRInstance, Scene,
+    SceneCaptionRecord, SceneKeyword, Video,
 )
 from offline.config import OfflineSettings
 from offline.media import FFmpegMedia
@@ -56,9 +56,10 @@ class OfflinePipeline:
         caption = await self.provider.image("caption", target)
         caption_text = " ".join(item.get("text", "") for item in caption.get("captions", []))
         candidate_labels = sorted({token.casefold() for token in re.findall(r"[\wÀ-ỹ]+", caption_text) if len(token) >= 4})[:32]
-        ocr, objects = await asyncio.gather(
+        ocr, objects, color = await asyncio.gather(
             self.provider.image("ocr", target),
             self.provider.image("object", target, caption=caption_text or None, candidate_labels=candidate_labels),
+            self.provider.image("color", target),
         )
         captions = [CaptionRecord(
             caption_type="detailed", text=item["text"], language=item.get("language", "vi"),
@@ -72,11 +73,23 @@ class OfflinePipeline:
             label=item["label"], confidence=item.get("confidence", 0.0),
             bbox=BoundingBox.model_validate(item["bbox"]), attributes=item.get("attributes", {}), provenance=self.provenance("object")
         ) for item in objects.get("objects", [])]
+        # Mock provider trả rỗng (không có model thật) -> giữ color=None thay vì một
+        # ColorFeature rỗng không mang tín hiệu gì (khớp cách ocr/object xử lý "chưa có
+        # model thật": list rỗng cho list-field, None cho optional single-object field).
+        color_feature = None
+        if color.get("dominant_colors") or color.get("hsv_histogram"):
+            color_feature = ColorFeature(
+                dominant_colors=[NamedColorRatio(**item) for item in color.get("dominant_colors", [])],
+                mean_hsv=tuple(color["mean_hsv"]) if color.get("mean_hsv") else None,
+                hsv_histogram=color.get("hsv_histogram", []),
+                regions=color.get("regions", {}),
+                provenance=self.provenance("color"),
+            )
         return Keyframe(
             keyframe_id=f"{scene_id}_F{frame_idx:06d}", video_id=video_id, scene_id=scene_id,
             frame_idx=frame_idx, timestamp_sec=frame_idx / info.fps, image_path=relative.as_posix(),
             width=info.width, height=info.height, roles=["representative"], captions=captions,
-            ocr_instances=ocr_instances, objects=object_instances, source_checksum=_checksum(target),
+            ocr_instances=ocr_instances, objects=object_instances, color=color_feature, source_checksum=_checksum(target),
         )
 
     async def process_video(self, source: Path) -> Video:
@@ -153,6 +166,6 @@ class OfflinePipeline:
             pipeline_version=self.settings.pipeline_version, video_count=len(videos),
             scene_count=sum(len(item.scenes) for item in videos),
             keyframe_count=sum(len(scene.keyframes) for item in videos for scene in item.scenes),
-            models=[ModelArtifact(task=task, model_name=self.provider.model_name, revision=self.provider.revision) for task in ("caption", "ocr", "object", "asr", "embedding")],
+            models=[ModelArtifact(task=task, model_name=self.provider.model_name, revision=self.provider.revision) for task in ("caption", "ocr", "object", "asr", "embedding", "color")],
         )
         return await asyncio.to_thread(export_dataset, videos, self.settings.export_dir, manifest)

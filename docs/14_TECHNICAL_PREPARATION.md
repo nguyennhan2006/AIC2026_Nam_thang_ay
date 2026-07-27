@@ -63,3 +63,30 @@ dụng cho mọi mục "planned" dưới đây: code trước, cờ tắt mặc 
   thuê được máy là chạy thử compose này, không phải viết lại.
 - `docs/05_VAST_DEPLOYMENT.md`: cần đối chiếu lại với compose production mới (doc đó
   viết cho profile cũ) trước khi dùng làm hướng dẫn thuê máy thật.
+
+## TECH-DEBT: package `schemas/` ở gốc repo
+
+**Phát hiện lúc nào**: khi mở rộng `ColorFeature` cho Search Mixing Console W1
+(commit "feat(offline): add CPU color feature extraction") — `tests/test_keyframe_schema.py`/
+`test_scene_schema.py` import từ `schemas.*` (gốc repo), một bản **trùng lặp cũ**
+của `datasection/schemas/` đã lệch nhau từ trước (thiếu cả validation UUID cho
+Qdrant `vector_id` mà `offline/indexing.py` đã dựa vào) — 2 test đó vô tình test
+nhầm bản cũ, che giấu bug cho tới khi regenerate `contracts/*.schema.json` từ bản
+canonical.
+
+**Đã làm ngay (an toàn, không phá gì)**:
+- Sửa `tests/test_keyframe_schema.py`/`test_scene_schema.py` import đúng
+  `datasection.schemas.*` + sửa 1 test dùng `vector_id` không phải UUID (bug có sẵn,
+  bị bản cũ che giấu).
+- Chuyển `schemas/__init__.py`, `schemas/common.py`, `schemas/keyframe.py`,
+  `schemas/scene.py` thành **compatibility façade** (`from datasection.schemas.X
+  import *`) — 2 cây schema không còn phát triển độc lập được nữa, mọi thay đổi ở
+  `datasection/schemas/` tự động phản ánh qua `schemas/` mà không cần sửa 2 nơi.
+  `schemas/README.md` (quy ước ID) giữ nguyên, vẫn đúng.
+
+**Còn lại (chưa làm, cần xác nhận trước khi làm)**: xoá hẳn thư mục `schemas/`.
+Tại thời điểm chuyển sang façade, `rg "from schemas\.|import schemas\b" --type py`
+đã cho kết quả rỗng (không còn ai import trực tiếp) — nhưng có thể có script/notebook
+ngoài version control (vd trên máy Kaggle) vẫn trỏ vào đây. Chỉ xoá khi:
+1. Chạy lại `rg "from schemas\.|import schemas\b"` vẫn rỗng sau một khoảng thời gian.
+2. Xác nhận không notebook/script rời nào (kể cả trên Kaggle) còn import `schemas.*`.

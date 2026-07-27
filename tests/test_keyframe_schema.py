@@ -8,8 +8,8 @@ import unittest
 
 from pydantic import ValidationError
 
-from schemas.common import EmbeddingReference, VectorLocation
-from schemas.keyframe import Keyframe, KeyframeRole
+from datasection.schemas.common import EmbeddingReference, VectorLocation
+from datasection.schemas.keyframe import Keyframe, KeyframeRole
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -90,8 +90,11 @@ class KeyframeContractTests(unittest.TestCase):
                     backend="faiss", vector_id="42", index_name="keyframes_v1"
                 ),
                 VectorLocation(
+                    # Qdrant point id phải là UUID (đúng cách offline/indexing.py::
+                    # QdrantIndexer sinh id thật qua uuid5(NAMESPACE_URL, ...)) — không
+                    # dùng thẳng keyframe_id dạng chuỗi.
                     backend="qdrant",
-                    vector_id="L01_V001_S0003_F001234",
+                    vector_id="7c8c7c0a-3f2a-5b7a-9b0a-1f1a2b3c4d5e",
                     index_name="aic_keyframes_v1",
                     vector_uri="qdrant://localhost/aic_keyframes_v1",
                 ),

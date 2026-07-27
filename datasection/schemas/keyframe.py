@@ -84,15 +84,31 @@ class ObjectInstance(StrictModel):
     provenance: ModelProvenance
 
 
+class NamedColorRatio(StrictModel):
+    """One named color and the fraction of the keyframe (or region) it covers."""
+
+    name: NonEmptyStr
+    ratio: Probability
+
+
 class ColorFeature(StrictModel):
-    """Compact color metadata suitable for filtering and result explanation."""
+    """Compact color metadata suitable for filtering and result explanation.
+
+    Baseline for the "color_search" branch (Search Mixing Console W1) — HSV
+    histogram + named dominant colors, optionally broken down by coarse region
+    (vd "upper"/"center"/"lower"). Region model tối ưu hơn để sau (calibration,
+    region-aware model) không đổi contract này.
+    """
 
     dominant_hex: list[str] = Field(default_factory=list, max_length=8)
+    dominant_colors: list[NamedColorRatio] = Field(default_factory=list, max_length=8)
     mean_hsv: tuple[
         Annotated[float, Field(ge=0.0, le=360.0)],
         Annotated[float, Field(ge=0.0, le=1.0)],
         Annotated[float, Field(ge=0.0, le=1.0)],
     ] | None = None
+    hsv_histogram: list[Annotated[float, Field(ge=0.0)]] = Field(default_factory=list)
+    regions: dict[NonEmptyStr, list[NonEmptyStr]] = Field(default_factory=dict)
     histogram_uri: ArtifactURI | None = None
     provenance: ModelProvenance | None = None
 
@@ -220,6 +236,7 @@ __all__ = [
     "ColorFeature",
     "Keyframe",
     "KeyframeRole",
+    "NamedColorRatio",
     "ObjectInstance",
     "OCRInstance",
     "QualitySignals",

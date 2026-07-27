@@ -11,7 +11,7 @@ from .common import ArtifactURI, NonEmptyStr, SHA256Checksum, StrictModel, utc_n
 
 
 class ModelArtifact(StrictModel):
-    task: Literal["scene", "keyframe", "caption", "ocr", "object", "asr", "embedding", "reranker"]
+    task: Literal["scene", "keyframe", "caption", "ocr", "object", "asr", "embedding", "reranker", "color"]
     model_name: NonEmptyStr
     revision: NonEmptyStr
     config_checksum: SHA256Checksum | None = None

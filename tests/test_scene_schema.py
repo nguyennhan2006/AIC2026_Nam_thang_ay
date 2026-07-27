@@ -8,9 +8,9 @@ import unittest
 
 from pydantic import ValidationError
 
-from schemas.common import BoundingBox, ModelProvenance
-from schemas.keyframe import Keyframe, KeyframeRole, OCRInstance
-from schemas.scene import ASRSegment, Scene, SceneCaptionRecord
+from datasection.schemas.common import BoundingBox, ModelProvenance
+from datasection.schemas.keyframe import Keyframe, KeyframeRole, OCRInstance
+from datasection.schemas.scene import ASRSegment, Scene, SceneCaptionRecord
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
