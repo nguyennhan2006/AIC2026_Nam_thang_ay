@@ -116,31 +116,27 @@ này đọc lại cùng vector đã lưu thay vì tính lại mỗi lần. Nghi�
 `provider.image("embedding", ...)` trước/sau trên cùng một video — phải giảm khi
 chạy lại toàn bộ pipeline (scene index + clip pooling) trên dữ liệu đã enrich.
 
-## TECH-DEBT: Qdrant indexing pipeline không có entry point chạy được
+## TECH-DEBT: `dense_visual_clip` chưa wire — cần `clip_rows_remote` + CLI mở rộng
 
-**Phát hiện lúc nào**: khi định wire branch `dense_visual_clip` (Search Mixing
-Console W3) — dự định tái dùng `offline/indexing.py::scene_rows_remote` làm mẫu để
-viết `clip_rows_remote` (đọc vector đã pool từ `offline/clip_pooling.py`), rồi đẩy
-vào một Qdrant collection riêng cho clip. Kiểm tra thì phát hiện
-`scene_rows`/`scene_rows_remote`/`build_local_index`/`QdrantIndexer`
-(`offline/indexing.py`) **không được gọi từ bất kỳ script hay route nào** ngoài unit
-test của chính chúng — nghĩa là backend `qdrant` của `online/api/container.py` chỉ
-hoạt động được nếu ai đó tự tay chạy các hàm này ngoài luồng (không có CLI). Đây là
-gap có sẵn trước khi tôi chạm vào, không phải regression mới.
+**Đính chính**: bản ghi trước đây ở mục này nói "Qdrant indexing pipeline không có
+entry point chạy được" — **sai**, đã tự kiểm lại và xin lỗi vì kết luận vội. `python -m
+offline index --scenes storage/exports/scenes.jsonl --qdrant --encoder remote` (xem
+`offline/cli.py::_main`) là entry point **thật, chạy được**: gọi `scene_rows_remote`
+(encoder thật qua `RemoteInferenceProvider`) hoặc `scene_rows` (encoder `local`/hash,
+không cần GPU), `QdrantIndexer.provision`/`upsert`, rồi publish `IndexArtifact` vào
+`dataset_manifest.json`. Đã xác minh thật bằng cách gọi trực tiếp Qdrant Cloud instance
+trong `.env` (`AIC_QDRANT_URL`) lúc audit phiên này: instance sống, credential đúng,
+nhưng **0 collection tồn tại** — nghĩa là CLI này có thật nhưng **chưa từng được chạy**
+trên dữ liệu thật, không phải "không tồn tại". Grep trước đó bị sót vì chỉ tìm trong
+`scripts/`/`online/`, không tìm `offline/cli.py`.
 
-**Vì sao không tự thêm luôn**: viết thêm `clip_rows_remote` + wiring
-`dense_visual_clip` vào container lúc chưa có entry point chạy scene-level
-indexing thật sẽ tạo thêm bề mặt "có class nhưng không ai gọi" — đúng thứ nguyên tắc
-"không có backend branch nào không xuất hiện trong capabilities/không chạy được"
-đã cấm. `dense_visual_clip` vì vậy **chưa được đăng ký** ở `online/api/container.py`
-— không có branch giả, chỉ là chưa có branch này.
-
-**Việc cần làm trước khi wire `dense_visual_clip`** (theo thứ tự):
-1. Viết script CLI thật (`scripts/build_qdrant_index.py` hay tương tự) gọi
-   `scene_rows_remote` + `QdrantIndexer.provision`/`upsert`, chạy được trên corpus
-   enrich thật — nghiệm thu: `curl` collection Qdrant thấy đúng số điểm = scene_count.
-2. Viết `clip_rows_remote` tương tự (đọc `clips.jsonl` + resolve
-   `embedding_refs[0].storage_locations[0].vector_uri`), thêm vào script trên.
+**Việc còn thiếu thật (chỉ áp dụng cho `dense_visual_clip`, không áp dụng cho
+`dense_visual_scene` — nhánh đó đã có CLI xong)**:
+1. Viết `clip_rows_remote` trong `offline/indexing.py` (đọc `clips.jsonl` + resolve
+   `embedding_refs[0].storage_locations[0].vector_uri`), theo đúng mẫu
+   `scene_rows_remote`.
+2. Thêm `--clip`/collection riêng vào `offline/cli.py`'s `index` subcommand (hoặc
+   script riêng), nghiệm thu: `curl` collection Qdrant thấy đúng số điểm = clip_count.
 3. Wire `DenseRetriever` thứ hai (đổi tên/modality qua constructor, xem
    `online/adapters/dense_retriever.py`) trỏ vào clip collection, sau `AIC_ENABLE_
    CLIP_DENSE` (cờ mới, mặc định tắt).
