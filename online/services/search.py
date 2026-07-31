@@ -19,6 +19,7 @@ from online.domain.models import (
 )
 from online.ports.interfaces import Retriever, SceneRepository
 from online.services.fusion import fuse_candidates
+from online.services.negative_constraints import apply_negative_constraints, extract_negative_constraints
 from online.services.query_planner import RuleBasedQueryPlanner
 from online.services.rules import RuleConfig, apply_bonus_penalty
 from online.services.temporal import link_event_hits
@@ -66,7 +67,11 @@ class SearchService:
             branches=plan.search_options.branches,
             minimum_matching_branches=fusion_options.minimum_matching_branches,
         )
-        if self.rule_config is None:
+        constraints = (
+            extract_negative_constraints(plan.normalized_query)
+            if plan.search_options.query.enable_negative_constraints else []
+        )
+        if not constraints and self.rule_config is None:
             return candidates
         documents = {
             document.scene_id: document
@@ -74,6 +79,10 @@ class SearchService:
                 [candidate.scene_id for candidate in candidates]
             )
         }
+        if constraints:
+            candidates = apply_negative_constraints(candidates, documents, constraints)
+        if self.rule_config is None:
+            return candidates
         exact_phrases = [
             phrase for event in plan.events for phrase in event.exact_phrases
         ]

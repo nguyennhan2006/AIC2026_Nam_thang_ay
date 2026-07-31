@@ -13,6 +13,7 @@ from online.domain.models import Candidate, Modality, QueryEvent, QueryPlan, Sce
 from online.domain.search_config import BranchRuntimeOptions, FusionOptions, SearchOptions
 from online.services.branch_options import effective_limit, effective_weight
 from online.services.fusion import fuse_candidates
+from online.services.negative_constraints import apply_negative_constraints, extract_negative_constraints
 
 
 def run(coro):
@@ -187,6 +188,37 @@ class FuseCandidatesTests(unittest.TestCase):
         only_b = [self._candidate("s2", "b", Modality.KEYWORD, 1.0, 1)]
         fused = fuse_candidates([only_a, only_b], {Modality.CAPTION: 1.0, Modality.KEYWORD: 1.0}, method="union")
         self.assertEqual({item.scene_id for item in fused}, {"s1", "s2"})
+
+
+class NegativeConstraintsTests(unittest.TestCase):
+    def test_extracts_khong_co_phrase(self) -> None:
+        self.assertEqual(extract_negative_constraints("cảnh có xe máy, không có ô tô"), ["o to"])
+
+    def test_extracts_bare_khong_phrase(self) -> None:
+        self.assertEqual(extract_negative_constraints("không mưa"), ["mua"])
+
+    def test_no_negation_returns_empty(self) -> None:
+        self.assertEqual(extract_negative_constraints("người cào muối trên cánh đồng"), [])
+
+    def _doc(self, scene_id: str, object_labels: list[str]) -> SceneDocument:
+        return SceneDocument(
+            scene_id=scene_id, video_id="L01_V001", scene_idx=0,
+            start_sec=0.0, end_sec=1.0, object_labels=object_labels,
+        )
+
+    def _candidate(self, scene_id: str) -> Candidate:
+        return Candidate(entity_id=scene_id, scene_id=scene_id, video_id="L01_V001", source="x", modality=Modality.KEYWORD, score=1.0, rank=1)
+
+    def test_excludes_scene_containing_the_constraint_phrase(self) -> None:
+        candidates = [self._candidate("s1"), self._candidate("s2")]
+        documents = {"s1": self._doc("s1", ["o to"]), "s2": self._doc("s2", ["xe may"])}
+        kept = apply_negative_constraints(candidates, documents, ["o to"])
+        self.assertEqual([c.scene_id for c in kept], ["s2"])
+        self.assertEqual(kept[0].rank, 1)
+
+    def test_no_constraints_returns_input_unchanged(self) -> None:
+        candidates = [self._candidate("s1")]
+        self.assertEqual(apply_negative_constraints(candidates, {}, []), candidates)
 
 
 class SearchCapabilitiesTests(unittest.TestCase):
