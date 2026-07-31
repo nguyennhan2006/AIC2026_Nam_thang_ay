@@ -12,6 +12,9 @@ import asyncio
 from pathlib import Path
 import unittest
 
+from online.adapters.bm25 import LexicalRetriever
+from online.adapters.color_search import ColorSearchRetriever
+from online.adapters.event_search import EventSearchRetriever
 from online.adapters.ocr_fuzzy import OcrFuzzyRetriever
 from online.api.container import build_container
 from online.config import Settings
@@ -48,6 +51,10 @@ def _settings(path: Path, **overrides) -> Settings:
         enable_query_prep=False,
         enable_expansion=False,
         enable_rules=False,
+        enable_object_search=False,
+        enable_action_search=False,
+        enable_color_search=False,
+        enable_event_search=False,
     )
     base.update(overrides)
     return Settings(**base)
@@ -95,6 +102,36 @@ class ContainerFlagTests(unittest.TestCase):
         candidates = run(service._retrieve(plan, service.candidate_limit))
         target = next(c for c in candidates if c.scene_id == "L01_V001_S0002")
         self.assertIn("ocr_exact", target.payload.get("rule_adjustments", {}))
+
+    def test_enable_object_search_wires_bm25_object_retriever(self) -> None:
+        service = self.build(enable_object_search=True).search_service
+        self.assertEqual(len(service.retrievers), 6)
+        matches = [r for r in service.retrievers if isinstance(r, LexicalRetriever) and r.field == "object"]
+        self.assertEqual(len(matches), 1)
+
+    def test_enable_action_search_wires_bm25_action_retriever(self) -> None:
+        service = self.build(enable_action_search=True).search_service
+        self.assertEqual(len(service.retrievers), 6)
+        matches = [r for r in service.retrievers if isinstance(r, LexicalRetriever) and r.field == "action"]
+        self.assertEqual(len(matches), 1)
+
+    def test_enable_color_search_wires_color_retriever(self) -> None:
+        service = self.build(enable_color_search=True).search_service
+        self.assertEqual(len(service.retrievers), 6)
+        self.assertTrue(any(isinstance(r, ColorSearchRetriever) for r in service.retrievers))
+
+    def test_enable_event_search_wires_event_retriever_since_events_jsonl_always_exported(self) -> None:
+        # export_dataset (datasection/exporter.py) always writes events.jsonl now
+        # (W1 event grouping), including for seed_demo's zero-event demo dataset.
+        container = self.build(enable_event_search=True)
+        self.assertIsNotNone(container.event_repository)
+        self.assertEqual(len(container.search_service.retrievers), 6)
+        self.assertTrue(any(isinstance(r, EventSearchRetriever) for r in container.search_service.retrievers))
+
+    def test_event_repository_available_even_when_event_search_disabled(self) -> None:
+        container = self.build()
+        self.assertIsNotNone(container.event_repository)
+        self.assertEqual(len(container.search_service.retrievers), 5)
 
     def test_enable_query_prep_rewrites_normalized_query_on_temporal_marker(self) -> None:
         service = self.build(enable_query_prep=True).search_service

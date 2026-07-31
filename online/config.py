@@ -46,6 +46,11 @@ class Settings:
     enable_query_prep: bool
     enable_expansion: bool
     enable_rules: bool
+    # Search Mixing Console W3 — mỗi cờ mặc định tắt, xem online/api/container.py.
+    enable_object_search: bool
+    enable_action_search: bool
+    enable_color_search: bool
+    enable_event_search: bool
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -87,4 +92,8 @@ class Settings:
             enable_query_prep=_env_bool("AIC_ENABLE_QUERY_PREP", False),
             enable_expansion=_env_bool("AIC_ENABLE_EXPANSION", False),
             enable_rules=_env_bool("AIC_ENABLE_RULES", False),
+            enable_object_search=_env_bool("AIC_ENABLE_OBJECT_SEARCH", False),
+            enable_action_search=_env_bool("AIC_ENABLE_ACTION_SEARCH", False),
+            enable_color_search=_env_bool("AIC_ENABLE_COLOR_SEARCH", False),
+            enable_event_search=_env_bool("AIC_ENABLE_EVENT_SEARCH", False),
         )

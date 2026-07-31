@@ -18,7 +18,7 @@ from online.domain.models import (
     TaskType,
 )
 from online.ports.interfaces import Retriever, SceneRepository
-from online.services.fusion import weighted_rrf
+from online.services.fusion import fuse_candidates
 from online.services.query_planner import RuleBasedQueryPlanner
 from online.services.rules import RuleConfig, apply_bonus_penalty
 from online.services.temporal import link_event_hits
@@ -50,11 +50,21 @@ class SearchService:
         lists = await asyncio.gather(
             *(item.search(plan, limit=limit) for item in self.retrievers)
         )
-        candidates = weighted_rrf(
+        fusion_options = plan.search_options.fusion
+        # rrf_k also exists as a deployment-level default (SearchService.rrf_k /
+        # AIC_RRF_K); only let a request override it when the caller actually set
+        # search_options.fusion.rrf_k explicitly (model_fields_set), so a request
+        # with no search_options keeps using the deployment default exactly as
+        # before FusionOptions existed.
+        rrf_k = fusion_options.rrf_k if "rrf_k" in fusion_options.model_fields_set else self.rrf_k
+        candidates = fuse_candidates(
             lists,
             plan.modality_weights,
-            rrf_k=self.rrf_k,
+            method=fusion_options.method,
+            rrf_k=rrf_k,
             limit=limit,
+            branches=plan.search_options.branches,
+            minimum_matching_branches=fusion_options.minimum_matching_branches,
         )
         if self.rule_config is None:
             return candidates
@@ -148,7 +158,8 @@ class SearchService:
         candidates = await self._retrieve(plan, self.candidate_limit)
         hits = await self._hydrate(candidates[: request.top_k], plan.normalized_query)
         if request.task == TaskType.AVS:
-            hits = _diversify_avs(hits, request.top_k)
+            per_video = plan.search_options.fusion.max_results_per_video or 3
+            hits = _diversify_avs(hits, request.top_k, per_video=per_video)
         return SearchResponse(
             query_id=query_id,
             task=request.task,

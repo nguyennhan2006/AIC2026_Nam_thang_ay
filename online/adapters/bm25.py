@@ -8,6 +8,7 @@ import re
 
 from online.domain.models import Candidate, Modality, QueryPlan, SceneDocument
 from online.ports.interfaces import SceneRepository
+from online.services.branch_options import effective_limit, effective_weight
 
 
 TOKEN_RE = re.compile(r"\w+", flags=re.UNICODE)
@@ -15,6 +16,14 @@ TOKEN_RE = re.compile(r"\w+", flags=re.UNICODE)
 
 def tokenize(text: str) -> list[str]:
     return TOKEN_RE.findall(text.casefold())
+
+
+def _document_id(document) -> str:
+    """Stable tie-break id. BM25Index is generic over any document exposing
+    `field_text()` — SceneDocument (`scene_id`) and EventDocument (`event_id`,
+    see online/adapters/event_search.py) are both used with it today."""
+
+    return getattr(document, "scene_id", None) or document.event_id
 
 
 class BM25Index:
@@ -60,7 +69,7 @@ class BM25Index:
                 score += self.idf.get(token, 0.0) * frequency * (self.k1 + 1) / denominator
             if score > 0:
                 scored.append((document, score))
-        scored.sort(key=lambda item: (-item[1], item[0].scene_id))
+        scored.sort(key=lambda item: (-item[1], _document_id(item[0])))
         return scored[:limit]
 
 
@@ -78,8 +87,9 @@ class LexicalRetriever:
         return cls(field, BM25Index(await repository.all(), field))
 
     async def search(self, plan: QueryPlan, *, limit: int) -> list[Candidate]:
-        if plan.modality_weights.get(self.modality, 0) <= 0:
+        if effective_weight(plan, self.name, self.modality) <= 0:
             return []
+        limit = effective_limit(plan, self.name, limit)
         query = plan.events[0].text if len(plan.events) == 1 else plan.normalized_query
         results = self.index.search(query, limit * 2)
         filtered = []

@@ -53,6 +53,7 @@ from difflib import SequenceMatcher
 
 from online.domain.models import Candidate, Modality, QueryPlan, SceneDocument
 from online.ports.interfaces import SceneRepository
+from online.services.branch_options import effective_limit, effective_weight
 
 
 _NON_WORD_RE = re.compile(r"[^\w\s]+", flags=re.UNICODE)
@@ -200,8 +201,9 @@ class OcrFuzzyRetriever:
         return [q for q in (normalize_vi(item) for item in raw) if q]
 
     async def search(self, plan: QueryPlan, *, limit: int) -> list[Candidate]:
-        if plan.modality_weights.get(Modality.OCR, 0) <= 0:
+        if effective_weight(plan, self.name, Modality.OCR) <= 0:
             return []
+        limit = effective_limit(plan, self.name, limit)
         queries = self._queries(plan)
         if not queries:
             return []

@@ -22,10 +22,13 @@ def project_scene(raw: dict[str, Any], video_path: str | None = None) -> SceneDo
     keyframe_captions: list[str] = []
     ocr_texts: list[str] = []
     object_labels: list[str] = []
+    color_names: list[str] = []
     for keyframe in keyframes:
         keyframe_captions.extend(_texts(keyframe.get("captions", [])))
         ocr_texts.extend(_texts(keyframe.get("ocr_instances", [])))
         object_labels.extend(str(item["label"]) for item in keyframe.get("objects", []) if item.get("label"))
+        color = keyframe.get("color") or {}
+        color_names.extend(str(item["name"]) for item in color.get("dominant_colors", []) if item.get("name"))
     scene_captions = _texts(raw.get("captions", []))
     asr_texts = _texts(raw.get("asr_segments", []))
     keywords = [
@@ -33,6 +36,7 @@ def project_scene(raw: dict[str, Any], video_path: str | None = None) -> SceneDo
         for item in raw.get("keywords", [])
         if item.get("normalized_text") or item.get("text")
     ]
+    action_tags = [str(item) for item in raw.get("action_tags", [])]
     return SceneDocument(
         scene_id=raw["scene_id"],
         video_id=raw["video_id"],
@@ -58,6 +62,8 @@ def project_scene(raw: dict[str, Any], video_path: str | None = None) -> SceneDo
         ocr_texts=ocr_texts,
         asr_texts=asr_texts,
         keywords=keywords,
+        action_tags=sorted(set(action_tags)),
+        color_names=sorted(set(color_names)),
     )
 
 

@@ -2,6 +2,7 @@
 
 from online.domain.models import Candidate, Modality, QueryPlan
 from online.ports.interfaces import TextEncoder, VectorStore
+from online.services.branch_options import effective_limit, effective_weight
 
 
 class DenseRetriever:
@@ -12,8 +13,10 @@ class DenseRetriever:
         self.store = store
 
     async def search(self, plan: QueryPlan, *, limit: int) -> list[Candidate]:
-        if plan.modality_weights.get(Modality.VISUAL, 0) <= 0:
+        if effective_weight(plan, self.name, Modality.VISUAL) <= 0:
             return []
         vector = await self.encoder.encode(plan.normalized_query)
-        return await self.store.search(vector, limit=limit, filters=plan.filters)
+        return await self.store.search(
+            vector, limit=effective_limit(plan, self.name, limit), filters=plan.filters
+        )
 

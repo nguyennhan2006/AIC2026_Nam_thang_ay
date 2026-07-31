@@ -99,6 +99,62 @@ async def get_scene(scene_id: str, container: Container) -> dict:
     return scene.model_dump(mode="json")
 
 
+@router.get("/events/{event_id}")
+async def get_event(event_id: str, container: Container) -> dict:
+    if container.event_repository is None:
+        raise HTTPException(status_code=404, detail="no event data available for this dataset")
+    event = await container.event_repository.get(event_id)
+    if not event:
+        raise HTTPException(status_code=404, detail="event not found")
+    return event.model_dump(mode="json")
+
+
+@router.get("/events/{event_id}/neighbors")
+async def get_event_neighbors(event_id: str, container: Container) -> dict:
+    if container.event_repository is None:
+        raise HTTPException(status_code=404, detail="no event data available for this dataset")
+    event = await container.event_repository.get(event_id)
+    if not event:
+        raise HTTPException(status_code=404, detail="event not found")
+    previous = await container.event_repository.get(event.previous_event_id) if event.previous_event_id else None
+    next_ = await container.event_repository.get(event.next_event_id) if event.next_event_id else None
+    return {
+        "previous": previous.model_dump(mode="json") if previous else None,
+        "next": next_.model_dump(mode="json") if next_ else None,
+    }
+
+
+@router.get("/search/capabilities")
+async def search_capabilities(container: Container) -> dict:
+    """Real, introspected capabilities — every branch listed here is actually
+    registered in `container.search_service.retrievers` right now, not an
+    aspirational/hardcoded list (Search Mixing Console clean-code rule #9)."""
+
+    branches = []
+    for retriever in container.search_service.retrievers:
+        modality = getattr(retriever, "modality", None)
+        branches.append({
+            "branch_id": retriever.name,
+            "modality": modality.value if modality is not None else None,
+            "status": "ready",
+        })
+    return {
+        "task_types": [item.value for item in TaskType],
+        "branches": branches,
+        # weighted_sum/max_score reuse rank-derived contribution, not a properly
+        # score-normalized weighted sum — see online/services/fusion.py docstring.
+        "fusion_methods": ["rrf", "weighted_sum", "max_score", "intersection", "union"],
+        "rerank": {
+            "rules": container.search_service.rule_config is not None,
+            # BGE/Qwen3-VL rerank need a remote model server that does not exist
+            # yet — see docs/14_TECHNICAL_PREPARATION.md Phase 3.
+            "text": False,
+            "vlm": False,
+        },
+        "events_available": container.event_repository is not None,
+    }
+
+
 @router.get("/media/{artifact_path:path}")
 async def media(artifact_path: str, container: Container) -> FileResponse:
     root = container.settings.data_root.resolve()

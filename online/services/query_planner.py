@@ -12,6 +12,7 @@ from online.domain.models import (
     SearchRequest,
     TaskType,
 )
+from online.domain.search_config import SearchOptions
 from online.errors import InvalidQueryError
 
 
@@ -68,6 +69,13 @@ class RuleBasedQueryPlanner:
             Modality.OCR: 0.35,
             Modality.ASR: 0.25,
             Modality.KEYWORD: 0.65,
+            # Buckets mới (W3) chỉ có hiệu lực khi container thực sự đăng ký
+            # retriever tương ứng (mặc định tắt, xem AIC_ENABLE_* ở online/config.py)
+            # — giá trị ở đây chỉ là default hợp lý cho lúc retriever được bật.
+            Modality.OBJECT: 0.5,
+            Modality.ACTION: 0.5,
+            Modality.COLOR: 0.4,
+            Modality.EVENT: 0.3,
         }
         if exact_phrases or any(hint in lowered for hint in TEXT_HINTS):
             weights[Modality.OCR] = 2.0
@@ -80,5 +88,6 @@ class RuleBasedQueryPlanner:
             events=events,
             modality_weights=weights,
             filters=request.filters,
+            search_options=request.search_options or SearchOptions(),
         )
 

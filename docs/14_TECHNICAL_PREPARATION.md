@@ -115,3 +115,65 @@ trong `offline/pipeline.py`, để scene pooling, clip pooling và event aggrega
 này đọc lại cùng vector đã lưu thay vì tính lại mỗi lần. Nghiệm thu: đo số lần gọi
 `provider.image("embedding", ...)` trước/sau trên cùng một video — phải giảm khi
 chạy lại toàn bộ pipeline (scene index + clip pooling) trên dữ liệu đã enrich.
+
+## TECH-DEBT: Qdrant indexing pipeline không có entry point chạy được
+
+**Phát hiện lúc nào**: khi định wire branch `dense_visual_clip` (Search Mixing
+Console W3) — dự định tái dùng `offline/indexing.py::scene_rows_remote` làm mẫu để
+viết `clip_rows_remote` (đọc vector đã pool từ `offline/clip_pooling.py`), rồi đẩy
+vào một Qdrant collection riêng cho clip. Kiểm tra thì phát hiện
+`scene_rows`/`scene_rows_remote`/`build_local_index`/`QdrantIndexer`
+(`offline/indexing.py`) **không được gọi từ bất kỳ script hay route nào** ngoài unit
+test của chính chúng — nghĩa là backend `qdrant` của `online/api/container.py` chỉ
+hoạt động được nếu ai đó tự tay chạy các hàm này ngoài luồng (không có CLI). Đây là
+gap có sẵn trước khi tôi chạm vào, không phải regression mới.
+
+**Vì sao không tự thêm luôn**: viết thêm `clip_rows_remote` + wiring
+`dense_visual_clip` vào container lúc chưa có entry point chạy scene-level
+indexing thật sẽ tạo thêm bề mặt "có class nhưng không ai gọi" — đúng thứ nguyên tắc
+"không có backend branch nào không xuất hiện trong capabilities/không chạy được"
+đã cấm. `dense_visual_clip` vì vậy **chưa được đăng ký** ở `online/api/container.py`
+— không có branch giả, chỉ là chưa có branch này.
+
+**Việc cần làm trước khi wire `dense_visual_clip`** (theo thứ tự):
+1. Viết script CLI thật (`scripts/build_qdrant_index.py` hay tương tự) gọi
+   `scene_rows_remote` + `QdrantIndexer.provision`/`upsert`, chạy được trên corpus
+   enrich thật — nghiệm thu: `curl` collection Qdrant thấy đúng số điểm = scene_count.
+2. Viết `clip_rows_remote` tương tự (đọc `clips.jsonl` + resolve
+   `embedding_refs[0].storage_locations[0].vector_uri`), thêm vào script trên.
+3. Wire `DenseRetriever` thứ hai (đổi tên/modality qua constructor, xem
+   `online/adapters/dense_retriever.py`) trỏ vào clip collection, sau `AIC_ENABLE_
+   CLIP_DENSE` (cờ mới, mặc định tắt).
+4. **Quan trọng**: `dense_visual_clip` chỉ có ý nghĩa ở backend `qdrant` (encoder
+   query và encoder ảnh phải cùng không gian embedding thật) — KHÔNG wire ở backend
+   `local` (ở đó query được encode bằng `HashingTextEncoder`, một token-hash không
+   liên quan gì tới không gian ảnh của `MockInferenceProvider`/`RemoteInferenceProvider`
+   — cosine similarity giữa hai không gian không liên quan sẽ là nhiễu, không phải
+   kết quả yếu, nên KHÔNG được coi là "baseline chấp nhận được" như cách
+   `local_dense` hiện tại chấp nhận được (nó hash TEXT, không giả vờ visual)).
+
+## TECH-DEBT: rerank cascade tầng 1/2 (BGE / Qwen3-VL) vẫn chỉ là tier 0 (rules)
+
+Đã có (Search Mixing Console W5): `online/services/rules.py` (tier 0, bonus/penalty
+tường minh) + `fuse_candidates`/`weighted_rrf` hỗ trợ per-branch weight/enable qua
+`SearchOptions.branches`, 5 phương thức fusion (`rrf`/`weighted_sum`/`max_score`/
+`intersection`/`union` — 4 phương thức sau dùng contribution theo rank, không phải
+raw-score-normalized weighted sum thật, xem docstring `online/services/fusion.py`).
+
+Chưa có (đã ghi ở Phase 3 phía trên, nhắc lại vì liên quan trực tiếp
+`RerankOptions.text`/`RerankOptions.vlm` đã có contract từ W0): tier 1 (BGE
+reranker top-300→50) và tier 2 (Qwen3-VL top-20) cần một model server thật
+(`POST /v1/inference/rerank` ở `offline/gpu_engine.py`/`offline/worker.py`, theo
+đúng mẫu `RemoteTextEncoder`/`RemoteInferenceProvider` đã có) — chưa tồn tại. Endpoint
+`GET /v1/search/capabilities` báo trung thực `rerank.text`/`rerank.vlm` đều `false`
+cho tới khi việc này xong, không hard-code `true`.
+
+## TECH-DEBT: React UI mới dừng ở backend capabilities, chưa có Advanced/Expert tier
+
+`GET /v1/search/capabilities` (mới, real, introspect trực tiếp
+`search_service.retrievers` — không hard-code danh sách branch) là contract mà UI
+cần để dựng branch mixer, nhưng `online/ui-react/` **chưa đọc endpoint này** và chưa
+có Simple/Advanced/Expert tier, branch card, evidence inspector theo đúng mục 15 của
+plan gốc. Việc UI cần làm trước khi coi W7 xong: gọi `/v1/search/capabilities` lúc
+khởi động, dựng danh sách branch động thay vì hard-code, thêm control cho
+`SearchOptions.branches[*].weight/top_k/enabled` đã có contract sẵn ở backend.

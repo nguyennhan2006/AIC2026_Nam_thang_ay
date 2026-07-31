@@ -24,6 +24,13 @@ class Modality(StrEnum):
     OCR = "ocr"
     ASR = "asr"
     KEYWORD = "keyword"
+    # Search Mixing Console W3 — mỗi bucket mới có 1 retriever tương ứng, mặc định
+    # KHÔNG được container đăng ký (xem AIC_ENABLE_* trong online/config.py) nên
+    # thêm bucket ở đây không tự thay đổi hành vi search hiện tại.
+    OBJECT = "object"
+    ACTION = "action"
+    COLOR = "color"
+    EVENT = "event"
 
 
 class SearchFilters(StrictModel):
@@ -69,6 +76,11 @@ class QueryPlan(StrictModel):
     events: list[QueryEvent] = Field(min_length=1)
     modality_weights: dict[Modality, float]
     filters: SearchFilters
+    # Search Mixing Console (W5) — per-branch override, copied verbatim from
+    # SearchRequest.search_options. Default SearchOptions() has empty `branches`,
+    # so every retriever's per-branch lookup misses and falls back to
+    # modality_weights exactly like before this field existed.
+    search_options: SearchOptions = Field(default_factory=SearchOptions)
 
     @model_validator(mode="after")
     def validate_weights(self) -> "QueryPlan":
@@ -97,6 +109,9 @@ class SceneDocument(StrictModel):
     ocr_texts: list[str] = Field(default_factory=list)
     asr_texts: list[str] = Field(default_factory=list)
     keywords: list[str] = Field(default_factory=list)
+    # W1 action tags / color features, projected read-only (xem project_scene).
+    action_tags: list[str] = Field(default_factory=list)
+    color_names: list[str] = Field(default_factory=list)
 
     def field_text(self, field: str) -> str:
         values = {
@@ -104,8 +119,31 @@ class SceneDocument(StrictModel):
             "ocr": self.ocr_texts,
             "asr": self.asr_texts,
             "keyword": self.keywords,
+            "object": self.object_labels,
+            "action": self.action_tags,
         }.get(field, [])
         return " ".join(values)
+
+
+class EventDocument(StrictModel):
+    """Read-only projection built from one canonical datasection Event."""
+
+    event_id: str
+    video_id: str
+    scene_ids: list[str] = Field(default_factory=list)
+    start_sec: float = Field(ge=0)
+    end_sec: float = Field(gt=0)
+    event_caption: str | None = None
+    keywords: list[str] = Field(default_factory=list)
+    action_tags: list[str] = Field(default_factory=list)
+    previous_event_id: str | None = None
+    next_event_id: str | None = None
+
+    def field_text(self, field: str = "text") -> str:
+        # `field` is ignored — kept so EventDocument can be reused with the same
+        # BM25Index used for scene fields (online/adapters/bm25.py), which is
+        # built generically around `item.field_text(field)`.
+        return " ".join([self.event_caption or "", *self.keywords, *self.action_tags])
 
 
 class Candidate(StrictModel):

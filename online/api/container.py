@@ -5,8 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from online.adapters.bm25 import LexicalRetriever
+from online.adapters.color_search import ColorSearchRetriever
 from online.adapters.dense_retriever import DenseRetriever
 from online.adapters.encoders import HashingTextEncoder, RemoteTextEncoder
+from online.adapters.event_search import EventSearchRetriever, JsonlEventRepository
 from online.adapters.json_metadata import JsonlSceneRepository
 from online.adapters.ocr_fuzzy import OcrFuzzyRetriever
 from online.adapters.vector_stores import InMemoryVectorStore, QdrantVectorStore
@@ -25,6 +27,7 @@ class AppContainer:
     search_service: SearchService
     vqa_service: VQAService
     vector_store: object
+    event_repository: JsonlEventRepository | None = None
 
 
 async def build_container(settings: Settings) -> AppContainer:
@@ -74,6 +77,22 @@ async def build_container(settings: Settings) -> AppContainer:
     retrievers = [DenseRetriever(encoder, vector_store), *lexical]
     if settings.enable_ocr_fuzzy:
         retrievers.append(await OcrFuzzyRetriever.build(repository))
+    if settings.enable_object_search:
+        retrievers.append(await LexicalRetriever.build("object", repository))
+    if settings.enable_action_search:
+        retrievers.append(await LexicalRetriever.build("action", repository))
+    if settings.enable_color_search:
+        retrievers.append(await ColorSearchRetriever.build(repository))
+
+    events_path = settings.metadata_jsonl.with_name("events.jsonl")
+    event_repository = await JsonlEventRepository.load(events_path) if events_path.exists() else None
+    if settings.enable_event_search:
+        if event_repository is None:
+            raise ValueError(
+                f"AIC_ENABLE_EVENT_SEARCH is set but {events_path} does not exist — "
+                "run the offline pipeline/exporter (which now always writes events.jsonl) first"
+            )
+        retrievers.append(await EventSearchRetriever.build(event_repository))
 
     search_service = SearchService(
         repository,
@@ -89,4 +108,5 @@ async def build_container(settings: Settings) -> AppContainer:
         search_service=search_service,
         vqa_service=VQAService(search_service, repository),
         vector_store=vector_store,
+        event_repository=event_repository,
     )
