@@ -131,6 +131,8 @@ class Scene(StrictModel):
     captions: list[SceneCaptionRecord] = Field(default_factory=list)
     asr_segments: list[ASRSegment] = Field(default_factory=list)
     keywords: list[SceneKeyword] = Field(default_factory=list)
+    # Union of keyframes' action_tags (W1 baseline, xem offline/action_tags.py).
+    action_tags: list[NonEmptyStr] = Field(default_factory=list)
     embedding_refs: list[EmbeddingReference] = Field(default_factory=list)
 
     scene_clip_path: RelativeArtifactPath | None = None
@@ -223,6 +225,9 @@ class Scene(StrictModel):
             raise ValueError(
                 "normalized keyword text must be unique per language within a scene"
             )
+
+        if len(self.action_tags) != len(set(self.action_tags)):
+            raise ValueError("action_tags must not contain duplicates")
 
         if self.scene_clip_checksum and not self.scene_clip_path:
             raise ValueError("scene_clip_checksum requires scene_clip_path")

@@ -167,6 +167,7 @@ async def build_clip_segment(
     window_center = (window.start_sec + window.end_sec) / 2
     representative = choose_representative_frame(selected.keyframes, vectors, pooled, window_center)
     clip_id = f"{scene.scene_id}_C{window.start_frame:08d}_{window.end_frame:08d}"
+    action_tags = sorted({tag for frame in selected.keyframes for tag in frame.action_tags})
     relative_vector_path = Path("processed/clip_embeddings") / scene.video_id / f"{clip_id}.json"
     _write_vector_atomic(data_root / relative_vector_path, pooled)
     embedding_ref = EmbeddingReference(
@@ -195,6 +196,7 @@ async def build_clip_segment(
         sampling_degraded=selected.sampling_degraded,
         fallback_distance_sec=selected.fallback_distance_sec,
         embedding_refs=[embedding_ref],
+        action_tags=action_tags,
         clip_config_id=clip_config_id,
         provenance=provenance,
     )

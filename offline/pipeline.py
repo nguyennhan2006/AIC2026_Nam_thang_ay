@@ -16,6 +16,7 @@ from datasection.schemas import (
     ModelArtifact, ModelProvenance, NamedColorRatio, ObjectInstance, OCRInstance, Scene,
     SceneCaptionRecord, SceneKeyword, Video,
 )
+from offline.action_tags import extract_action_tags
 from offline.clip_pooling import build_clip_segment, build_clip_windows, select_clip_frames
 from offline.config import OfflineSettings
 from offline.embedding_reader import MemoizedEmbeddingReader, ProviderEmbeddingReader
@@ -92,7 +93,8 @@ class OfflinePipeline:
             keyframe_id=f"{scene_id}_F{frame_idx:06d}", video_id=video_id, scene_id=scene_id,
             frame_idx=frame_idx, timestamp_sec=frame_idx / info.fps, image_path=relative.as_posix(),
             width=info.width, height=info.height, roles=["representative"], captions=captions,
-            ocr_instances=ocr_instances, objects=object_instances, color=color_feature, source_checksum=_checksum(target),
+            ocr_instances=ocr_instances, objects=object_instances, color=color_feature,
+            action_tags=extract_action_tags(caption_text), source_checksum=_checksum(target),
         )
 
     async def process_video(self, source: Path) -> Video:
@@ -119,10 +121,12 @@ class OfflinePipeline:
             labels = sorted({item.label.casefold() for frame in frames for item in frame.objects})
             for label in labels:
                 keywords.append(SceneKeyword(text=label, normalized_text=label, sources=["object"], provenance=self.provenance("keyword")))
+            action_tags = sorted({tag for frame in frames for tag in frame.action_tags})
             scenes.append(Scene(
                 scene_id=scene_id, video_id=video_id, scene_idx=scene_idx,
                 start_frame=start, end_frame_exclusive=end, start_sec=start / info.fps, end_sec=end / info.fps,
-                segmentation_provenance=self.provenance("uniform-scene"), keyframes=frames, captions=captions, keywords=keywords,
+                segmentation_provenance=self.provenance("uniform-scene"), keyframes=frames, captions=captions,
+                keywords=keywords, action_tags=action_tags,
             ))
             self.ledger.write(video_id, "enrich", "running", completed_scenes=scene_idx + 1)
         relative_source = source.resolve().relative_to(self.settings.data_root).as_posix()

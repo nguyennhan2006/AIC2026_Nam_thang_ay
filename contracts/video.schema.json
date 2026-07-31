@@ -506,6 +506,14 @@
       "additionalProperties": false,
       "description": "Complete metadata for one searchable frame inside a scene.",
       "properties": {
+        "action_tags": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Action Tags",
+          "type": "array"
+        },
         "captions": {
           "items": {
             "$ref": "#/$defs/CaptionRecord"
@@ -946,6 +954,14 @@
       "additionalProperties": false,
       "description": "Complete searchable scene with nested keyframes and temporal evidence.",
       "properties": {
+        "action_tags": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Action Tags",
+          "type": "array"
+        },
         "asr_segments": {
           "items": {
             "$ref": "#/$defs/ASRSegment"

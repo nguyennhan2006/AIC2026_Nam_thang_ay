@@ -105,6 +105,8 @@ class ClipSegment(StrictModel):
         names = [item.embedding_name for item in self.embedding_refs]
         if len(names) != len(set(names)):
             raise ValueError("embedding_name must be unique within a clip")
+        if len(self.action_tags) != len(set(self.action_tags)):
+            raise ValueError("action_tags must not contain duplicates")
         return self
 
 

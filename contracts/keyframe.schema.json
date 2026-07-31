@@ -601,6 +601,14 @@
   "additionalProperties": false,
   "description": "Complete metadata for one searchable frame inside a scene.",
   "properties": {
+    "action_tags": {
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "title": "Action Tags",
+      "type": "array"
+    },
     "captions": {
       "items": {
         "$ref": "#/$defs/CaptionRecord"

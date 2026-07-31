@@ -161,6 +161,9 @@ class Keyframe(StrictModel):
     ocr_instances: list[OCRInstance] = Field(default_factory=list)
     objects: list[ObjectInstance] = Field(default_factory=list)
     color: ColorFeature | None = None
+    # Baseline W1 (action tags): rule-based lexicon match trên caption text,
+    # xem offline/action_tags.py. Không phải action-recognition model thật.
+    action_tags: list[NonEmptyStr] = Field(default_factory=list)
     embedding_refs: list[EmbeddingReference] = Field(default_factory=list)
 
     source_checksum: SHA256Checksum | None = None
@@ -172,6 +175,13 @@ class Keyframe(StrictModel):
     def require_unique_roles(cls, values: list[KeyframeRole]) -> list[KeyframeRole]:
         if len(values) != len(set(values)):
             raise ValueError("roles must not contain duplicates")
+        return values
+
+    @field_validator("action_tags")
+    @classmethod
+    def require_unique_action_tags(cls, values: list[str]) -> list[str]:
+        if len(values) != len(set(values)):
+            raise ValueError("action_tags must not contain duplicates")
         return values
 
     @field_validator("created_at")
