@@ -45,9 +45,24 @@ class TransformersGpuEngine:
 
     def _load_qwen(self):
         if self._qwen is None:
+            name = os.getenv("AIC_CAPTION_MODEL", "Qwen/Qwen2.5-VL-7B-Instruct")
+            # AIC_CAPTION_MODEL is a generic-looking name but this loader only ever
+            # instantiates Qwen2_5_VLForConditionalGeneration — pointing it at a
+            # different model family (BLIP, Qwen3-VL, Florence, ...) crashes on
+            # from_pretrained with a confusing shape/config mismatch. Fail fast with
+            # a clear message instead (checked before the heavy torch/transformers
+            # import so this is testable without a GPU environment installed).
+            # Qwen3-VL captioning is a separate code path (scripts/caption_qwen3vl.py,
+            # OpenAI-compatible HTTP client), not this one.
+            if "qwen2.5-vl" not in name.casefold() and "qwen2_5-vl" not in name.casefold():
+                raise ValueError(
+                    f"AIC_CAPTION_MODEL={name!r} does not look like a Qwen2.5-VL checkpoint. "
+                    "TransformersGpuEngine._load_qwen only supports the Qwen2.5-VL family "
+                    "(Qwen2_5_VLForConditionalGeneration). For Qwen3-VL captioning, use "
+                    "scripts/caption_qwen3vl.py instead (a separate HTTP-based path)."
+                )
             import torch
             from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration
-            name = os.getenv("AIC_CAPTION_MODEL", "Qwen/Qwen2.5-VL-7B-Instruct")
             revision = os.getenv("AIC_CAPTION_MODEL_REVISION") or None
             cuda = torch.cuda.is_available()
             # float16 (not bf16) for broad GPU compat (e.g. Kaggle T4 has no fast bf16);

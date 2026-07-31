@@ -32,7 +32,7 @@ import base64
 import re
 import mimetypes
 import traceback
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, NamedTuple, Optional
 
 import requests
 from PIL import Image
@@ -61,55 +61,85 @@ def _read_env_file(env_path: Path, key_name: str) -> Optional[str]:
 
 
 def _env(key_name: str) -> Optional[str]:
-    return os.environ.get(key_name) or _read_env_file(Path(".env"), key_name)
-
-
-def _env_bool(key_name: str, default: bool) -> bool:
-    raw = _env(key_name)
-    if raw is None:
-        return default
-    return raw.strip().lower() in {"1", "true", "yes", "on"}
+    # os.environ takes priority, but must distinguish "set to empty string" from "not
+    # set at all" (a plain `or` chain treats both as falsy and would incorrectly fall
+    # through to .env for an explicitly-empty shell/docker env var).
+    if key_name in os.environ:
+        return os.environ[key_name]
+    return _read_env_file(Path(".env"), key_name)
 
 
 def _env_int(key_name: str, default: Optional[int]) -> Optional[int]:
+    """`key_name` absent -> `default`. Present but empty ("KEY=") -> None (explicit
+    "no limit" - dùng cho AIC_QWEN3VL_LIMIT khi đã sẵn sàng chạy toàn bộ corpus)."""
     raw = _env(key_name)
-    if raw is None or not raw.strip():
+    if raw is None:
         return default
+    if not raw.strip():
+        return None
     return int(raw)
 
 
-# Bat True de goi qua OpenRouter API (chua co server rieng). Khi da thue/host xong server
-# vLLM cua rieng ban, dat AIC_QWEN3VL_USE_OPENROUTER=false trong .env (hoac sua truc tiep
-# o day) va dien AIC_QWEN3VL_SERVER_URL/AIC_QWEN3VL_MODEL/AIC_QWEN3VL_API_KEY.
-USE_OPENROUTER = _env_bool("AIC_QWEN3VL_USE_OPENROUTER", True)
+PROVIDER_OPENROUTER = "openrouter"
+PROVIDER_VLLM = "vllm"
+VALID_PROVIDERS = {PROVIDER_OPENROUTER, PROVIDER_VLLM}
 
-if USE_OPENROUTER:
-    # Goi qua OpenRouter (giong notebook) - lay key tu file .env o goc repo (khong hard-code).
-    SERVER_BASE_URL = "https://openrouter.ai/api/v1"
-    MODEL = "qwen/qwen3-vl-32b-instruct"  # ten model dang slug OpenRouter (chu thuong)
-    API_KEY = (
-        _read_env_file(Path(".env"), "OPENROUTER_API_KEY")
-        or os.environ.get("OPENROUTER_API_KEY")
-        or ""
-    )
-    if not API_KEY:
+
+class ProviderConfig(NamedTuple):
+    provider: str
+    server_base_url: str
+    model: str
+    api_key: str
+
+
+def resolve_provider_config(env: Callable[[str], Optional[str]]) -> ProviderConfig:
+    """Resolve + validate the Qwen3-VL provider config from `env` (a key -> value
+    lookup, normally `_env`). Pulled out as a pure function so the validation rules
+    are unit-testable without touching real environment variables/.env.
+    """
+
+    provider = (env("AIC_QWEN3VL_PROVIDER") or PROVIDER_OPENROUTER).strip().lower()
+    if provider not in VALID_PROVIDERS:
         raise ValueError(
-            "Khong tim thay OPENROUTER_API_KEY trong .env hoac bien moi truong."
+            f"AIC_QWEN3VL_PROVIDER must be one of {sorted(VALID_PROVIDERS)}, got {provider!r}"
         )
-else:
-    # Dia chi server vLLM tu host cua ban (KHONG phai OpenRouter nua). Vi du neu server co
-    # IP 123.45.67.89 va vLLM chay cong 8000: AIC_QWEN3VL_SERVER_URL=http://123.45.67.89:8000/v1
+
+    if provider == PROVIDER_OPENROUTER:
+        server_base_url = "https://openrouter.ai/api/v1"
+        model = env("AIC_QWEN3VL_MODEL") or "qwen/qwen3-vl-32b-instruct"  # OpenRouter slug, lowercase
+        api_key = env("OPENROUTER_API_KEY") or ""
+        if not api_key:
+            raise ValueError(
+                "AIC_QWEN3VL_PROVIDER=openrouter requires OPENROUTER_API_KEY trong .env "
+                "hoac bien moi truong."
+            )
+        return ProviderConfig(provider, server_base_url, model, api_key)
+
+    # provider == "vllm": server vLLM tu host cua ban (KHONG phai OpenRouter). Vi du neu
+    # server co IP 123.45.67.89 va vLLM chay cong 8000:
+    #   AIC_QWEN3VL_SERVER_URL=http://123.45.67.89:8000/v1
     # Neu thue tren Vast.ai, ho thuong cho 1 URL/port forward rieng - dung dung URL do.
-    SERVER_BASE_URL = _env("AIC_QWEN3VL_SERVER_URL") or "http://<DIEN_IP_HOAC_HOST_SERVER_CUA_BAN>:8000/v1"
-
-    # Ten model PHAI KHOP CHINH XAC voi ten ban nap khi khoi dong vLLM server
-    # (vi du: "Qwen/Qwen3-VL-32B-Instruct" hoac duong dan local ban dung khi chay lenh vllm serve).
-    MODEL = _env("AIC_QWEN3VL_MODEL") or "Qwen/Qwen3-VL-32B-Instruct"
-
+    server_base_url = env("AIC_QWEN3VL_SERVER_URL") or ""
+    if not server_base_url:
+        raise ValueError(
+            "AIC_QWEN3VL_PROVIDER=vllm requires AIC_QWEN3VL_SERVER_URL (OpenAI-compatible "
+            "/v1 base URL, vd http://127.0.0.1:8001/v1)."
+        )
+    # Ten model PHAI KHOP CHINH XAC voi ten ban nap khi khoi dong vLLM server (vi du:
+    # "Qwen/Qwen3-VL-32B-Instruct" hoac duong dan local ban dung khi chay lenh vllm serve).
+    model = env("AIC_QWEN3VL_MODEL") or "Qwen/Qwen3-VL-32B-Instruct"
     # vLLM mac dinh KHONG yeu cau API key. Neu ban co bat --api-key khi chay vLLM server,
-    # dien key do vao AIC_QWEN3VL_API_KEY trong .env. Neu khong, de nguyen chuoi bat ky, code
-    # se van gui header nhung server se bo qua neu khong bat xac thuc.
-    API_KEY = _env("AIC_QWEN3VL_API_KEY") or "not-needed"
+    # dien key do vao AIC_QWEN3VL_API_KEY. Neu khong, de nguyen chuoi bat ky, code se van
+    # gui header nhung server se bo qua neu khong bat xac thuc.
+    api_key = env("AIC_QWEN3VL_API_KEY") or "not-needed"
+    return ProviderConfig(provider, server_base_url, model, api_key)
+
+
+_provider_config = resolve_provider_config(_env)
+USE_OPENROUTER = _provider_config.provider == PROVIDER_OPENROUTER  # dùng cho MAX_WORKERS/SLEEP mặc định bên dưới
+SERVER_BASE_URL = _provider_config.server_base_url
+MODEL = _provider_config.model
+API_KEY = _provider_config.api_key
 
 CHAT_COMPLETIONS_URL = f"{SERVER_BASE_URL}/chat/completions"
 
@@ -156,7 +186,10 @@ TMP_RESIZED_DIR = OUT_DIR / "_resized_tmp"
 
 # So luong worker chay song song. Goi qua OpenRouter nen de thap (2-4) tranh rate-limit;
 # khi chuyen sang server tu host co the tang len 4-16 tuy vRAM/GPU con trong.
-MAX_WORKERS = _env_int("AIC_QWEN3VL_MAX_WORKERS", 2 if USE_OPENROUTER else 8)
+# Mac dinh 2 cho ca 2 provider - Qwen3-VL-32B BF16 tren 1 A100 80GB rat sat VRAM (~66GB+KV,
+# xem docs/05_VAST_DEPLOYMENT.md), tang dan 2->4->... sau khi do peak VRAM on dinh va
+# throughput thuc tang, KHONG dat cao ngay tu dau khi chua benchmark.
+MAX_WORKERS = _env_int("AIC_QWEN3VL_MAX_WORKERS", 2)
 
 # So bin cho histogram HSV (16 la muc thong dung, du chi tiet ma khong qua nang).
 HSV_HIST_BINS = 16

@@ -51,55 +51,107 @@ instance Vast.ai — chỉ cần `OPENROUTER_API_KEY` và `pip install -e .[capt
 Việc này không thay thế worker GPU (vẫn cần cho OCR/object/embedding/ASR), chỉ giúp
 nâng chất lượng caption ngay trong lúc chưa thuê máy.
 
-## Triển khai 1×A100 tuần tự 3 pha (không cần 2×A100)
+## Triển khai 1×A100 80GB tuần tự 3 pha (không cần 2×A100)
 
 Bảng VRAM ở `docs/11_SERVER_IMPLEMENTATION.md` §3 giả định **enrich và serving chạy đồng
 thời** nên cần 2×A100. Thực tế offline (enrich) và online (serving) không cần chạy cùng
-lúc — tách theo thời gian, mỗi pha chỉ tải đúng model nó cần, thì **1×A100 80GB đủ dùng**
-cho cả 2, miễn là chấp nhận: (a) rerank tầng 2 (Qwen3-VL evidence rerank) chưa bật — bản
-thân nó cũng chưa có code (`docs/14_TECHNICAL_PREPARATION.md` mục rerank cascade), nên đây
-không phải đánh đổi mới, chỉ là giữ nguyên trạng thái hiện tại; (b) mỗi lần đổi pha phải
-dừng hẳn pha trước để giải phóng VRAM (không chạy song song 2 pha).
+lúc — tách theo thời gian, mỗi pha chỉ tải đúng model nó cần, thì **1×A100 80GB** (không
+phải 40GB — xem cảnh báo VRAM ở Pha 2) đủ dùng cho cả 2, miễn là chấp nhận: (a) rerank tầng
+2 (Qwen3-VL evidence rerank) chưa bật — bản thân nó cũng chưa có code
+(`docs/14_TECHNICAL_PREPARATION.md` mục rerank cascade), nên đây không phải đánh đổi mới,
+chỉ là giữ nguyên trạng thái hiện tại; (b) mỗi lần đổi pha phải dừng hẳn pha trước để giải
+phóng VRAM (không chạy song song 2 pha).
 
 ### Pha 1 — Enrich cơ bản (Qwen2.5-VL-7B + OWLv2 + CLIP + Whisper + color)
 
-VRAM ước tính: ~15-16GB (Qwen2.5-VL-7B fp16) + ~1GB (OWLv2) + ~1.7GB (CLIP) + ~3GB
-(Whisper-large-v3-turbo) ≈ **~22GB** — dư nhiều so với 80GB.
+`offline/gpu_engine.py::TransformersGpuEngine` load lazy từng model đúng 1 lần (mỗi
+`_load_*` tự cache vào `self._qwen`/`self._object`/`self._clip`/`self._asr`, không load lại
+mỗi video/frame) và cả 4 model cùng sống suốt vòng đời process worker — không phải load-
+rồi-giải-phóng tuần tự trong cùng pha này, nên VRAM ổn định (không tăng dần/fragment theo
+số video đã xử lý). VRAM ước tính ở steady-state: ~15-16GB (Qwen2.5-VL-7B fp16) + ~1GB
+(OWLv2) + ~1.7GB (CLIP) + ~3GB (Whisper-large-v3-turbo) ≈ **~22GB** — đây vẫn là ước tính
+theo thông số công bố của từng model, CHƯA đo thật trên A100; xác nhận bằng
+`nvidia-smi`/preflight lúc dựng máy trước khi coi là chắc chắn.
 
 ```bash
 docker compose -f infra/docker-compose.vast.yml up -d --build worker
 python -m offline run           # AIC_OFFLINE_PROVIDER=remote, AIC_GPU_PROVIDER=transformers
-python -m offline index --encoder remote --qdrant   # nếu đã sẵn sàng dùng backend qdrant
 docker compose -f infra/docker-compose.vast.yml stop worker   # GIẢI PHÓNG VRAM trước khi sang Pha 2
 ```
 
+(Chưa `offline index --qdrant` ở đây — đợi Pha 2.5, sau khi caption Qwen3-VL đã gộp vào,
+để không phải build index 2 lần.)
+
 ### Pha 2 — Caption làm giàu Qwen3-VL-32B (`scripts/caption_qwen3vl.py`)
 
-VRAM ước tính: ~66GB bf16 + KV cache — cần gần như toàn bộ 80GB, đây là lý do PHẢI dừng
-worker Pha 1 trước (chạy chung sẽ tràn VRAM: 22GB + 66GB+KV > 80GB).
+**Cảnh báo VRAM**: `Qwen/Qwen3-VL-32B-Instruct` là checkpoint ~33B tham số BF16, kho HF
+chính thức ~66.7GB. Cộng KV cache + CUDA context + vision-encoder activations + tiền xử lý
+multimodal + bộ nhớ tạm của vLLM scheduler, tổng thực tế **sát trần 80GB**, không có nhiều
+dư. Vì vậy:
+- **A100 40GB: không đủ** cho BF16 nguyên bản — không dùng kết luận "1×A100" ở mục này cho
+  bản 40GB.
+- **A100 80GB: khả thi nhưng sát giới hạn** — PHẢI giới hạn `--max-model-len` (khuyến nghị
+  8K–16K, tác vụ caption không cần context dài) và bắt đầu concurrency thấp (xem
+  `AIC_QWEN3VL_MAX_WORKERS` dưới), verify bằng smoke test thật trước khi chạy full corpus,
+  không giả định trước.
+- Muốn dư VRAM hơn: quantize (AWQ/FP8) — phải benchmark lại chất lượng caption trước khi
+  dùng cho enrich thật (chất lượng caption ảnh hưởng trực tiếp mọi branch retrieval sau).
+
+Vì cần gần hết 80GB, đây là lý do PHẢI dừng worker Pha 1 trước (chạy chung sẽ tràn VRAM:
+22GB + 66GB+KV > 80GB).
 
 ```bash
 # Cài vllm trên máy thuê (không nằm trong pyproject.toml của repo này — đây là service
 # riêng, không phải dependency của online/offline package):
 pip install vllm
-vllm serve Qwen/Qwen3-VL-32B-Instruct --port 8001 --dtype bfloat16
+vllm serve Qwen/Qwen3-VL-32B-Instruct --port 8001 --dtype bfloat16 --max-model-len 16384
 
-# Ở .env: AIC_QWEN3VL_USE_OPENROUTER=false, AIC_QWEN3VL_SERVER_URL=http://127.0.0.1:8001/v1,
-# AIC_QWEN3VL_MODEL=Qwen/Qwen3-VL-32B-Instruct. Chạy thử LIMIT nhỏ trước (AIC_QWEN3VL_LIMIT=1
-# hoặc vài scene) để verify JSON parse_ok + chất lượng trước khi để trống LIMIT chạy hết:
+# Ở .env: AIC_QWEN3VL_PROVIDER=vllm, AIC_QWEN3VL_SERVER_URL=http://127.0.0.1:8001/v1,
+# AIC_QWEN3VL_MODEL=Qwen/Qwen3-VL-32B-Instruct. Giữ AIC_QWEN3VL_MAX_WORKERS=1 cho lần chạy
+# đầu tiên — chỉ tăng dần (1 -> 2 -> 4...) sau khi xác nhận từng bước: peak VRAM ổn định,
+# không OOM, throughput thật sự tăng, latency đuôi không tăng bất thường, output không bị
+# retry hàng loạt. Chạy thử LIMIT nhỏ trước (AIC_QWEN3VL_LIMIT=1 hoặc vài scene) để verify
+# JSON parse_ok + chất lượng caption trước khi để RỖNG (không xoá dòng) LIMIT để chạy hết:
 python -m scripts.caption_qwen3vl
 python -m scripts.import_qwen3vl_captions --captions storage/exports/qwen3vl_captions/scene_captions_selfhosted.jsonl --export-dir storage/exports
 
-# Xong thì dừng vLLM để giải phóng VRAM trước khi sang Pha 3 (Ctrl+C hoặc kill process).
+# Xong thì dừng vLLM để giải phóng VRAM trước khi sang Pha 2.5 (Ctrl+C hoặc kill process).
 ```
+
+### Pha 2.5 — Finalize dataset (merge, validate, index)
+
+Ba pha enrich (1, 2) tạo ra output từ nhiều model khác nhau nhưng **chưa chắc đã là một
+dataset thống nhất, sẵn sàng cho online search** cho tới khi:
+
+```bash
+python -m datasection.cli storage/exports          # validate coverage/checksum của export đã gộp Qwen3-VL
+python -m scripts.preflight --export-dir storage/exports --check-gpu-warmup
+python -m offline index --encoder remote --qdrant  # build/publish index Qdrant SAU khi đã có caption Qwen3-VL
+```
+
+Chạy `offline index` ở đây (không phải cuối Pha 1) để tránh phải index lại lần 2 — dù vector
+ảnh (CLIP) trong `scene_rows_remote` không phụ thuộc caption text nên về mặt kỹ thuật thứ tự
+này không bắt buộc, nhưng gộp về 1 lần cho rõ ràng, tránh nhầm "đã sẵn sàng" khi dữ liệu
+online thật ra vẫn còn thiếu bước merge.
 
 ### Pha 3 — Online serving
 
-VRAM cần: chỉ khi bật `AIC_ONLINE_BACKEND=qdrant` (`RemoteTextEncoder` gọi worker
-`/v1/embed/text` — có thể dùng lại CLIP đã load, ~1.7GB) hoặc `local` (không cần GPU,
-`HashingTextEncoder` chạy CPU). Qwen3-14B query parser và BGE reranker **chưa có code**
+Không phải hoàn toàn "không cần VRAM" — cần làm rõ theo backend:
+- `AIC_ONLINE_BACKEND=qdrant`: mỗi query vẫn cần encode qua `RemoteTextEncoder` gọi
+  `/v1/embed/text` — tức là CLIP text encoder (~1.7GB) phải chạy ở đâu đó (GPU hoặc CPU với
+  latency cao hơn tương ứng), không phải "0 VRAM".
+- `AIC_ONLINE_BACKEND=local`: `HashingTextEncoder` chạy thuần CPU, thật sự không cần GPU.
+
+Qwen3-14B query parser và BGE reranker **chưa có code**
 (`docs/14_TECHNICAL_PREPARATION.md` — `online/services/llm_planner.py` không tồn tại,
-`POST /v1/rerank` chưa có ở worker) nên serving hôm nay không cần thêm VRAM cho 2 việc đó.
+`POST /v1/rerank` chưa có ở worker) nên serving hôm nay không cần thêm VRAM cho 2 việc đó —
+đây là phần đúng của khẳng định trước, chỉ riêng phần embedding-cho-query là cần làm rõ lại.
+
+Về kinh tế: giữ nguyên A100 80GB chỉ để chạy online lightweight (đặc biệt nếu dùng backend
+`local`, hoàn toàn không cần GPU) không hiệu quả chi phí. Sau khi Pha 2.5 xong và dữ liệu đã
+lên Qdrant, cân nhắc: đồng bộ `storage/exports`, tắt A100, chạy online backend trên máy
+local hoặc một instance rẻ hơn (chỉ cần CPU nếu dùng backend `local`, hoặc GPU nhỏ nếu vẫn
+muốn CLIP text encoder thật cho `qdrant`).
 
 ```bash
 docker compose -f infra/docker-compose.vast.yml up -d --build backend
@@ -110,11 +162,12 @@ python -m scripts.preflight --export-dir storage/exports --check-gpu-warmup
 
 Có thể sẽ muốn hỏi "sao không caption bằng Qwen3-VL-32B luôn trong `offline run` cho đỡ 1
 bước" — không được, vì `offline/gpu_engine.py::_load_qwen` hard-code
-`Qwen2_5_VLForConditionalGeneration` (transformers, in-process `.generate()`), còn
-`scripts/caption_qwen3vl.py` gọi Qwen3-VL-32B qua HTTP OpenAI-compatible (vLLM hoặc
-OpenRouter) — hai đường code khác nhau, chưa hợp nhất (xem quyết định "giữ 2 nguồn OCR/
-caption tách biệt" trong docstring `scripts/import_qwen3vl_captions.py`). Việc tách pha ở
-trên tận dụng đúng 2 đường code có sẵn, không cần viết thêm code mới.
+`Qwen2_5_VLForConditionalGeneration` (transformers, in-process `.generate()`, có fail-fast
+check nếu `AIC_CAPTION_MODEL` không thuộc họ Qwen2.5-VL), còn `scripts/caption_qwen3vl.py`
+gọi Qwen3-VL-32B qua HTTP OpenAI-compatible (vLLM hoặc OpenRouter) — hai đường code khác
+nhau, chưa hợp nhất (xem quyết định "giữ 2 nguồn OCR/caption tách biệt" trong docstring
+`scripts/import_qwen3vl_captions.py`). Việc tách pha ở trên tận dụng đúng 2 đường code có
+sẵn, không cần viết thêm code mới.
 
 ## Mode an toàn khi chưa có index
 

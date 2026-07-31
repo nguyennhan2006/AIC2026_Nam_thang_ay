@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import base64
 from io import BytesIO
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -91,6 +92,35 @@ class ColorSyncBaselineTests(unittest.TestCase):
                 os.environ.pop("AIC_COLOR_HIST_BINS", None)
             else:
                 os.environ["AIC_COLOR_HIST_BINS"] = old
+
+
+class LoadQwenModelFamilyGuardTests(unittest.TestCase):
+    """_load_qwen only ever instantiates Qwen2_5_VLForConditionalGeneration — a wrong
+    AIC_CAPTION_MODEL family must fail fast, before the heavy torch/transformers
+    import/download, with a message naming the actual problem."""
+
+    def setUp(self) -> None:
+        self._old = os.environ.get("AIC_CAPTION_MODEL")
+
+    def tearDown(self) -> None:
+        if self._old is None:
+            os.environ.pop("AIC_CAPTION_MODEL", None)
+        else:
+            os.environ["AIC_CAPTION_MODEL"] = self._old
+
+    def test_non_qwen25vl_model_name_raises_clear_error(self) -> None:
+        os.environ["AIC_CAPTION_MODEL"] = "Salesforce/blip-image-captioning-base"
+        engine = TransformersGpuEngine()
+        with self.assertRaisesRegex(ValueError, "Qwen2.5-VL"):
+            engine._load_qwen()
+
+    def test_qwen3_vl_name_also_rejected_here(self) -> None:
+        # Qwen3-VL captioning is scripts/caption_qwen3vl.py's separate HTTP path, not
+        # this in-process transformers loader.
+        os.environ["AIC_CAPTION_MODEL"] = "Qwen/Qwen3-VL-32B-Instruct"
+        engine = TransformersGpuEngine()
+        with self.assertRaisesRegex(ValueError, "Qwen2.5-VL"):
+            engine._load_qwen()
 
 
 if __name__ == "__main__":
