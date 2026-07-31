@@ -12,7 +12,7 @@ import warnings
 
 from datasection.exporter import export_dataset
 from datasection.schemas import (
-    ASRSegment, BoundingBox, CaptionRecord, ClipSegment, ColorFeature, DatasetManifest, Keyframe,
+    ASRSegment, BoundingBox, CaptionRecord, ClipSegment, ColorFeature, DatasetManifest, Event, Keyframe,
     ModelArtifact, ModelProvenance, NamedColorRatio, ObjectInstance, OCRInstance, Scene,
     SceneCaptionRecord, SceneKeyword, Video,
 )
@@ -20,6 +20,7 @@ from offline.action_tags import extract_action_tags
 from offline.clip_pooling import build_clip_segment, build_clip_windows, select_clip_frames
 from offline.config import OfflineSettings
 from offline.embedding_reader import MemoizedEmbeddingReader, ProviderEmbeddingReader
+from offline.event_grouping import build_event, group_scenes_into_events, link_event_neighbors
 from offline.media import FFmpegMedia
 from offline.providers import MockInferenceProvider, RemoteInferenceProvider
 from offline.state import JobLedger
@@ -171,11 +172,19 @@ class OfflinePipeline:
                     self.settings.clip_config_id, self.provenance("embedding"),
                     self.provider.model_name, self.provider.revision,
                 ))
+        groups = group_scenes_into_events(
+            scenes, self.settings.event_max_gap_sec, self.settings.event_max_duration_sec, self.settings.event_min_text_overlap,
+        )
+        events = [
+            build_event(video_id, event_idx, group, self.settings.event_config_id, self.provenance("event-grouping"))
+            for event_idx, group in enumerate(groups)
+        ]
+        events = link_event_neighbors(events)
         video = Video(
             video_id=video_id, source_path=relative_source, source_checksum=_checksum(source), fps=info.fps,
             frame_count=info.frame_count, duration_sec=info.frame_count / info.fps, width=info.width, height=info.height,
             codec=info.codec, audio_present=info.audio_present, probe_provenance=self.provenance("ffprobe"), scenes=scenes,
-            clips=clips,
+            clips=clips, events=events,
         )
         self.ledger.write(video_id, "complete", "succeeded", scene_count=len(scenes))
         return video
@@ -197,6 +206,7 @@ class OfflinePipeline:
             scene_count=sum(len(item.scenes) for item in videos),
             keyframe_count=sum(len(scene.keyframes) for item in videos for scene in item.scenes),
             clip_count=sum(len(item.clips) for item in videos),
+            event_count=sum(len(item.events) for item in videos),
             models=[ModelArtifact(task=task, model_name=self.provider.model_name, revision=self.provider.revision) for task in ("caption", "ocr", "object", "asr", "embedding", "color")],
         )
         return await asyncio.to_thread(export_dataset, videos, self.settings.export_dir, manifest)

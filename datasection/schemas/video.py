@@ -9,6 +9,7 @@ from pydantic import Field, field_validator, model_validator
 
 from .clip import ClipSegment
 from .common import ModelProvenance, RelativeArtifactPath, SHA256Checksum, StrictModel, VideoId, utc_now
+from .event import Event
 from .scene import Scene
 
 
@@ -31,6 +32,8 @@ class Video(StrictModel):
     # Clip không nhét vào Scene: clip/scene có lifecycle và index khác nhau (đổi
     # scene boundary không nên buộc rebuild toàn bộ clip) — xem datasection/schemas/clip.py.
     clips: list[ClipSegment] = Field(default_factory=list)
+    # Event cũng là sibling collection như clip — xem datasection/schemas/event.py.
+    events: list[Event] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=utc_now)
     extensions: dict[str, Any] = Field(default_factory=dict)
 
@@ -83,11 +86,31 @@ class Video(StrictModel):
             if unknown:
                 raise ValueError(f"clip {clip.clip_id} references keyframes outside its scene: {sorted(unknown)}")
             clip_ids.add(clip.clip_id)
+        known_scene_ids = set(scene_by_id)
+        event_ids: set[str] = set()
+        scene_ids_in_events: set[str] = set()
+        for event in self.events:
+            if event.video_id != self.video_id:
+                raise ValueError(f"event {event.event_id} belongs to another video")
+            if event.event_id in event_ids:
+                raise ValueError("event IDs must be unique")
+            unknown_scenes = set(event.scene_ids) - known_scene_ids
+            if unknown_scenes:
+                raise ValueError(f"event {event.event_id} references unknown scenes: {sorted(unknown_scenes)}")
+            already_grouped = set(event.scene_ids) & scene_ids_in_events
+            if already_grouped:
+                raise ValueError(f"scene assigned to more than one event: {sorted(already_grouped)}")
+            scene_ids_in_events.update(event.scene_ids)
+            event_ids.add(event.event_id)
         return self
 
     @property
     def clip_count(self) -> int:
         return len(self.clips)
+
+    @property
+    def event_count(self) -> int:
+        return len(self.events)
 
     @property
     def scene_count(self) -> int:

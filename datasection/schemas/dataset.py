@@ -38,6 +38,8 @@ class DatasetManifest(StrictModel):
     # Optional/mặc định 0 để tương thích ngược với manifest cũ chưa có clip (seed_demo,
     # export không chạy clip pooling) — không đổi hành vi mặc định.
     clip_count: Annotated[int, Field(ge=0)] = 0
+    # Tương tự clip_count: mặc định 0 để tương thích ngược với manifest cũ chưa có event.
+    event_count: Annotated[int, Field(ge=0)] = 0
     models: list[ModelArtifact] = Field(default_factory=list)
     indexes: list[IndexArtifact] = Field(default_factory=list)
     export_checksums: dict[str, SHA256Checksum] = Field(default_factory=dict)

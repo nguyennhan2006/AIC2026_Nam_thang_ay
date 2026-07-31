@@ -2,6 +2,7 @@
 
 from .clip import ClipSegment
 from .common import BoundingBox, EmbeddingReference, ModelProvenance, VectorLocation
+from .event import Event
 from .keyframe import (
     CaptionRecord,
     ColorFeature,
@@ -23,6 +24,7 @@ __all__ = [
     "ClipSegment",
     "ColorFeature",
     "EmbeddingReference",
+    "Event",
     "Keyframe",
     "KeyframeRole",
     "ModelProvenance",

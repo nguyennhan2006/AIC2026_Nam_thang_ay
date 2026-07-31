@@ -35,6 +35,8 @@ KEYFRAME_ID_PATTERN = r"^L[0-9]{2}_V[0-9]{3}_S[0-9]{4}_F[0-9]{6}$"
 # Boundary-derived, không phụ thuộc thứ tự tạo (Search Mixing Console W1 - clip pooling):
 # {scene_id}_C{start_frame:08d}_{end_frame:08d}.
 CLIP_ID_PATTERN = r"^L[0-9]{2}_V[0-9]{3}_S[0-9]{4}_C[0-9]{8}_[0-9]{8}$"
+# Event grouping (Search Mixing Console W1): {video_id}_E{event_idx:04d}.
+EVENT_ID_PATTERN = r"^L[0-9]{2}_V[0-9]{3}_E[0-9]{4}$"
 ASR_SOURCE_ID_PATTERN = r"^L[0-9]{2}_V[0-9]{3}_ASR[0-9]{6}$"
 SCENE_ASR_SEGMENT_ID_PATTERN = (
     r"^L[0-9]{2}_V[0-9]{3}_S[0-9]{4}_A[0-9]{4}$"
@@ -50,6 +52,7 @@ VideoId = Annotated[str, Field(pattern=VIDEO_ID_PATTERN)]
 SceneId = Annotated[str, Field(pattern=SCENE_ID_PATTERN)]
 KeyframeId = Annotated[str, Field(pattern=KEYFRAME_ID_PATTERN)]
 ClipId = Annotated[str, Field(pattern=CLIP_ID_PATTERN)]
+EventId = Annotated[str, Field(pattern=EVENT_ID_PATTERN)]
 ASRSourceId = Annotated[str, Field(pattern=ASR_SOURCE_ID_PATTERN)]
 SceneASRSegmentId = Annotated[str, Field(pattern=SCENE_ASR_SEGMENT_ID_PATTERN)]
 SHA256Checksum = Annotated[str, Field(pattern=SHA256_PATTERN)]
@@ -196,6 +199,8 @@ __all__ = [
     "BoundingBox",
     "CLIP_ID_PATTERN",
     "ClipId",
+    "EVENT_ID_PATTERN",
+    "EventId",
     "EmbeddingReference",
     "KEYFRAME_ID_PATTERN",
     "KeyframeId",

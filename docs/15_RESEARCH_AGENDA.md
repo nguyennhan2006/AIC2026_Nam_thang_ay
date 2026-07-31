@@ -92,6 +92,20 @@ smoke-test, không đủ để chốt production default. Mở rộng GT là vi�
     Chỉ chuyển sang dedicated clip sampling khi ablation cho thấy Recall@K tăng đủ để
     bù chi phí đo được ở trên — không đoán, đo bằng `eval_kis.py`.
 
+## Event grouping quality — Search Mixing Console W1 (event grouping)
+
+13. **Event boundary từ gap-only vs. visual similarity thật**: baseline V1
+    (`offline/event_grouping.py::group_scenes_into_events`) gộp scene thuần theo
+    temporal gap + trần duration — không có tín hiệu visual similarity nào (chưa có
+    scene embedding lưu lại, xem tech debt "persistent frame-embedding cache" ở
+    `docs/14_TECHNICAL_PREPARATION.md`). Có sẵn cổng `min_text_overlap` (Jaccard trên
+    keyword+action_tag) nhưng **tắt mặc định** vì với mật độ keyframe thưa hiện tại,
+    vocab mỗi scene quá nhỏ để tín hiệu này có ý nghĩa thật.
+    - Đo `event_search` Recall@K khi bật/tắt `min_text_overlap` ở vài mức (0.0, 0.2,
+      0.5) trên corpus enrich thật — không suy luận, đo bằng `eval_kis.py`.
+    - Khi có scene-level visual embedding lưu bền (tech debt ở trên được giải quyết),
+      so sánh gap-only vs. gap+visual-similarity cùng metric trước khi đổi baseline.
+
 ## Cách ghi lại kết quả
 
 Mọi lần chạy ablation nên dùng `--json <path>` của `eval_kis.py` để lưu vết (mode,

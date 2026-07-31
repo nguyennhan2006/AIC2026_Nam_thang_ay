@@ -502,6 +502,147 @@
       "title": "EmbeddingReference",
       "type": "object"
     },
+    "Event": {
+      "additionalProperties": false,
+      "description": "One greedily-grouped run of consecutive scenes inside a video.",
+      "properties": {
+        "action_tags": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Action Tags",
+          "type": "array"
+        },
+        "end_frame_exclusive": {
+          "exclusiveMinimum": 0,
+          "title": "End Frame Exclusive",
+          "type": "integer"
+        },
+        "end_sec": {
+          "exclusiveMinimum": 0.0,
+          "title": "End Sec",
+          "type": "number"
+        },
+        "event_caption": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Event Caption"
+        },
+        "event_config_id": {
+          "minLength": 1,
+          "title": "Event Config Id",
+          "type": "string"
+        },
+        "event_id": {
+          "pattern": "^L[0-9]{2}_V[0-9]{3}_E[0-9]{4}$",
+          "title": "Event Id",
+          "type": "string"
+        },
+        "event_idx": {
+          "maximum": 9999,
+          "minimum": 0,
+          "title": "Event Idx",
+          "type": "integer"
+        },
+        "keywords": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Keywords",
+          "type": "array"
+        },
+        "next_event_id": {
+          "anyOf": [
+            {
+              "pattern": "^L[0-9]{2}_V[0-9]{3}_E[0-9]{4}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Next Event Id"
+        },
+        "previous_event_id": {
+          "anyOf": [
+            {
+              "pattern": "^L[0-9]{2}_V[0-9]{3}_E[0-9]{4}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Previous Event Id"
+        },
+        "provenance": {
+          "$ref": "#/$defs/ModelProvenance"
+        },
+        "representative_frame_ids": {
+          "items": {
+            "pattern": "^L[0-9]{2}_V[0-9]{3}_S[0-9]{4}_F[0-9]{6}$",
+            "type": "string"
+          },
+          "title": "Representative Frame Ids",
+          "type": "array"
+        },
+        "scene_ids": {
+          "items": {
+            "pattern": "^L[0-9]{2}_V[0-9]{3}_S[0-9]{4}$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Scene Ids",
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "start_frame": {
+          "minimum": 0,
+          "title": "Start Frame",
+          "type": "integer"
+        },
+        "start_sec": {
+          "minimum": 0.0,
+          "title": "Start Sec",
+          "type": "number"
+        },
+        "video_id": {
+          "pattern": "^L[0-9]{2}_V[0-9]{3}$",
+          "title": "Video Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "event_id",
+        "video_id",
+        "event_idx",
+        "scene_ids",
+        "start_frame",
+        "end_frame_exclusive",
+        "start_sec",
+        "end_sec",
+        "event_config_id",
+        "provenance"
+      ],
+      "title": "Event",
+      "type": "object"
+    },
     "Keyframe": {
       "additionalProperties": false,
       "description": "Complete metadata for one searchable frame inside a scene.",
@@ -1355,6 +1496,13 @@
       "exclusiveMinimum": 0,
       "title": "Duration Sec",
       "type": "number"
+    },
+    "events": {
+      "items": {
+        "$ref": "#/$defs/Event"
+      },
+      "title": "Events",
+      "type": "array"
     },
     "extensions": {
       "additionalProperties": true,

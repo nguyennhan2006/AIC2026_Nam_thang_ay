@@ -32,9 +32,12 @@ class DataContractTests(unittest.TestCase):
             Scene.model_validate_json(line)
 
     def test_committed_json_schemas_match_models(self) -> None:
-        from datasection.schemas import ClipSegment, DatasetManifest, Keyframe, Scene, Video
+        from datasection.schemas import ClipSegment, DatasetManifest, Event, Keyframe, Scene, Video
         export_schemas()
-        for name, model in (("keyframe", Keyframe), ("scene", Scene), ("clip", ClipSegment), ("video", Video), ("dataset_manifest", DatasetManifest)):
+        for name, model in (
+            ("keyframe", Keyframe), ("scene", Scene), ("clip", ClipSegment), ("event", Event),
+            ("video", Video), ("dataset_manifest", DatasetManifest),
+        ):
             committed = json.loads((self.root / f"contracts/{name}.schema.json").read_text(encoding="utf-8"))
             self.assertEqual(committed, model.model_json_schema())
 

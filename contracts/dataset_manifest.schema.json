@@ -152,6 +152,12 @@
       "title": "Dataset Id",
       "type": "string"
     },
+    "event_count": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Event Count",
+      "type": "integer"
+    },
     "export_checksums": {
       "additionalProperties": {
         "pattern": "^sha256:[0-9a-f]{64}$",

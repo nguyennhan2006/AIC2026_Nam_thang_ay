@@ -36,6 +36,11 @@ class OfflineSettings:
     clip_empty_window_policy: str = "nearest_scene_keyframe"
     clip_fallback_max_distance_sec: float = 6.0
     clip_config_id: str = "clip-v1"
+    # Event grouping (Search Mixing Console W1) — greedy partition of consecutive scenes.
+    event_max_gap_sec: float = 2.0
+    event_max_duration_sec: float = 60.0
+    event_min_text_overlap: float = 0.0
+    event_config_id: str = "event-v1"
 
     @classmethod
     def from_env(cls) -> "OfflineSettings":
@@ -49,6 +54,9 @@ class OfflineSettings:
         empty_window_policy = os.getenv("AIC_CLIP_EMPTY_WINDOW_POLICY", "nearest_scene_keyframe")
         if empty_window_policy not in {"nearest_scene_keyframe", "skip"}:
             raise ValueError("AIC_CLIP_EMPTY_WINDOW_POLICY must be nearest_scene_keyframe or skip")
+        event_min_text_overlap = float(os.getenv("AIC_EVENT_MIN_TEXT_OVERLAP", "0.0"))
+        if not 0.0 <= event_min_text_overlap <= 1.0:
+            raise ValueError("AIC_EVENT_MIN_TEXT_OVERLAP must be between 0.0 and 1.0")
         return cls(
             data_root=root,
             input_dir=Path(os.getenv("AIC_INPUT_DIR", str(root / "raw/videos"))),
@@ -69,4 +77,8 @@ class OfflineSettings:
             clip_empty_window_policy=empty_window_policy,
             clip_fallback_max_distance_sec=_positive("AIC_CLIP_FALLBACK_MAX_DISTANCE_SEC", "6", float),
             clip_config_id=os.getenv("AIC_CLIP_CONFIG_ID", "clip-v1"),
+            event_max_gap_sec=_positive("AIC_EVENT_MAX_GAP_SEC", "2", float),
+            event_max_duration_sec=_positive("AIC_EVENT_MAX_DURATION_SEC", "60", float),
+            event_min_text_overlap=event_min_text_overlap,
+            event_config_id=os.getenv("AIC_EVENT_CONFIG_ID", "event-v1"),
         )
