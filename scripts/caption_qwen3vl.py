@@ -41,12 +41,10 @@ import cv2
 import numpy as np
 
 # =========================
-# USER CONFIG - SUA O DAY
+# USER CONFIG - doc tu .env/bien moi truong, co fallback ve gia tri cu neu khong dat
+# (giu nguyen hanh vi mac dinh cho ai dang chinh tay file nay nhu truoc) - xem
+# .env.example muc "Qwen3-VL-32B caption (scripts/caption_qwen3vl.py)".
 # =========================
-
-# Bat True de goi qua OpenRouter API (chua co server rieng). Khi da thue/host xong server
-# vLLM cua rieng ban, doi thanh False va dien SERVER_BASE_URL/MODEL o nhanh else ben duoi.
-USE_OPENROUTER = True
 
 
 def _read_env_file(env_path: Path, key_name: str) -> Optional[str]:
@@ -62,6 +60,29 @@ def _read_env_file(env_path: Path, key_name: str) -> Optional[str]:
     return None
 
 
+def _env(key_name: str) -> Optional[str]:
+    return os.environ.get(key_name) or _read_env_file(Path(".env"), key_name)
+
+
+def _env_bool(key_name: str, default: bool) -> bool:
+    raw = _env(key_name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _env_int(key_name: str, default: Optional[int]) -> Optional[int]:
+    raw = _env(key_name)
+    if raw is None or not raw.strip():
+        return default
+    return int(raw)
+
+
+# Bat True de goi qua OpenRouter API (chua co server rieng). Khi da thue/host xong server
+# vLLM cua rieng ban, dat AIC_QWEN3VL_USE_OPENROUTER=false trong .env (hoac sua truc tiep
+# o day) va dien AIC_QWEN3VL_SERVER_URL/AIC_QWEN3VL_MODEL/AIC_QWEN3VL_API_KEY.
+USE_OPENROUTER = _env_bool("AIC_QWEN3VL_USE_OPENROUTER", True)
+
 if USE_OPENROUTER:
     # Goi qua OpenRouter (giong notebook) - lay key tu file .env o goc repo (khong hard-code).
     SERVER_BASE_URL = "https://openrouter.ai/api/v1"
@@ -76,20 +97,19 @@ if USE_OPENROUTER:
             "Khong tim thay OPENROUTER_API_KEY trong .env hoac bien moi truong."
         )
 else:
-    # Dia chi server vLLM tu host cua ban (KHONG phai OpenRouter nua).
-    # Vi du neu server co IP 123.45.67.89 va vLLM chay cong 8000:
-    #   SERVER_BASE_URL = "http://123.45.67.89:8000/v1"
+    # Dia chi server vLLM tu host cua ban (KHONG phai OpenRouter nua). Vi du neu server co
+    # IP 123.45.67.89 va vLLM chay cong 8000: AIC_QWEN3VL_SERVER_URL=http://123.45.67.89:8000/v1
     # Neu thue tren Vast.ai, ho thuong cho 1 URL/port forward rieng - dung dung URL do.
-    SERVER_BASE_URL = "http://<DIEN_IP_HOAC_HOST_SERVER_CUA_BAN>:8000/v1"
+    SERVER_BASE_URL = _env("AIC_QWEN3VL_SERVER_URL") or "http://<DIEN_IP_HOAC_HOST_SERVER_CUA_BAN>:8000/v1"
 
     # Ten model PHAI KHOP CHINH XAC voi ten ban nap khi khoi dong vLLM server
     # (vi du: "Qwen/Qwen3-VL-32B-Instruct" hoac duong dan local ban dung khi chay lenh vllm serve).
-    MODEL = "Qwen/Qwen3-VL-32B-Instruct"
+    MODEL = _env("AIC_QWEN3VL_MODEL") or "Qwen/Qwen3-VL-32B-Instruct"
 
     # vLLM mac dinh KHONG yeu cau API key. Neu ban co bat --api-key khi chay vLLM server,
-    # dien key do vao day. Neu khong, de nguyen chuoi bat ky, code se van gui header nhung
-    # server se bo qua neu khong bat xac thuc.
-    API_KEY = "not-needed"
+    # dien key do vao AIC_QWEN3VL_API_KEY trong .env. Neu khong, de nguyen chuoi bat ky, code
+    # se van gui header nhung server se bo qua neu khong bat xac thuc.
+    API_KEY = _env("AIC_QWEN3VL_API_KEY") or "not-needed"
 
 CHAT_COMPLETIONS_URL = f"{SERVER_BASE_URL}/chat/completions"
 
@@ -122,10 +142,10 @@ MAX_RETRIES = 4
 # Goi qua OpenRouter can nghi giua cac request de tranh rate-limit; tu host thi khong can.
 SLEEP_BETWEEN_CALLS = 0.2 if USE_OPENROUTER else 0.0
 
-# Chay thu it anh/scene truoc khi chay full. Doi None de chay toan bo.
-# Luu y: o RUN_MODE="scene", LIMIT gioi han SO SCENE (khong phai so anh) - vd LIMIT=1
-# chi chay scene dau tien (theo thu tu sap xep ten scene_id).
-LIMIT: Optional[int] = 1
+# Chay thu it anh/scene truoc khi chay full. Doi None (hoac AIC_QWEN3VL_LIMIT= rong) de
+# chay toan bo. Luu y: o RUN_MODE="scene", LIMIT gioi han SO SCENE (khong phai so anh) - vd
+# LIMIT=1 chi chay scene dau tien (theo thu tu sap xep ten scene_id).
+LIMIT: Optional[int] = _env_int("AIC_QWEN3VL_LIMIT", 1)
 
 # Tat resize: gui nguyen do phan giai goc de OCR chinh xac hon. Doi lai payload gui di
 # se nang hon, ton nhieu prompt token/chi phi hon voi frame do phan giai cao.
@@ -136,7 +156,7 @@ TMP_RESIZED_DIR = OUT_DIR / "_resized_tmp"
 
 # So luong worker chay song song. Goi qua OpenRouter nen de thap (2-4) tranh rate-limit;
 # khi chuyen sang server tu host co the tang len 4-16 tuy vRAM/GPU con trong.
-MAX_WORKERS = 2 if USE_OPENROUTER else 8
+MAX_WORKERS = _env_int("AIC_QWEN3VL_MAX_WORKERS", 2 if USE_OPENROUTER else 8)
 
 # So bin cho histogram HSV (16 la muc thong dung, du chi tiet ma khong qua nang).
 HSV_HIST_BINS = 16
