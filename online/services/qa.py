@@ -51,6 +51,20 @@ def normalize_answer(text: str) -> str:
     return re.sub(r"\s+", " ", re.sub(r"[^\w\s]", " ", stripped.replace("đ", "d"))).strip()
 
 
+def answer_matches(predicted: str, accepted: tuple[str, ...] | list[str]) -> bool:
+    """So khớp answer đã nộp với danh sách answer được chấp nhận của gold.
+
+    Dùng bởi cả eval harness (`scripts/eval_tasks.py`) và local scorer
+    (`online/competition/scorer.py`) — một định nghĩa duy nhất cho "đúng" để
+    hai nơi không lệch nhau.
+    """
+
+    if not predicted or not accepted:
+        return False
+    normalized = normalize_answer(predicted)
+    return any(normalize_answer(item) in normalized for item in accepted)
+
+
 # --------------------------------------------------------------------------
 # Parser
 # --------------------------------------------------------------------------
@@ -386,6 +400,7 @@ __all__ = [
     "ParsedQuestion",
     "QaProcessor",
     "QuestionParser",
+    "answer_matches",
     "normalize_answer",
     "verify_answer",
 ]

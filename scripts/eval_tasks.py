@@ -12,8 +12,9 @@ Gold benchmark: `examples/AIC2026_L21_V001_queries_4tasks.jsonl` (40 query —
     python -m scripts.eval_tasks --gold examples/AIC2026_L21_V001_queries_4tasks.jsonl \
         --metadata storage/exports/scenes.jsonl --tasks all
 
-Điểm QA answer sẽ bằng 0 cho tới khi PR-07 có answer generator thật — đó là
-số đo đúng của khoảng cách hiện tại, không phải lỗi của harness.
+PR-07 đã thêm bốn task processor thật (`online.services.{kis,qa,trake,avs}`),
+nên harness này chấm trên `response.kis/qa/trake/avs` — kết quả của processor
+— chứ không phải `response.results/sequences` thô.
 """
 
 from __future__ import annotations
@@ -24,13 +25,12 @@ from dataclasses import dataclass, field
 import json
 import math
 from pathlib import Path
-import re
 import sys
-import unicodedata
 
 from online.adapters.json_metadata import JsonlSceneRepository
 from online.domain.models import SearchRequest
 from online.domain.tasks import TaskType, normalize_task
+from online.services.qa import answer_matches, normalize_answer  # noqa: F401 - re-export cho test cũ
 from scripts.eval_kis import build_service
 
 K_VALUES = (1, 5, 20, 50, 100)
@@ -125,21 +125,9 @@ def load_gold(path: Path, tasks: set[TaskType] | None = None) -> list[GoldQuery]
 # --------------------------------------------------------------------------
 # Chấm điểm
 # --------------------------------------------------------------------------
-
-
-def normalize_answer(text: str) -> str:
-    """Chuẩn hóa answer trước khi so khớp: bỏ dấu, bỏ ký tự thừa."""
-
-    lowered = unicodedata.normalize("NFD", str(text).casefold())
-    stripped = "".join(ch for ch in lowered if unicodedata.category(ch) != "Mn")
-    return re.sub(r"[^\w\s]", " ", stripped.replace("đ", "d")).strip()
-
-
-def answer_matches(predicted: str, accepted: tuple[str, ...]) -> bool:
-    if not predicted or not accepted:
-        return False
-    normalized = normalize_answer(predicted)
-    return any(normalize_answer(item) in normalized for item in accepted)
+# normalize_answer/answer_matches giờ sống ở online.services.qa (import ở
+# đầu file) — dùng chung với QaProcessor.verify_answer và
+# online/competition/scorer.py, tránh hai định nghĩa "đúng" khác nhau.
 
 
 @dataclass(slots=True)

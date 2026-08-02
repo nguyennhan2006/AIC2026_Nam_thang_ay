@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -17,6 +18,36 @@ from online.domain.models import (
     TaskType,
     VQARequest,
     VQAResponse,
+)
+from online.domain.submission import (
+    EvaluateLocalRequest,
+    EvaluateLocalResponse,
+    SubmissionBuildRequest,
+    SubmissionBuildResponse,
+    SubmissionIssue,
+)
+from online.competition.scorer import (
+    KisGold,
+    QaGold,
+    TrakeGold,
+    GoldInterval,
+    score_kis,
+    score_qa,
+    score_trake,
+)
+from online.competition.submission_builder import (
+    build_kis_submission,
+    build_qa_submission,
+    build_trake_submission,
+    kis_to_csv,
+    qa_to_csv,
+    trake_to_csv,
+)
+from online.competition.submission_validator import (
+    has_errors,
+    validate_kis,
+    validate_qa,
+    validate_trake,
 )
 from online.errors import TaskConflictError
 from online.services.capabilities import (
@@ -232,6 +263,101 @@ async def search_capabilities(container: Container) -> dict:
         },
         "events_available": container.event_repository is not None,
     }
+
+
+def _submission_lookup(container: AppContainer):
+    async def lookup(video_id: str) -> int | None:
+        return await container.repository.video_frame_count(video_id)
+
+    return lookup
+
+
+@router.post("/submissions/build", response_model=SubmissionBuildResponse)
+async def build_submission(
+    request: SubmissionBuildRequest, container: Container
+) -> SubmissionBuildResponse:
+    """Dựng CSV đúng format BTC + validate, từ kết quả một lần `/v1/search/*`.
+
+    Không tự cắt hay tự sửa dòng sai — chỉ báo `issues`; người dùng quyết
+    định sửa gì trước khi tải CSV xuống.
+    """
+
+    lookup = _submission_lookup(container)
+    if request.task == TaskType.TEXTUAL_KIS:
+        items = build_kis_submission(request.kis)
+        issues = await validate_kis(items, frame_count=lookup)
+        csv_text = kis_to_csv(items)
+    elif request.task == TaskType.QA:
+        items = build_qa_submission(request.qa)
+        issues = await validate_qa(items, frame_count=lookup)
+        csv_text = qa_to_csv(items)
+    elif request.task == TaskType.TRAKE:
+        items = build_trake_submission(request.trake)
+        issues = await validate_trake(items, frame_count=lookup)
+        csv_text = trake_to_csv(items)
+    else:
+        raise HTTPException(
+            status_code=422,
+            detail="AVS is an internal task and has no official submission format",
+        )
+    return SubmissionBuildResponse(
+        task=request.task,
+        item_count=len(items),
+        csv=csv_text,
+        has_errors=has_errors(issues),
+        issues=[SubmissionIssue(**dataclasses.asdict(item)) for item in issues],
+    )
+
+
+@router.post("/submissions/validate", response_model=list[SubmissionIssue])
+async def validate_submission(
+    request: SubmissionBuildRequest, container: Container
+) -> list[SubmissionIssue]:
+    """Validate không kèm CSV — dùng sau khi người dùng sửa tay trong Submission Board."""
+
+    lookup = _submission_lookup(container)
+    if request.task == TaskType.TEXTUAL_KIS:
+        issues = await validate_kis(build_kis_submission(request.kis), frame_count=lookup)
+    elif request.task == TaskType.QA:
+        issues = await validate_qa(build_qa_submission(request.qa), frame_count=lookup)
+    elif request.task == TaskType.TRAKE:
+        issues = await validate_trake(build_trake_submission(request.trake), frame_count=lookup)
+    else:
+        raise HTTPException(status_code=422, detail="AVS has no official submission format")
+    return [SubmissionIssue(**dataclasses.asdict(item)) for item in issues]
+
+
+@router.post("/submissions/evaluate-local", response_model=EvaluateLocalResponse)
+async def evaluate_local(request: EvaluateLocalRequest) -> EvaluateLocalResponse:
+    """Chấm thử một submission trên gold người dùng tự dán vào (xem trước điểm)."""
+
+    intervals = tuple(
+        GoldInterval(start_frame=item.start_frame, end_frame=item.end_frame)
+        for item in request.intervals
+    )
+    if request.task == TaskType.TEXTUAL_KIS:
+        result = score_kis(
+            build_kis_submission(request.kis), KisGold(request.video_id, intervals)
+        )
+    elif request.task == TaskType.QA:
+        result = score_qa(
+            build_qa_submission(request.qa),
+            QaGold(request.video_id, intervals, tuple(request.accepted_answers)),
+        )
+    elif request.task == TaskType.TRAKE:
+        items = build_trake_submission(request.trake)
+        if not items:
+            raise HTTPException(status_code=422, detail="no TRAKE row to evaluate")
+        step_windows = tuple(
+            GoldInterval(start_frame=item.start_frame, end_frame=item.end_frame)
+            for item in request.step_windows
+        )
+        result = score_trake(items[0], TrakeGold(request.video_id, step_windows))
+    else:
+        raise HTTPException(status_code=422, detail="AVS has no official submission format")
+    return EvaluateLocalResponse(
+        score=result.score, best_rank=result.best_rank, detail=result.detail
+    )
 
 
 @router.get("/media/{artifact_path:path}")

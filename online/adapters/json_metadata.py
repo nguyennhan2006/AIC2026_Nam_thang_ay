@@ -116,17 +116,27 @@ def project_scene(raw: dict[str, Any], video_path: str | None = None) -> SceneDo
 class JsonlSceneRepository:
     """In-memory read repository loaded atomically from a JSONL export."""
 
-    def __init__(self, path: Path, scenes: dict[str, SceneDocument]) -> None:
+    def __init__(
+        self,
+        path: Path,
+        scenes: dict[str, SceneDocument],
+        *,
+        video_frame_counts: dict[str, int] | None = None,
+    ) -> None:
         self.path = path
         self._scenes = scenes
+        # Cần cho submission_validator (PR-08): "frame thuộc video" chỉ kiểm
+        # tra được nếu biết frame_count thật của video, không suy từ scene.
+        self._video_frame_counts = video_frame_counts or {}
 
     @classmethod
     async def load(cls, path: Path) -> "JsonlSceneRepository":
-        def read() -> dict[str, SceneDocument]:
+        def read() -> tuple[dict[str, SceneDocument], dict[str, int]]:
             if not path.exists():
                 raise MetadataNotFoundError(f"scene JSONL not found: {path}")
             scenes: dict[str, SceneDocument] = {}
             video_paths: dict[str, str] = {}
+            video_frame_counts: dict[str, int] = {}
             videos_path = path.with_name("videos.jsonl")
             if videos_path.exists():
                 with videos_path.open(encoding="utf-8") as videos:
@@ -134,6 +144,8 @@ class JsonlSceneRepository:
                         if row.strip():
                             video = json.loads(row)
                             video_paths[video["video_id"]] = video["source_path"]
+                            if "frame_count" in video:
+                                video_frame_counts[video["video_id"]] = int(video["frame_count"])
             with path.open("r", encoding="utf-8") as handle:
                 for line_number, line in enumerate(handle, start=1):
                     if not line.strip():
@@ -157,12 +169,22 @@ class JsonlSceneRepository:
                     f"no scenes loaded from {path}; the export is empty — "
                     "run the offline pipeline/exporter before starting online"
                 )
-            return scenes
+            return scenes, video_frame_counts
 
-        return cls(path, await asyncio.to_thread(read))
+        scenes, video_frame_counts = await asyncio.to_thread(read)
+        return cls(path, scenes, video_frame_counts=video_frame_counts)
 
     async def get(self, scene_id: str) -> SceneDocument | None:
         return self._scenes.get(scene_id)
+
+    async def video_frame_count(self, video_id: str) -> int | None:
+        """Số frame thật của video, hoặc None nếu videos.jsonl không có nó.
+
+        `None` (chứ không phải 0) khi thiếu thông tin: validator coi đây là
+        "không kiểm tra được" chứ không phải "mọi frame đều vượt biên".
+        """
+
+        return self._video_frame_counts.get(video_id)
 
     async def get_many(self, scene_ids: Sequence[str]) -> list[SceneDocument]:
         return [self._scenes[item] for item in scene_ids if item in self._scenes]
