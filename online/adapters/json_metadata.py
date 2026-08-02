@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 from typing import Any, Sequence
 
-from online.domain.models import SceneDocument
+from online.domain.models import FrameEvidence, FrameQuality, SceneDocument
 from online.errors import MetadataNotFoundError
 
 
@@ -15,20 +15,72 @@ def _texts(records: list[dict[str, Any]]) -> list[str]:
     return [str(item["text"]) for item in records if item.get("text")]
 
 
+def project_frame(
+    raw: dict[str, Any], *, start_frame: int, end_frame_exclusive: int
+) -> FrameEvidence:
+    """Chiếu một canonical Keyframe sang FrameEvidence, GIỮ NGUYÊN `frame_idx`.
+
+    Trước PR-01 hàm `project_scene` chỉ lấy id/path/timestamp và vứt
+    `frame_idx`, khiến online không xuất được submission. `frame_idx` giờ là
+    field bắt buộc của `FrameEvidence`, nên regression tương tự sẽ fail ngay
+    ở tầng validate chứ không âm thầm.
+    """
+
+    frame_idx = int(raw["frame_idx"])
+    color = raw.get("color") or {}
+    quality_raw = raw.get("quality") or {}
+    return FrameEvidence(
+        keyframe_id=raw["keyframe_id"],
+        video_id=raw["video_id"],
+        scene_id=raw["scene_id"],
+        frame_idx=frame_idx,
+        timestamp_sec=float(raw["timestamp_sec"]),
+        image_path=raw["image_path"],
+        selection_score=raw.get("selection_score"),
+        quality=FrameQuality(
+            sharpness=quality_raw.get("sharpness"),
+            brightness=quality_raw.get("brightness"),
+            contrast=quality_raw.get("contrast"),
+            black_frame_ratio=quality_raw.get("black_frame_ratio"),
+            duplicate_score=quality_raw.get("duplicate_score"),
+        ),
+        boundary_distance_frames=min(
+            frame_idx - start_frame, end_frame_exclusive - 1 - frame_idx
+        ),
+        captions=_texts(raw.get("captions", [])),
+        ocr_texts=_texts(raw.get("ocr_instances", [])),
+        object_labels=[
+            str(item["label"]) for item in raw.get("objects", []) if item.get("label")
+        ],
+        action_tags=[str(item) for item in raw.get("action_tags", [])],
+        dominant_colors=[
+            str(item["name"])
+            for item in color.get("dominant_colors", [])
+            if item.get("name")
+        ],
+        embedding_names=[
+            str(item["embedding_name"])
+            for item in raw.get("embedding_refs", [])
+            if item.get("embedding_name")
+        ],
+    )
+
+
 def project_scene(raw: dict[str, Any], video_path: str | None = None) -> SceneDocument:
     """Build an online read projection without mutating canonical metadata."""
 
-    keyframes = raw.get("keyframes", [])
-    keyframe_captions: list[str] = []
-    ocr_texts: list[str] = []
-    object_labels: list[str] = []
-    color_names: list[str] = []
-    for keyframe in keyframes:
-        keyframe_captions.extend(_texts(keyframe.get("captions", [])))
-        ocr_texts.extend(_texts(keyframe.get("ocr_instances", [])))
-        object_labels.extend(str(item["label"]) for item in keyframe.get("objects", []) if item.get("label"))
-        color = keyframe.get("color") or {}
-        color_names.extend(str(item["name"]) for item in color.get("dominant_colors", []) if item.get("name"))
+    start_frame = int(raw["start_frame"])
+    end_frame_exclusive = int(raw["end_frame_exclusive"])
+    keyframes = [
+        project_frame(
+            item, start_frame=start_frame, end_frame_exclusive=end_frame_exclusive
+        )
+        for item in raw.get("keyframes", [])
+    ]
+    keyframe_captions = [text for frame in keyframes for text in frame.captions]
+    ocr_texts = [text for frame in keyframes for text in frame.ocr_texts]
+    object_labels = [label for frame in keyframes for label in frame.object_labels]
+    color_names = {name for frame in keyframes for name in frame.dominant_colors}
     scene_captions = _texts(raw.get("captions", []))
     asr_texts = _texts(raw.get("asr_segments", []))
     keywords = [
@@ -42,28 +94,22 @@ def project_scene(raw: dict[str, Any], video_path: str | None = None) -> SceneDo
         video_id=raw["video_id"],
         video_path=video_path,
         scene_idx=raw["scene_idx"],
+        start_frame=start_frame,
+        end_frame_exclusive=end_frame_exclusive,
         start_sec=raw["start_sec"],
         end_sec=raw["end_sec"],
-        keyframe_ids=[item["keyframe_id"] for item in keyframes],
-        keyframe_paths=[item["image_path"] for item in keyframes],
-        keyframe_timestamps=[float(item["timestamp_sec"]) for item in keyframes],
+        # Scene canonical không mang event_id (Event trỏ ngược tới scene_ids);
+        # exporter/assemble ghi lại quan hệ này vào `extensions` khi có.
+        event_id=(raw.get("extensions") or {}).get("event_id"),
+        artifact_version=raw.get("schema_version"),
+        keyframes=keyframes,
         object_labels=object_labels,
-        keyframe_evidence=[{
-            "keyframe_id": item["keyframe_id"],
-            "image_path": item["image_path"],
-            "timestamp_sec": item["timestamp_sec"],
-            "text": " ".join(
-                [x.get("text", "") for x in item.get("captions", [])]
-                + [x.get("text", "") for x in item.get("ocr_instances", [])]
-                + [x.get("label", "") for x in item.get("objects", [])]
-            ),
-        } for item in keyframes],
         captions=scene_captions + keyframe_captions,
         ocr_texts=ocr_texts,
         asr_texts=asr_texts,
         keywords=keywords,
         action_tags=sorted(set(action_tags)),
-        color_names=sorted(set(color_names)),
+        color_names=sorted(color_names),
     )
 
 

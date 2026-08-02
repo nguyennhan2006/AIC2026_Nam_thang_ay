@@ -228,7 +228,7 @@ async def evaluate_mode(
     per_query: list[dict] = []
     for gt in groundtruth:
         response = await service.search(
-            SearchRequest(query=gt.query, task=TaskType.KIS, top_k=args.top_k)
+            SearchRequest(query=gt.query, task=TaskType.TEXTUAL_KIS, top_k=args.top_k)
         )
         rank = next(
             (

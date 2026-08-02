@@ -24,7 +24,7 @@ def _plan(
     *, modality_weights: dict[Modality, float], search_options: SearchOptions | None = None, query: str = "q",
 ) -> QueryPlan:
     return QueryPlan(
-        task=TaskType.KIS, original_query=query, normalized_query=query,
+        task=TaskType.TEXTUAL_KIS, original_query=query, normalized_query=query,
         events=[QueryEvent(event_idx=0, text=query)],
         modality_weights=modality_weights, filters=SearchFilters(),
         search_options=search_options or SearchOptions(),
@@ -64,6 +64,7 @@ class ColorSearchTests(unittest.TestCase):
     def _doc(self, scene_id: str, colors: list[str]) -> SceneDocument:
         return SceneDocument(
             scene_id=scene_id, video_id="L01_V001", scene_idx=0,
+            start_frame=0, end_frame_exclusive=30,
             start_sec=0.0, end_sec=1.0, color_names=colors,
         )
 
@@ -137,8 +138,8 @@ class EventSearchTests(unittest.TestCase):
 class FuseCandidatesTests(unittest.TestCase):
     def _candidate(self, scene_id: str, source: str, modality: Modality, score: float, rank: int) -> Candidate:
         return Candidate(
-            entity_id=scene_id, scene_id=scene_id, video_id="v1",
-            source=source, modality=modality, score=score, rank=rank,
+            candidate_id=scene_id, scene_id=scene_id, video_id="v1",
+            source=source, modality=modality, raw_score=score, rank=rank,
         )
 
     def test_rrf_unchanged_from_weighted_rrf_behavior(self) -> None:
@@ -203,11 +204,12 @@ class NegativeConstraintsTests(unittest.TestCase):
     def _doc(self, scene_id: str, object_labels: list[str]) -> SceneDocument:
         return SceneDocument(
             scene_id=scene_id, video_id="L01_V001", scene_idx=0,
+            start_frame=0, end_frame_exclusive=30,
             start_sec=0.0, end_sec=1.0, object_labels=object_labels,
         )
 
     def _candidate(self, scene_id: str) -> Candidate:
-        return Candidate(entity_id=scene_id, scene_id=scene_id, video_id="L01_V001", source="x", modality=Modality.KEYWORD, score=1.0, rank=1)
+        return Candidate(candidate_id=scene_id, scene_id=scene_id, video_id="L01_V001", source="x", modality=Modality.KEYWORD, raw_score=1.0, rank=1)
 
     def test_excludes_scene_containing_the_constraint_phrase(self) -> None:
         candidates = [self._candidate("s1"), self._candidate("s2")]

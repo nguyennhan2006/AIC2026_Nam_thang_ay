@@ -15,7 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from online.api.container import build_container
 from online.api.routes import router
 from online.config import Settings
-from online.errors import OnlineError
+from online.errors import InvalidQueryError, OnlineError, TaskConflictError
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -52,10 +52,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 return JSONResponse(status_code=401, content={"detail": "invalid API token"})
         return await call_next(request)
 
+    # Lỗi do request sai (4xx) phải tách khỏi lỗi hạ tầng (503) — client cần
+    # biết mình gửi sai chứ không phải "thử lại sau".
+    client_errors: dict[type[OnlineError], int] = {
+        TaskConflictError: 422,
+        InvalidQueryError: 422,
+    }
+
     @app.exception_handler(OnlineError)
     async def handle_online_error(_: Request, exc: OnlineError) -> JSONResponse:
         return JSONResponse(
-            status_code=503,
+            status_code=client_errors.get(type(exc), 503),
             content={"error": {"code": exc.code, "message": str(exc)}},
         )
 

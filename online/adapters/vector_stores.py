@@ -20,6 +20,50 @@ def qdrant_point_id(entity_id: str) -> str:
     return str(uuid5(NAMESPACE_URL, f"aic2026:v1:{entity_id}"))
 
 
+def candidate_from_payload(
+    payload: dict,
+    *,
+    source: str,
+    score: float,
+    rank: int,
+    index_id: str | None = None,
+    model_id: str | None = None,
+) -> Candidate | None:
+    """Dựng Candidate từ payload của vector store, giữ `frame_idx` nếu có.
+
+    Một collection có thể ở mức scene (`aic_scenes_*`) hoặc mức frame
+    (`aic_frames_*`, PR-02). Payload frame mang thêm `frame_idx`/`keyframe_id`,
+    và khi đó candidate được đánh dấu `entity_type="frame"` để tầng trên biết
+    nó đã neo đúng tọa độ submission chứ không phải cả một scene.
+    """
+
+    video_id = payload.get("video_id")
+    scene_id = payload.get("scene_id")
+    if not video_id or not scene_id:
+        return None
+    frame_idx = payload.get("frame_idx")
+    is_frame = frame_idx is not None and payload.get("keyframe_id")
+    return Candidate(
+        candidate_id=str(payload.get("keyframe_id") or scene_id),
+        entity_type="frame" if is_frame else "scene",
+        scene_id=str(scene_id),
+        video_id=str(video_id),
+        event_id=payload.get("event_id"),
+        frame_idx=int(frame_idx) if frame_idx is not None else None,
+        timestamp_sec=payload.get("timestamp_sec"),
+        start_frame=payload.get("start_frame"),
+        end_frame=payload.get("end_frame"),
+        source=source,
+        modality=Modality.VISUAL,
+        raw_score=float(score),
+        score_kind="cosine",
+        rank=rank,
+        model_id=model_id,
+        index_id=index_id,
+        payload=payload,
+    )
+
+
 def cosine(left: Sequence[float], right: Sequence[float]) -> float:
     if len(left) != len(right):
         raise ValueError("vector dimensions do not match")
@@ -56,21 +100,17 @@ class InMemoryVectorStore:
             score = cosine(vector, candidate_vector)
             results.append((scene_id, video_id, score, payload))
         results.sort(key=lambda item: (-item[2], item[0]))
-        return [
-            Candidate(
-                entity_id=scene_id,
-                scene_id=scene_id,
-                video_id=video_id,
-                source="local_dense",
-                modality=Modality.VISUAL,
-                score=score,
-                rank=rank,
-                payload=payload,
+        candidates: list[Candidate] = []
+        for rank, (_scene_id, _video_id, score, payload) in enumerate(
+            results[:limit], start=1
+        ):
+            candidate = candidate_from_payload(
+                payload, source="local_dense", score=score, rank=rank,
+                index_id="inmemory_hashing_v1",
             )
-            for rank, (scene_id, video_id, score, payload) in enumerate(
-                results[:limit], start=1
-            )
-        ]
+            if candidate is not None:
+                candidates.append(candidate)
+        return candidates
 
 
 def _qdrant_filter(filters: SearchFilters) -> dict | None:
@@ -165,21 +205,14 @@ class QdrantVectorStore:
             points = []
         candidates: list[Candidate] = []
         for rank, point in enumerate(points, start=1):
-            payload = point.get("payload") or {}
-            scene_id = payload.get("scene_id")
-            video_id = payload.get("video_id")
-            if not scene_id or not video_id:
-                continue
-            candidates.append(
-                Candidate(
-                    entity_id=scene_id,
-                    scene_id=scene_id,
-                    video_id=video_id,
-                    source="qdrant_dense",
-                    modality=Modality.VISUAL,
-                    score=float(point["score"]),
-                    rank=rank,
-                    payload=payload,
-                )
+            candidate = candidate_from_payload(
+                point.get("payload") or {},
+                source="qdrant_dense",
+                score=float(point["score"]),
+                rank=rank,
+                index_id=f"{self.collection}:{self.vector_name}",
+                model_id=self.vector_name,
             )
+            if candidate is not None:
+                candidates.append(candidate)
         return candidates

@@ -115,13 +115,18 @@ class LexicalRetriever:
             text = scene.field_text(self.field)
             filtered.append(
                 Candidate(
-                    entity_id=scene.scene_id,
+                    candidate_id=scene.scene_id,
+                    entity_type="scene",
                     scene_id=scene.scene_id,
                     video_id=scene.video_id,
+                    start_frame=scene.start_frame,
+                    end_frame=scene.end_frame_exclusive - 1,
                     source=self.name,
                     modality=self.modality,
-                    score=score,
+                    raw_score=score,
+                    score_kind="bm25",
                     rank=len(filtered) + 1,
+                    index_id=f"bm25_{self.field}_inmemory",
                     payload={"matched_text": text[:1000]},
                 )
             )

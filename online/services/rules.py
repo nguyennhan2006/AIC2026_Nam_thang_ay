@@ -106,7 +106,7 @@ def apply_bonus_penalty(
 
     output: list[Candidate] = []
     for candidate in candidates:
-        document = documents.get(candidate.scene_id)
+        document = documents.get(candidate.scene_id or "")
         if document is None:
             output.append(candidate)
             continue
@@ -166,13 +166,13 @@ def apply_bonus_penalty(
         output.append(
             candidate.model_copy(
                 update={
-                    "score": candidate.score + sum(adjustments.values()),
+                    "raw_score": candidate.raw_score + sum(adjustments.values()),
                     "payload": payload,
                 }
             )
         )
 
-    output.sort(key=lambda item: (-item.score, item.scene_id))
+    output.sort(key=lambda item: (-item.raw_score, item.candidate_id))
     return [
         candidate.model_copy(update={"rank": rank})
         for rank, candidate in enumerate(output, start=1)

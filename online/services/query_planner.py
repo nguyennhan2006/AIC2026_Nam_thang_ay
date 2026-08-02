@@ -48,11 +48,12 @@ class RuleBasedQueryPlanner:
     """Safe V1 planner; an LLM planner can replace it through the same output model."""
 
     async def plan(self, request: SearchRequest) -> QueryPlan:
+        task = request.task or TaskType.TEXTUAL_KIS
         normalized = normalize_query(request.query)
         exact_phrases = [item.strip() for item in QUOTED_RE.findall(normalized)]
         parts = [item.strip(" ,.;:") for item in TEMPORAL_RE.split(normalized)]
         parts = [item for item in parts if item]
-        if request.task != TaskType.SEQUENCE or len(parts) < 2:
+        if task != TaskType.TRAKE or len(parts) < 2:
             parts = [normalized]
         events = [
             QueryEvent(
@@ -82,7 +83,7 @@ class RuleBasedQueryPlanner:
         if any(hint in lowered for hint in SPEECH_HINTS):
             weights[Modality.ASR] = 1.7
         return QueryPlan(
-            task=request.task,
+            task=task,
             original_query=request.query,
             normalized_query=normalized,
             events=events,

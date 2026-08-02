@@ -40,7 +40,7 @@ class VQAService:
         search_response = await self.search_service.search(
             SearchRequest(
                 query=request.question,
-                task=TaskType.VQA,
+                task=TaskType.QA,
                 top_k=request.top_k_evidence,
                 filters=request.filters,
                 debug=request.debug,

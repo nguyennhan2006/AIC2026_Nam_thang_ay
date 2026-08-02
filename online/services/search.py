@@ -10,8 +10,10 @@ from uuid import uuid4
 from online.domain.models import (
     Candidate,
     Evidence,
+    FrameEvidence,
     Modality,
     QueryPlan,
+    SceneDocument,
     SearchHit,
     SearchRequest,
     SearchResponse,
@@ -76,7 +78,7 @@ class SearchService:
         documents = {
             document.scene_id: document
             for document in await self.repository.get_many(
-                [candidate.scene_id for candidate in candidates]
+                [candidate.scene_id for candidate in candidates if candidate.scene_id]
             )
         }
         if constraints:
@@ -94,51 +96,98 @@ class SearchService:
             config=self.rule_config,
         )
 
+    @staticmethod
+    def _select_frame(
+        document: SceneDocument, candidate: Candidate, query: str
+    ) -> FrameEvidence | None:
+        """Chọn frame đại diện cho một scene candidate.
+
+        Thứ tự ưu tiên:
+
+        1. Frame do chính retrieval chỉ ra (candidate neo frame, vd dense frame
+           index) — đáng tin hơn mọi suy đoán ở tầng này.
+        2. Frame khớp nhiều token query nhất.
+        3. Frame gần giữa scene nhất (ít dính biên/cut nhất).
+
+        Đây là baseline; safe-frame scoring đầy đủ (quality, blur, boundary)
+        thuộc PR-07.
+        """
+
+        if not document.keyframes:
+            return None
+        if candidate.frame_idx is not None:
+            for frame in document.keyframes:
+                if frame.frame_idx == candidate.frame_idx:
+                    return frame
+        query_tokens = set(re.findall(r"\w+", query.casefold()))
+        if query_tokens:
+            scored = [
+                (
+                    len(query_tokens & set(re.findall(r"\w+", frame.search_text.casefold()))),
+                    frame,
+                )
+                for frame in document.keyframes
+            ]
+            best_overlap, best_frame = max(scored, key=lambda item: (item[0], -item[1].frame_idx))
+            if best_overlap:
+                return best_frame
+        midpoint = (document.start_sec + document.end_sec) / 2
+        return min(document.keyframes, key=lambda frame: abs(frame.timestamp_sec - midpoint))
+
     async def _hydrate(self, candidates: list[Candidate], query: str = "") -> list[SearchHit]:
         documents = {
             item.scene_id: item
             for item in await self.repository.get_many(
-                [candidate.scene_id for candidate in candidates]
+                [candidate.scene_id for candidate in candidates if candidate.scene_id]
             )
         }
         hits: list[SearchHit] = []
-        for candidate in candidates:
-            document = documents.get(candidate.scene_id)
+        for rank, candidate in enumerate(candidates, start=1):
+            document = documents.get(candidate.scene_id or "")
             if not document:
                 continue
             payload = candidate.payload
             evidence = [Evidence.model_validate(item) for item in payload.get("evidence", [])]
-            best_idx = 0
-            query_tokens = set(re.findall(r"\w+", query.casefold()))
-            if query_tokens and document.keyframe_evidence:
-                scores = []
-                for frame in document.keyframe_evidence:
-                    tokens = set(re.findall(r"\w+", str(frame.get("text", "")).casefold()))
-                    scores.append(len(query_tokens & tokens) / max(len(query_tokens), 1))
-                best_idx = max(range(len(scores)), key=scores.__getitem__)
-            elif document.keyframe_timestamps:
-                midpoint = (document.start_sec + document.end_sec) / 2
-                best_idx = min(range(len(document.keyframe_timestamps)), key=lambda i: abs(document.keyframe_timestamps[i] - midpoint))
+            frame = self._select_frame(document, candidate, query)
+            warnings: list[str] = []
+            if frame is None:
+                # Scene canonical luôn có >= 1 keyframe; nếu tới đây thì export
+                # bị hỏng. Vẫn trả một frame_idx hợp lệ (giữa scene) để không
+                # chặn cả response, nhưng nói rõ là suy ra chứ không phải evidence.
+                best_frame_idx = (document.start_frame + document.end_frame_exclusive - 1) // 2
+                warnings.append(
+                    f"scene {document.scene_id} has no keyframe evidence; "
+                    f"best_frame_idx={best_frame_idx} was derived from the scene midpoint"
+                )
+            else:
+                best_frame_idx = frame.frame_idx
             hits.append(
                 SearchHit(
+                    rank=rank,
+                    candidate_id=candidate.candidate_id,
                     scene_id=document.scene_id,
                     video_id=document.video_id,
                     video_path=document.video_path,
+                    event_id=candidate.event_id or document.event_id,
                     scene_idx=document.scene_idx,
+                    start_frame=document.start_frame,
+                    end_frame_exclusive=document.end_frame_exclusive,
                     start_sec=document.start_sec,
                     end_sec=document.end_sec,
-                    score=candidate.score,
-                    keyframe_ids=document.keyframe_ids,
-                    keyframe_paths=document.keyframe_paths,
-                    keyframe_timestamps=document.keyframe_timestamps,
-                    best_keyframe_id=document.keyframe_ids[best_idx] if document.keyframe_ids else None,
-                    best_keyframe_path=document.keyframe_paths[best_idx] if document.keyframe_paths else None,
-                    best_timestamp_sec=document.keyframe_timestamps[best_idx] if document.keyframe_timestamps else None,
+                    best_frame_idx=best_frame_idx,
+                    best_keyframe_id=frame.keyframe_id if frame else None,
+                    best_keyframe_path=frame.image_path if frame else None,
+                    best_timestamp_sec=frame.timestamp_sec if frame else None,
+                    score=candidate.raw_score,
+                    keyframes=document.keyframes,
                     matched_modalities=[
                         Modality(item) for item in payload.get("matched_modalities", [])
                     ],
+                    matched_branches=list(payload.get("matched_branches", [])),
                     evidence=evidence[:10],
                     component_scores=payload.get("component_scores", {}),
+                    branch_contributions=payload.get("branch_contributions", {}),
+                    warnings=warnings,
                 )
             )
         return hits
@@ -146,8 +195,12 @@ class SearchService:
     async def search(self, request: SearchRequest) -> SearchResponse:
         started = perf_counter()
         query_id = str(uuid4())
+        # `task=None` nghĩa là caller không chỉ định (vd gọi service trực tiếp
+        # từ script/test); mặc định về task chính của cuộc thi. Route convenience
+        # đã điền task của path trước khi tới đây.
+        task = request.task or TaskType.TEXTUAL_KIS
         plan = await self.planner.plan(request)
-        if request.task == TaskType.SEQUENCE and len(plan.events) >= 2:
+        if task == TaskType.TRAKE and len(plan.events) >= 2:
             event_hit_lists: list[list[SearchHit]] = []
             for event in plan.events:
                 event_plan = plan.model_copy(
@@ -158,7 +211,7 @@ class SearchService:
             sequences = link_event_hits(event_hit_lists, limit=request.top_k)
             return SearchResponse(
                 query_id=query_id,
-                task=request.task,
+                task=task,
                 took_ms=(perf_counter() - started) * 1000,
                 sequences=sequences,
                 query_plan=plan if request.debug else None,
@@ -166,15 +219,19 @@ class SearchService:
 
         candidates = await self._retrieve(plan, self.candidate_limit)
         hits = await self._hydrate(candidates[: request.top_k], plan.normalized_query)
-        if request.task == TaskType.AVS:
+        if task == TaskType.AVS:
             per_video = plan.search_options.fusion.max_results_per_video or 3
             hits = _diversify_avs(hits, request.top_k, per_video=per_video)
+        results = hits[: request.top_k]
+        warnings = [warning for hit in results for warning in hit.warnings]
         return SearchResponse(
             query_id=query_id,
-            task=request.task,
+            task=task,
             took_ms=(perf_counter() - started) * 1000,
-            results=hits[: request.top_k],
+            status="COMPLETED_WITH_WARNINGS" if warnings else "COMPLETED",
+            results=results,
             query_plan=plan if request.debug else None,
+            warnings=warnings,
         )
 
 

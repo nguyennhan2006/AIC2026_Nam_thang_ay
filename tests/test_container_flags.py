@@ -85,7 +85,7 @@ class ContainerFlagTests(unittest.TestCase):
         # khi bỏ hết dấu — chỉ OcrFuzzyRetriever bắt được, và bonus của nó (rank 1,
         # weight OCR mặc định 0.35) đủ lớn để thắng chênh lệch rank giữa 3 scene ở
         # nhánh dense (corpus demo chỉ có 3 scene nên khoảng cách rank rất nhỏ).
-        result = run(service.search(SearchRequest(query="hen ngay gap lai", task=TaskType.KIS, top_k=1)))
+        result = run(service.search(SearchRequest(query="hen ngay gap lai", task=TaskType.TEXTUAL_KIS, top_k=1)))
         self.assertEqual(result.results[0].scene_id, "L01_V001_S0001")
 
     def test_enable_expansion_wraps_caption_and_keyword_only(self) -> None:
@@ -97,7 +97,7 @@ class ContainerFlagTests(unittest.TestCase):
         service = self.build(enable_rules=True).search_service
         self.assertIsNotNone(service.rule_config)
         plan = run(service.planner.plan(SearchRequest(
-            query='"Gừng cay muối mặn xin đừng quên nhau"', task=TaskType.KIS, top_k=5,
+            query='"Gừng cay muối mặn xin đừng quên nhau"', task=TaskType.TEXTUAL_KIS, top_k=5,
         )))
         candidates = run(service._retrieve(plan, service.candidate_limit))
         target = next(c for c in candidates if c.scene_id == "L01_V001_S0002")
@@ -138,7 +138,7 @@ class ContainerFlagTests(unittest.TestCase):
         self.assertIsInstance(service.planner, PreparedQueryPlanner)
         plan = run(service.planner.plan(SearchRequest(
             query="cào muối, sau đó vẫy tay, cuối cùng đứng trước căn nhà",
-            task=TaskType.KIS, top_k=5,
+            task=TaskType.TEXTUAL_KIS, top_k=5,
         )))
         self.assertEqual(plan.normalized_query, "đứng trước căn nhà")
 

@@ -96,9 +96,12 @@ class EventSearchRetriever:
                 if plan.filters.scene_ids and scene_id not in plan.filters.scene_ids:
                     continue
                 candidates.append(Candidate(
-                    entity_id=scene_id, scene_id=scene_id, video_id=event.video_id,
-                    source=self.name, modality=self.modality, score=score,
+                    candidate_id=scene_id, entity_type="scene", scene_id=scene_id,
+                    event_id=event.event_id, video_id=event.video_id,
+                    source=self.name, modality=self.modality,
+                    raw_score=score, score_kind="bm25",
                     rank=len(candidates) + 1,
+                    index_id="bm25_event_inmemory",
                     payload={"matched_text": event.field_text()[:1000], "event_id": event.event_id},
                 ))
                 if len(candidates) >= limit:

@@ -65,6 +65,11 @@ async def build_container(settings: Settings) -> AppContainer:
                         "scene_id": scene.scene_id,
                         "video_id": scene.video_id,
                         "scene_idx": scene.scene_idx,
+                        # start/end_frame đi kèm payload để candidate từ vector
+                        # store cũng truy ngược được về khoảng frame, không phải
+                        # chờ hydrate mới biết (PR-01 frame contract).
+                        "start_frame": scene.start_frame,
+                        "end_frame": scene.end_frame_exclusive - 1,
                         "start_sec": scene.start_sec,
                         "end_sec": scene.end_sec,
                         "has_ocr": bool(scene.ocr_texts),

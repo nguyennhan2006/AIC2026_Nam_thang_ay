@@ -44,7 +44,7 @@ def apply_negative_constraints(
 
     kept: list[Candidate] = []
     for candidate in candidates:
-        document = documents.get(candidate.scene_id)
+        document = documents.get(candidate.scene_id or "")
         if document is None:
             kept.append(candidate)
             continue

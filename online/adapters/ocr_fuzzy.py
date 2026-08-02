@@ -252,12 +252,16 @@ class OcrFuzzyRetriever:
         scored.sort(key=lambda item: (-item[0], item[2].scene_id))
         return [
             Candidate(
-                entity_id=doc.scene_id,
+                candidate_id=doc.scene_id,
+                entity_type="scene",
                 scene_id=doc.scene_id,
                 video_id=doc.video_id,
+                start_frame=doc.start_frame,
+                end_frame=doc.end_frame_exclusive - 1,
                 source=self.name,
                 modality=self.modality,
-                score=score,
+                raw_score=score,
+                score_kind="fuzzy_ratio",
                 rank=rank,
                 payload={
                     # matched_text giữ OCR *gốc còn dấu* để evidence dễ đọc.

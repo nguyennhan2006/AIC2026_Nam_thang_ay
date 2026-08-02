@@ -87,8 +87,11 @@ class ColorSearchRetriever:
         scored.sort(key=lambda item: (-item[0], item[1].scene_id))
         return [
             Candidate(
-                entity_id=doc.scene_id, scene_id=doc.scene_id, video_id=doc.video_id,
-                source=self.name, modality=self.modality, score=score, rank=rank,
+                candidate_id=doc.scene_id, entity_type="scene", scene_id=doc.scene_id,
+                video_id=doc.video_id, start_frame=doc.start_frame,
+                end_frame=doc.end_frame_exclusive - 1,
+                source=self.name, modality=self.modality,
+                raw_score=score, score_kind="overlap_ratio", rank=rank,
                 payload={"matched_colors": sorted(query_set & set(doc.color_names))},
             )
             for rank, (score, doc) in enumerate(scored[:limit], start=1)

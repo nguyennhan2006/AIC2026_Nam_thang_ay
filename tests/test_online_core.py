@@ -54,7 +54,7 @@ class OnlineCoreTests(unittest.TestCase):
                 'Người cào muối, sau đó đoàn người vẫy tay, cuối cùng trước '
                 'căn nhà có chữ "Gừng cay muối mặn xin đừng quên nhau"'
             ),
-            task=TaskType.SEQUENCE,
+            task=TaskType.TRAKE,
         )
         plan = run(RuleBasedQueryPlanner().plan(request))
         self.assertEqual(len(plan.events), 3)
@@ -63,14 +63,14 @@ class OnlineCoreTests(unittest.TestCase):
     def test_weighted_rrf_uses_rank_and_modality_weight(self) -> None:
         visual = [
             Candidate(
-                entity_id="s1", scene_id="s1", video_id="v1",
-                source="dense", modality=Modality.VISUAL, score=0.8, rank=1
+                candidate_id="s1", scene_id="s1", video_id="v1",
+                source="dense", modality=Modality.VISUAL, raw_score=0.8, rank=1
             )
         ]
         ocr = [
             Candidate(
-                entity_id="s2", scene_id="s2", video_id="v1",
-                source="ocr", modality=Modality.OCR, score=10.0, rank=1,
+                candidate_id="s2", scene_id="s2", video_id="v1",
+                source="ocr", modality=Modality.OCR, raw_score=10.0, rank=1,
                 payload={"matched_text": "exact phrase"}
             )
         ]
@@ -83,9 +83,12 @@ class OnlineCoreTests(unittest.TestCase):
 
     def test_temporal_linker_requires_same_video_and_increasing_scene(self) -> None:
         def hit(scene: int, score: float, video: str = "L01_V001") -> SearchHit:
+            scene_id = f"{video}_S{scene:04d}"
             return SearchHit(
-                scene_id=f"{video}_S{scene:04d}", video_id=video, scene_idx=scene,
-                start_sec=scene * 5.0, end_sec=scene * 5.0 + 4.0, score=score
+                candidate_id=scene_id, scene_id=scene_id, video_id=video, scene_idx=scene,
+                start_frame=scene * 150, end_frame_exclusive=scene * 150 + 120,
+                start_sec=scene * 5.0, end_sec=scene * 5.0 + 4.0,
+                best_frame_idx=scene * 150 + 60, score=score,
             )
         sequences = link_event_hits([[hit(1, 1.0)], [hit(2, 0.9)], [hit(3, 0.8)]])
         self.assertEqual([x.scene_idx for x in sequences[0].scenes], [1, 2, 3])
@@ -111,7 +114,8 @@ class OnlineCoreTests(unittest.TestCase):
                 return json.dumps({"result": {"points": [{
                     "id": qdrant_point_id("L01_V001_S0003"),
                     "score": 0.91,
-                    "payload": {"scene_id": "L01_V001_S0003", "video_id": "L01_V001"}
+                    "payload": {"scene_id": "L01_V001_S0003", "video_id": "L01_V001",
+                                "start_frame": 600, "end_frame": 779}
                 }]}}).encode()
 
         def fake_urlopen(request, timeout):
@@ -130,7 +134,8 @@ class OnlineCoreTests(unittest.TestCase):
         self.assertEqual(captured["body"]["using"], "visual")
         self.assertIn("filter", captured["body"])
         self.assertEqual(results[0].scene_id, "L01_V001_S0003")
-        self.assertEqual(results[0].score, 0.91)
+        self.assertEqual(results[0].raw_score, 0.91)
+        self.assertEqual(results[0].start_frame, 600)
 
     def test_end_to_end_kis_and_sequence(self) -> None:
         async def scenario():
@@ -141,6 +146,8 @@ class OnlineCoreTests(unittest.TestCase):
                 vector = await encoder.encode(" ".join(scene.captions + scene.keywords))
                 rows.append((scene.scene_id, scene.video_id, vector, {
                     "scene_id": scene.scene_id, "video_id": scene.video_id,
+                    "start_frame": scene.start_frame,
+                    "end_frame": scene.end_frame_exclusive - 1,
                     "has_ocr": bool(scene.ocr_texts), "has_asr": bool(scene.asr_texts)
                 }))
             retrievers = [DenseRetriever(encoder, InMemoryVectorStore(rows))]
@@ -151,22 +158,26 @@ class OnlineCoreTests(unittest.TestCase):
             service = SearchService(repository, retrievers, candidate_limit=20)
             kis = await service.search(SearchRequest(
                 query='căn nhà có chữ "Gừng cay muối mặn xin đừng quên nhau"',
-                task=TaskType.KIS, top_k=3
+                task=TaskType.TEXTUAL_KIS, top_k=3
             ))
             sequence = await service.search(SearchRequest(
                 query=("người cào muối, sau đó đoàn người vẫy tay phía sau bảng chữ, "
                        "cuối cùng đứng trước căn nhà"),
-                task=TaskType.SEQUENCE, top_k=3
+                task=TaskType.TRAKE, top_k=3
             ))
             return kis, sequence
 
         kis, sequence = run(scenario())
         self.assertEqual(kis.results[0].scene_id, "L01_V001_S0003")
+        # Contract PR-01: kết quả phải mang tọa độ submission thật.
+        self.assertEqual(kis.results[0].best_frame_idx, 600)
+        self.assertEqual(kis.results[0].best_keyframe_id, "L01_V001_S0003_F000600")
         self.assertTrue(sequence.sequences)
         self.assertEqual(
             [item.scene_id for item in sequence.sequences[0].scenes],
             ["L01_V001_S0001", "L01_V001_S0002", "L01_V001_S0003"],
         )
+        self.assertEqual(sequence.sequences[0].frame_ids, [300, 450, 600])
 
 
 if __name__ == "__main__":

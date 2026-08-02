@@ -48,56 +48,86 @@ def fuse_candidates(
     totals: defaultdict[str, float] = defaultdict(float)
     representatives: dict[str, Candidate] = {}
     components: defaultdict[str, dict[str, float]] = defaultdict(dict)
+    contributions: defaultdict[str, dict[str, float]] = defaultdict(dict)
     modalities: defaultdict[str, set[str]] = defaultdict(set)
     evidence: defaultdict[str, list[dict]] = defaultdict(list)
     matching_branches: defaultdict[str, set[str]] = defaultdict(set)
+    frame_hints: dict[str, Candidate] = {}
 
     for candidates in ranked_lists:
         for fallback_rank, candidate in enumerate(candidates, start=1):
             rank = candidate.rank or fallback_rank
             weight = _branch_weight(candidate, modality_weights, branches)
             contribution = weight / (rrf_k + rank)
-            scene_id = candidate.scene_id
+            key = candidate.grouping_key
             if method == "max_score":
-                totals[scene_id] = max(totals[scene_id], contribution)
+                totals[key] = max(totals[key], contribution)
             else:
-                totals[scene_id] += contribution
-            matching_branches[scene_id].add(candidate.source)
-            representatives.setdefault(scene_id, candidate)
-            components[scene_id][candidate.source] = candidate.score
-            modalities[scene_id].add(candidate.modality.value)
+                totals[key] += contribution
+            matching_branches[key].add(candidate.source)
+            representatives.setdefault(key, candidate)
+            components[key][candidate.source] = candidate.raw_score
+            # Đóng góp thực tế vào điểm fusion — cùng thang đo giữa mọi branch,
+            # khác với component_scores (raw, không so sánh được với nhau).
+            contributions[key][candidate.source] = (
+                contributions[key].get(candidate.source, 0.0) + contribution
+            )
+            modalities[key].add(candidate.modality.value)
+            # Candidate neo frame mang tọa độ submission chính xác hơn candidate
+            # neo scene; giữ lại cái có contribution cao nhất để tầng hydrate ưu
+            # tiên frame do retrieval chỉ ra thay vì tự đoán lại.
+            if candidate.frame_idx is not None:
+                incumbent = frame_hints.get(key)
+                if incumbent is None or contribution > contributions[key].get(
+                    incumbent.source, 0.0
+                ):
+                    frame_hints[key] = candidate
             matched_text = candidate.payload.get("matched_text")
             if matched_text:
-                evidence[scene_id].append(
-                    {"modality": candidate.modality.value, "text": matched_text, "score": candidate.score}
+                evidence[key].append(
+                    {
+                        "modality": candidate.modality.value,
+                        "text": matched_text,
+                        "score": candidate.raw_score,
+                    }
                 )
 
     eligible = totals.keys()
     if method == "intersection":
         threshold = max(2, minimum_matching_branches)
-        eligible = [scene_id for scene_id in totals if len(matching_branches[scene_id]) >= threshold]
+        eligible = [key for key in totals if len(matching_branches[key]) >= threshold]
 
     ordered = sorted(eligible, key=lambda item: (-totals[item], item))[:limit]
     output: list[Candidate] = []
-    for rank, scene_id in enumerate(ordered, start=1):
-        base = representatives[scene_id]
+    for rank, key in enumerate(ordered, start=1):
+        base = representatives[key]
+        hint = frame_hints.get(key)
         payload = dict(base.payload)
         payload.update(
             {
-                "component_scores": components[scene_id],
-                "matched_modalities": sorted(modalities[scene_id]),
-                "evidence": evidence[scene_id],
-                "matched_branches": sorted(matching_branches[scene_id]),
+                "component_scores": components[key],
+                "branch_contributions": contributions[key],
+                "matched_modalities": sorted(modalities[key]),
+                "evidence": evidence[key],
+                "matched_branches": sorted(matching_branches[key]),
             }
         )
         output.append(
             Candidate(
-                entity_id=scene_id,
-                scene_id=scene_id,
+                candidate_id=key,
+                entity_type=base.entity_type,
+                scene_id=base.scene_id,
+                clip_id=base.clip_id,
+                event_id=base.event_id or (hint.event_id if hint else None),
                 video_id=base.video_id,
+                frame_idx=hint.frame_idx if hint else base.frame_idx,
+                timestamp_sec=hint.timestamp_sec if hint else base.timestamp_sec,
+                start_frame=base.start_frame,
+                end_frame=base.end_frame,
                 source=f"fusion_{method}",
                 modality=base.modality,
-                score=totals[scene_id],
+                raw_score=totals[key],
+                score_kind="fusion",
                 rank=rank,
                 payload=payload,
             )

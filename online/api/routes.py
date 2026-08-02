@@ -16,6 +16,7 @@ from online.domain.models import (
     VQARequest,
     VQAResponse,
 )
+from online.errors import TaskConflictError
 
 
 router = APIRouter(prefix="/v1")
@@ -48,10 +49,19 @@ async def health(container: Container) -> dict:
 async def _search_with_task(
     request: SearchRequest, task: TaskType, container: AppContainer
 ) -> SearchResponse:
+    """Chạy search với task của endpoint.
+
+    Body được phép bỏ trống `task`. Nếu body khai báo task KHÁC path thì đó là
+    lỗi của client — trước PR-01 request kiểu đó bị ghi đè im lặng nên người
+    gọi không bao giờ biết mình đang chạy sai task.
+    """
+
+    if request.task is not None and request.task != task:
+        raise TaskConflictError(body_task=request.task.value, path_task=task.value)
     response = await container.search_service.search(
         request.model_copy(update={"task": task})
     )
-    if task == TaskType.SEQUENCE:
+    if task == TaskType.TRAKE:
         if not response.sequences:
             raise HTTPException(
                 status_code=404,
@@ -67,7 +77,12 @@ async def _search_with_task(
 
 @router.post("/search/kis", response_model=SearchResponse)
 async def search_kis(request: SearchRequest, container: Container) -> SearchResponse:
-    return await _search_with_task(request, TaskType.KIS, container)
+    return await _search_with_task(request, TaskType.TEXTUAL_KIS, container)
+
+
+@router.post("/search/qa", response_model=SearchResponse)
+async def search_qa(request: SearchRequest, container: Container) -> SearchResponse:
+    return await _search_with_task(request, TaskType.QA, container)
 
 
 @router.post("/search/avs", response_model=SearchResponse)
@@ -75,9 +90,16 @@ async def search_avs(request: SearchRequest, container: Container) -> SearchResp
     return await _search_with_task(request, TaskType.AVS, container)
 
 
-@router.post("/search/sequence", response_model=SearchResponse)
+@router.post("/search/trake", response_model=SearchResponse)
+async def search_trake(request: SearchRequest, container: Container) -> SearchResponse:
+    return await _search_with_task(request, TaskType.TRAKE, container)
+
+
+@router.post("/search/sequence", response_model=SearchResponse, deprecated=True)
 async def search_sequence(request: SearchRequest, container: Container) -> SearchResponse:
-    return await _search_with_task(request, TaskType.SEQUENCE, container)
+    """Alias cũ của `/search/trake`; giữ để client hiện tại không gãy."""
+
+    return await _search_with_task(request, TaskType.TRAKE, container)
 
 
 @router.post("/vqa", response_model=VQAResponse)

@@ -121,8 +121,8 @@ def prepare_query(query: str) -> QueryParts:
 class PreparedQueryPlanner:
     """Drop-in planner: chạy planner gốc rồi định tuyến lại theo QueryParts.
 
-    Giữ nguyên hành vi cho SEQUENCE (đã có tách event riêng trong planner
-    gốc); chỉ can thiệp KIS/AVS/VQA một-event.
+    Giữ nguyên hành vi cho TRAKE nhiều bước (đã có tách event riêng trong
+    planner gốc); chỉ can thiệp TEXTUAL_KIS/AVS/QA một-event.
     """
 
     def __init__(
@@ -139,7 +139,7 @@ class PreparedQueryPlanner:
 
     async def plan(self, request: SearchRequest) -> QueryPlan:
         plan = await self.inner.plan(request)
-        if request.task == TaskType.SEQUENCE and len(plan.events) >= 2:
+        if plan.task == TaskType.TRAKE and len(plan.events) >= 2:
             return plan
 
         parts = prepare_query(plan.normalized_query)

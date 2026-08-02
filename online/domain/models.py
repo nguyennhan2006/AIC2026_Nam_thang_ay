@@ -2,35 +2,21 @@
 
 from __future__ import annotations
 
-from enum import StrEnum
-from typing import Any, Literal
+from typing import Literal
 
-from pydantic import Field, model_validator
+from pydantic import Field, computed_field, field_validator, model_validator
 
 from online.domain.base import StrictModel  # noqa: F401 - re-export cho chỗ import cũ
+from online.domain.candidate import (  # noqa: F401 - re-export: nhiều adapter import từ đây
+    Candidate,
+    EntityType,
+    FrameEvidence,
+    FrameQuality,
+    Modality,
+)
+from online.domain.scores import BranchScore, ScoreKind  # noqa: F401 - re-export
 from online.domain.search_config import SearchOptions
-
-
-class TaskType(StrEnum):
-    KIS = "kis"
-    AVS = "avs"
-    SEQUENCE = "sequence"
-    VQA = "vqa"
-
-
-class Modality(StrEnum):
-    VISUAL = "visual"
-    CAPTION = "caption"
-    OCR = "ocr"
-    ASR = "asr"
-    KEYWORD = "keyword"
-    # Search Mixing Console W3 — mỗi bucket mới có 1 retriever tương ứng, mặc định
-    # KHÔNG được container đăng ký (xem AIC_ENABLE_* trong online/config.py) nên
-    # thêm bucket ở đây không tự thay đổi hành vi search hiện tại.
-    OBJECT = "object"
-    ACTION = "action"
-    COLOR = "color"
-    EVENT = "event"
+from online.domain.tasks import TaskType, normalize_task  # noqa: F401 - re-export
 
 
 class SearchFilters(StrictModel):
@@ -54,13 +40,23 @@ class SearchFilters(StrictModel):
 
 class SearchRequest(StrictModel):
     query: str = Field(min_length=1, max_length=4000)
-    task: TaskType = TaskType.KIS
+    # None = "để endpoint quyết định". Convenience endpoint điền task của path;
+    # body khai báo task KHÁC path là lỗi tường minh (TaskConflictError), không
+    # còn bị ghi đè im lặng như trước PR-01.
+    task: TaskType | None = None
     top_k: int = Field(default=20, ge=1, le=200)
     filters: SearchFilters = Field(default_factory=SearchFilters)
     debug: bool = False
-    # Search Mixing Console (W0) — None = hành vi search hiện tại, không đổi mặc
-    # định. Chưa đọc bởi SearchService/container.py (đó là W3/W5).
     search_options: SearchOptions | None = None
+
+    @field_validator("task", mode="before")
+    @classmethod
+    def accept_task_aliases(cls, value: object) -> object:
+        """Chấp nhận alias (`kis`, `vqa`, `sequence`, ...) ở API boundary."""
+
+        if value is None or isinstance(value, TaskType):
+            return value
+        return normalize_task(value)
 
 
 class QueryEvent(StrictModel):
@@ -98,20 +94,55 @@ class SceneDocument(StrictModel):
     video_id: str
     video_path: str | None = None
     scene_idx: int = Field(ge=0)
+    # Khoảng frame nửa mở [start_frame, end_frame_exclusive) — giữ đúng
+    # convention của canonical `datasection.schemas.scene.Scene`.
+    start_frame: int = Field(ge=0)
+    end_frame_exclusive: int = Field(gt=0)
     start_sec: float = Field(ge=0)
     end_sec: float = Field(gt=0)
-    keyframe_ids: list[str] = Field(default_factory=list)
-    keyframe_paths: list[str] = Field(default_factory=list)
-    keyframe_timestamps: list[float] = Field(default_factory=list)
+    event_id: str | None = None
+    artifact_version: str | None = None
+
+    keyframes: list[FrameEvidence] = Field(default_factory=list)
     object_labels: list[str] = Field(default_factory=list)
-    keyframe_evidence: list[dict[str, Any]] = Field(default_factory=list)
     captions: list[str] = Field(default_factory=list)
     ocr_texts: list[str] = Field(default_factory=list)
     asr_texts: list[str] = Field(default_factory=list)
     keywords: list[str] = Field(default_factory=list)
-    # W1 action tags / color features, projected read-only (xem project_scene).
     action_tags: list[str] = Field(default_factory=list)
     color_names: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_frame_interval(self) -> "SceneDocument":
+        if self.end_frame_exclusive <= self.start_frame:
+            raise ValueError("scene requires end_frame_exclusive > start_frame")
+        for frame in self.keyframes:
+            if not self.start_frame <= frame.frame_idx < self.end_frame_exclusive:
+                raise ValueError(
+                    f"keyframe {frame.keyframe_id} (frame_idx={frame.frame_idx}) is "
+                    f"outside scene interval [{self.start_frame}, {self.end_frame_exclusive})"
+                )
+        return self
+
+    # -- Derived views ----------------------------------------------------
+    # Trước PR-01 ba list này được lưu song song và có thể lệch nhau. Giờ
+    # chúng chỉ là view của `keyframes`, không thể desync.
+
+    @property
+    def keyframe_ids(self) -> list[str]:
+        return [frame.keyframe_id for frame in self.keyframes]
+
+    @property
+    def keyframe_paths(self) -> list[str]:
+        return [frame.image_path for frame in self.keyframes]
+
+    @property
+    def keyframe_timestamps(self) -> list[float]:
+        return [frame.timestamp_sec for frame in self.keyframes]
+
+    @property
+    def frame_indices(self) -> list[int]:
+        return [frame.frame_idx for frame in self.keyframes]
 
     def field_text(self, field: str) -> str:
         values = {
@@ -146,17 +177,6 @@ class EventDocument(StrictModel):
         return " ".join([self.event_caption or "", *self.keywords, *self.action_tags])
 
 
-class Candidate(StrictModel):
-    entity_id: str
-    scene_id: str
-    video_id: str
-    source: str
-    modality: Modality
-    score: float
-    rank: int = Field(ge=1)
-    payload: dict[str, Any] = Field(default_factory=dict)
-
-
 class Evidence(StrictModel):
     modality: Modality
     text: str
@@ -164,37 +184,84 @@ class Evidence(StrictModel):
 
 
 class SearchHit(StrictModel):
+    """Một kết quả đã hydrate, sẵn sàng để hiển thị và để build submission."""
+
+    rank: int = Field(default=1, ge=1)
+    candidate_id: str
     scene_id: str
     video_id: str
     video_path: str | None = None
+    event_id: str | None = None
     scene_idx: int = Field(ge=0)
+
+    start_frame: int = Field(ge=0)
+    end_frame_exclusive: int = Field(gt=0)
     start_sec: float
     end_sec: float
-    score: float
-    keyframe_ids: list[str] = Field(default_factory=list)
-    keyframe_paths: list[str] = Field(default_factory=list)
-    keyframe_timestamps: list[float] = Field(default_factory=list)
+
+    # Tọa độ submission. Bắt buộc: KIS/QA nộp đúng cặp (video_id, frame_idx).
+    best_frame_idx: int = Field(ge=0)
     best_keyframe_id: str | None = None
     best_keyframe_path: str | None = None
     best_timestamp_sec: float | None = None
+    safe_frame_score: float | None = None
+
+    score: float
+    keyframes: list[FrameEvidence] = Field(default_factory=list)
     matched_modalities: list[Modality] = Field(default_factory=list)
+    matched_branches: list[str] = Field(default_factory=list)
     evidence: list[Evidence] = Field(default_factory=list)
+    # Điểm gốc từng branch (không cùng thang đo giữa các branch — chỉ để debug).
     component_scores: dict[str, float] = Field(default_factory=dict)
+    # Đóng góp thực tế của từng branch vào điểm fusion (cùng thang đo).
+    branch_contributions: dict[str, float] = Field(default_factory=dict)
+    warnings: list[str] = Field(default_factory=list)
+
+    @property
+    def keyframe_ids(self) -> list[str]:
+        return [frame.keyframe_id for frame in self.keyframes]
+
+    @property
+    def keyframe_paths(self) -> list[str]:
+        return [frame.image_path for frame in self.keyframes]
+
+    @property
+    def keyframe_timestamps(self) -> list[float]:
+        return [frame.timestamp_sec for frame in self.keyframes]
 
 
 class SequenceHit(StrictModel):
+    """Chuỗi scene theo đúng thứ tự cho TRAKE.
+
+    `frame_ids` là thứ được nộp — mỗi step một frame. Nó được suy ra từ
+    `scenes[*].best_frame_idx` nên không thể lệch với evidence hiển thị.
+    """
+
     video_id: str
     score: float
     scenes: list[SearchHit] = Field(min_length=2)
+
+    # computed_field (không phải property thường): `frame_ids` là thứ được nộp
+    # nên nó phải nằm trong JSON response, kể cả khi FastAPI serialize qua
+    # response_model.
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def frame_ids(self) -> list[int]:
+        return [scene.best_frame_idx for scene in self.scenes]
+
+
+PipelineStatus = Literal["COMPLETED", "COMPLETED_WITH_WARNINGS"]
 
 
 class SearchResponse(StrictModel):
     query_id: str
     task: TaskType
     took_ms: float
+    status: PipelineStatus = "COMPLETED"
     results: list[SearchHit] = Field(default_factory=list)
     sequences: list[SequenceHit] = Field(default_factory=list)
     query_plan: QueryPlan | None = None
+    warnings: list[str] = Field(default_factory=list)
 
 
 class VQARequest(StrictModel):
@@ -210,6 +277,3 @@ class VQAResponse(StrictModel):
     confidence: float | None = Field(default=None, ge=0, le=1)
     evidence: list[SearchHit]
     took_ms: float
-
-
-EntityType = Literal["scene", "keyframe"]
