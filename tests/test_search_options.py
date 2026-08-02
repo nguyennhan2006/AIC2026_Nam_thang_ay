@@ -212,16 +212,20 @@ class OptionValidationTests(unittest.TestCase):
                 with self.assertRaises(UnsupportedSearchOptionError):
                     validate_search_options(options, CAPABILITIES)
 
-    def test_dedup_scope_beyond_scene_is_rejected(self) -> None:
+    def test_implemented_dedup_scopes_are_accepted(self) -> None:
+        # PR-05 cài dedup thật cho các scope này.
+        for scope in ("none", "frame", "scene", "event"):
+            with self.subTest(scope=scope):
+                validate_search_options(
+                    SearchOptions(fusion=FusionOptions(dedup_scope=scope)), CAPABILITIES
+                )
+
+    def test_visual_near_duplicate_dedup_is_still_rejected(self) -> None:
         with self.assertRaises(UnsupportedSearchOptionError) as ctx:
             validate_search_options(
-                SearchOptions(fusion=FusionOptions(dedup_scope="event")), CAPABILITIES
+                SearchOptions(fusion=FusionOptions(dedup_similarity=0.9)), CAPABILITIES
             )
-        self.assertIn("dedup_scope", str(ctx.exception))
-        # 'scene' là hành vi hiện có nên phải được chấp nhận.
-        validate_search_options(
-            SearchOptions(fusion=FusionOptions(dedup_scope="scene")), CAPABILITIES
-        )
+        self.assertIn("dedup_similarity", str(ctx.exception))
 
     def test_group_by_other_than_none_is_rejected(self) -> None:
         with self.assertRaises(UnsupportedSearchOptionError):

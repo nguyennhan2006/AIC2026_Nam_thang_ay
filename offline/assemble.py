@@ -521,6 +521,24 @@ async def assemble(
             )
             for event_idx, group in enumerate(groups)
         ])
+        # Event trỏ tới scene, nhưng online cần chiều ngược lại để dedup theo
+        # event mà không phải nạp toàn bộ events.jsonl cho mỗi request.
+        event_by_scene = {
+            scene_id: event.event_id for event in events for scene_id in event.scene_ids
+        }
+        scenes = [
+            scene.model_copy(
+                update={
+                    "extensions": {
+                        **scene.extensions,
+                        "event_id": event_by_scene[scene.scene_id],
+                    }
+                }
+            )
+            if scene.scene_id in event_by_scene
+            else scene
+            for scene in scenes
+        ]
         videos.append(
             Video(
                 video_id=video_id,

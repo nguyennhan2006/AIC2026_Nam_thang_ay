@@ -21,6 +21,7 @@ from online.domain.models import (
 from online.domain.execution import BranchStatus
 from online.domain.search_config import ResultOptions
 from online.ports.interfaces import Retriever, SceneRepository
+from online.services.deduplication import deduplicate_for_task
 from online.services.fusion import fuse_candidates
 from online.services.negative_constraints import apply_negative_constraints, extract_negative_constraints
 from online.services.query_planner import RuleBasedQueryPlanner
@@ -110,6 +111,30 @@ class SearchService:
             query=plan.normalized_query,
             config=self.rule_config,
         ), statuses
+
+    async def _attach_events(self, candidates: list[Candidate]) -> list[Candidate]:
+        """Gắn `event_id` từ metadata scene để dedup theo event chạy được.
+
+        Candidate từ nhánh event đã có sẵn `event_id`; nhánh khác thì không, và
+        nếu không gắn ở đây thì dedup scope=event sẽ im lặng thoái hóa thành
+        dedup theo scene.
+        """
+
+        missing = [item.scene_id for item in candidates if item.scene_id and not item.event_id]
+        if not missing:
+            return candidates
+        documents = {
+            document.scene_id: document
+            for document in await self.repository.get_many(missing)
+        }
+        output: list[Candidate] = []
+        for candidate in candidates:
+            document = documents.get(candidate.scene_id or "")
+            if candidate.event_id or document is None or not document.event_id:
+                output.append(candidate)
+                continue
+            output.append(candidate.model_copy(update={"event_id": document.event_id}))
+        return output
 
     @staticmethod
     def _select_frame(
@@ -241,10 +266,19 @@ class SearchService:
             )
 
         candidates, statuses = await self._retrieve(plan, self.candidate_limit)
+        candidates = await self._attach_events(candidates)
+        fusion_options = plan.search_options.fusion
+        candidates = deduplicate_for_task(
+            candidates,
+            task,
+            scope_override=(
+                fusion_options.dedup_scope
+                if "dedup_scope" in fusion_options.model_fields_set
+                else None
+            ),
+            max_per_video_override=fusion_options.max_results_per_video,
+        )
         hits = await self._hydrate(candidates[: request.top_k], plan.normalized_query)
-        if task == TaskType.AVS:
-            per_video = plan.search_options.fusion.max_results_per_video or 3
-            hits = _diversify_avs(hits, request.top_k, per_video=per_video)
         results = _format_results(hits, request.top_k, plan.search_options.results)
         warnings = _status_warnings(statuses) + [
             warning for hit in results for warning in hit.warnings
@@ -355,14 +389,6 @@ def _format_results(
     ]
 
 
-def _diversify_avs(hits: list[SearchHit], limit: int, per_video: int = 3) -> list[SearchHit]:
-    counts: dict[str, int] = {}
-    output: list[SearchHit] = []
-    for hit in hits:
-        if counts.get(hit.video_id, 0) >= per_video:
-            continue
-        output.append(hit)
-        counts[hit.video_id] = counts.get(hit.video_id, 0) + 1
-        if len(output) >= limit:
-            break
-    return output
+# `_diversify_avs` cũ (chỉ giới hạn N kết quả mỗi video) đã được thay bằng
+# `online/services/deduplication.py`: trần theo video chỉ là MỘT chính sách dedup,
+# và AVS còn cần dedup theo event chứ không chỉ theo video.

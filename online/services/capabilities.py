@@ -67,14 +67,16 @@ UNSUPPORTED: dict[str, tuple[object, str]] = {
     ),
     "fusion.dedup_similarity": (
         None,
-        "dedup theo độ tương đồng thị giác chưa được cài đặt",
+        "dedup theo độ tương đồng thị giác (embedding) chưa được cài đặt; "
+        "dùng fusion.dedup_scope thay thế",
     ),
 }
 
 # Giá trị được chấp nhận cho field vốn bị từ chối "mọi giá trị".
 ALLOWED_VALUES: dict[str, set[object]] = {
     "results.group_by": {"none"},
-    "fusion.dedup_scope": {"scene"},
+    # PR-05: dedup service hỗ trợ thật các scope này.
+    "fusion.dedup_scope": {"none", "frame", "scene", "event"},
 }
 
 UNSUPPORTED_BRANCH_CONTROLS: dict[str, str] = {
@@ -127,15 +129,6 @@ def validate_search_options(
             continue
         if rejected is None or value == rejected:
             problems.append(f"{path}={value!r}: {reason}")
-
-    if "fusion" in options.model_fields_set:
-        fusion_explicit = _walk(options.fusion, "fusion.")
-        scope = fusion_explicit.get("fusion.dedup_scope")
-        if scope is not None and scope not in ALLOWED_VALUES["fusion.dedup_scope"]:
-            problems.append(
-                f"fusion.dedup_scope={scope!r}: chỉ hỗ trợ 'scene'; dedup theo "
-                "frame/event/cửa sổ thời gian chưa được cài đặt"
-            )
 
     known_branches = {item.branch_id for item in capabilities}
     known_executions = {
