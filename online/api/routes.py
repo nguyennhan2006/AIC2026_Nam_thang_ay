@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import dataclasses
+import json
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pathlib import Path
 
 from online.api.container import AppContainer
@@ -53,6 +54,7 @@ from online.errors import TaskConflictError
 from online.services.capabilities import (
     UNSUPPORTED,
     UNSUPPORTED_BRANCH_CONTROLS,
+    UnsupportedSearchOptionError,
     validate_search_options,
 )
 
@@ -116,6 +118,88 @@ async def _search_with_task(
             status_code=404,
             detail=f"no scene matched the query: {request.query!r}",
         )
+    return response
+
+
+@router.post("/search", response_model=SearchResponse)
+async def unified_search(request: SearchRequest, container: Container) -> SearchResponse:
+    """Endpoint thống nhất (PR-09) — convenience endpoint bên dưới chỉ là
+    wrapper mỏng gọi `_search_with_task` với task đã biết trước từ path.
+
+    `task` là bắt buộc ở đây (khác convenience endpoint, nơi path đã ngầm
+    định task): không có path nào để suy ra, nên bỏ trống task là lỗi
+    tường minh thay vì âm thầm rơi về TEXTUAL_KIS.
+    """
+
+    if request.task is None:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "task is required for POST /v1/search; set it explicitly or call "
+                "a convenience endpoint (/v1/search/kis, /qa, /trake, /avs)"
+            ),
+        )
+    return await _search_with_task(request, request.task, container)
+
+
+@router.post("/search/stream")
+async def search_stream(request: SearchRequest, container: Container):
+    """SSE thật: mỗi sự kiện phát ra đúng lúc giai đoạn đó xong, không phải
+    một loạt sự kiện giả lập sau khi search đã chạy xong từ lâu.
+
+    Task bắt buộc như `/v1/search` (không có path để suy ra). Không validate
+    trước cả stream — lỗi search_options được phát như một sự kiện `error`
+    duy nhất, EventSource phía client vẫn đóng kết nối bình thường.
+    """
+
+    if request.task is None:
+        raise HTTPException(status_code=422, detail="task is required for /v1/search/stream")
+    try:
+        validate_search_options(
+            request.search_options,
+            container.search_service.registry.capabilities(),
+            rerank_stages=container.search_service.rerank_pipeline.available_stages,
+        )
+    except UnsupportedSearchOptionError as exc:
+        # `except ... as exc` bị Python tự `del exc` khi ra khỏi block, nên
+        # phải chụp message vào biến thường TRƯỚC khi định nghĩa generator —
+        # generator chỉ thực sự chạy khi StreamingResponse duyệt nó, lúc đó
+        # block except đã kết thúc từ lâu.
+        message = str(exc)
+
+        async def error_only():
+            yield f"data: {json.dumps({'type': 'error', 'message': message}, ensure_ascii=False)}\n\n"
+        return StreamingResponse(error_only(), media_type="text/event-stream")
+
+    async def events():
+        async for event in container.search_service.search_stream(request):
+            yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(events(), media_type="text/event-stream")
+
+
+@router.get("/search-sessions/{session_id}")
+async def get_search_session(session_id: str, container: Container) -> dict:
+    """Trace của một lần search đã chạy — session được tạo NGẦM bởi chính
+    lần search đó (không có endpoint "tạo session rỗng": search luôn đi
+    trước, session luôn là dấu vết của nó)."""
+
+    if container.search_service.session_store is None:
+        raise HTTPException(status_code=404, detail="session store is not enabled")
+    trace = await container.search_service.session_store.get(session_id)
+    if trace is None:
+        raise HTTPException(status_code=404, detail=f"unknown session: {session_id}")
+    return trace.model_dump(mode="json")
+
+
+@router.post("/search-sessions/{session_id}/replay", response_model=SearchResponse)
+async def replay_search_session(session_id: str, container: Container) -> SearchResponse:
+    """Chạy lại đúng request đã lưu của `session_id` — session mới, có
+    `replayed_from` trỏ về session gốc để so sánh hai lần chạy."""
+
+    response = await container.search_service.replay(session_id)
+    if response is None:
+        raise HTTPException(status_code=404, detail=f"unknown session: {session_id}")
     return response
 
 

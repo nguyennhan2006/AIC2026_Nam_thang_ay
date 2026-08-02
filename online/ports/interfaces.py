@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Protocol, Sequence
 
 from online.domain.models import Candidate, QueryPlan, SceneDocument, SearchFilters
+from online.domain.session import SearchExecutionTrace
 
 
 class SceneRepository(Protocol):
@@ -42,3 +43,10 @@ class Reranker(Protocol):
 
 class AnswerGenerator(Protocol):
     async def answer(self, question: str, contexts: list[SceneDocument]) -> tuple[str, float | None]: ...
+
+
+class SessionStore(Protocol):
+    """Lưu trace một lần search để replay/audit (PR-09)."""
+
+    async def put(self, trace: SearchExecutionTrace) -> None: ...
+    async def get(self, session_id: str) -> SearchExecutionTrace | None: ...

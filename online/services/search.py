@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from time import perf_counter
+from typing import AsyncIterator
 from uuid import uuid4
 
 from online.domain.models import (
@@ -20,7 +21,8 @@ from online.domain.models import (
 )
 from online.domain.execution import BranchStatus
 from online.domain.search_config import ResultOptions
-from online.ports.interfaces import Retriever, SceneRepository
+from online.domain.session import SearchExecutionTrace
+from online.ports.interfaces import Retriever, SceneRepository, SessionStore
 from online.services.avs import AvsProcessor
 from online.services.deduplication import deduplicate_for_task
 from online.services.evidence_builder import EvidenceBuilder
@@ -32,7 +34,7 @@ from online.services.query_planner import RuleBasedQueryPlanner
 from online.services.registry import RetrieverRegistry
 from online.services.rerank_pipeline import RerankPipeline
 from online.services.score_normalization import normalize_all
-from online.services.retrieval_orchestrator import RetrievalOrchestrator
+from online.services.retrieval_orchestrator import RetrievalOrchestrator, _branch_identity
 from online.services.rules import RuleConfig, apply_bonus_penalty
 from online.services.thresholding import apply_thresholds
 from online.services.temporal import link_event_hits
@@ -51,6 +53,8 @@ class SearchService:
         rule_config: RuleConfig | None = None,
         rerank_pipeline: RerankPipeline | None = None,
         evidence_builder: EvidenceBuilder | None = None,
+        session_store: SessionStore | None = None,
+        dataset_version: str | None = None,
     ) -> None:
         if not retrievers:
             raise ValueError("at least one retriever is required")
@@ -58,6 +62,11 @@ class SearchService:
         self.retrievers = retrievers
         self.registry = RetrieverRegistry(retrievers)
         self.orchestrator = RetrievalOrchestrator(retrievers)
+        # None = không lưu trace (vd script/test không cần replay). Có store
+        # thì MỌI lần search (kể cả qua endpoint convenience) đều ghi lại
+        # được, vì tất cả đều đi qua đúng một hàm `search()` này.
+        self.session_store = session_store
+        self.dataset_version = dataset_version
         self.evidence_builder = evidence_builder or EvidenceBuilder(repository)
         # None = không có tầng rerank nào; cascade vẫn chạy được và chỉ ghi
         # warning "chưa cấu hình", nên hành vi mặc định không đổi.
@@ -251,6 +260,47 @@ class SearchService:
         return hits
 
     async def search(self, request: SearchRequest) -> SearchResponse:
+        """Chạy một lần search đầy đủ và (nếu có `session_store`) lưu trace."""
+
+        response = await self._search_impl(request)
+        await self._record_trace(response, request)
+        return response
+
+    async def _record_trace(self, response: SearchResponse, request: SearchRequest) -> None:
+        if self.session_store is None:
+            return
+        await self.session_store.put(SearchExecutionTrace(
+            session_id=response.query_id,
+            task=response.task,
+            raw_request=request,
+            branch_status=response.branch_status,
+            status=response.status,
+            warnings=response.warnings,
+            took_ms=response.took_ms,
+            dataset_version=self.dataset_version,
+            model_versions=self.evidence_builder.model_versions,
+        ))
+
+    async def replay(self, session_id: str) -> SearchResponse | None:
+        """Chạy lại đúng request đã lưu của `session_id`; None nếu không có trace.
+
+        Kết quả là một session MỚI (query_id mới), đánh dấu `replayed_from`
+        trỏ về session gốc — để so sánh gốc-vs-replay thay vì ghi đè lẫn nhau.
+        Không tái sử dụng response cũ: dataset/index có thể đã đổi từ lúc đó,
+        nên "replay" nghĩa là "chạy lại y hệt input", không phải "trả cache".
+        """
+
+        if self.session_store is None:
+            return None
+        trace = await self.session_store.get(session_id)
+        if trace is None:
+            return None
+        if hasattr(self.session_store, "update"):
+            await self.session_store.update(session_id, replay_count=trace.replay_count + 1)
+        response = await self.search(trace.raw_request)
+        return response.model_copy(update={"replayed_from": session_id})
+
+    async def _search_impl(self, request: SearchRequest) -> SearchResponse:
         started = perf_counter()
         query_id = str(uuid4())
         # `task=None` nghĩa là caller không chỉ định (vd gọi service trực tiếp
@@ -340,6 +390,128 @@ class SearchService:
             warnings=warnings,
             **task_results,
         )
+
+    async def search_stream(self, request: SearchRequest) -> AsyncIterator[dict]:
+        """Như `search`, nhưng phát sự kiện thật theo từng giai đoạn (PR-09).
+
+        Chỉ branch retrieval là thứ có thể stream đúng nghĩa (chạy song song,
+        xong lúc nào phát lúc đó — dùng `RetrievalOrchestrator.stream`).
+        Fusion/dedup/rerank/hydrate/task-processor là các bước tính một lần,
+        nên chỉ phát MỘT sự kiện "xong giai đoạn" cho mỗi bước — không giả
+        lập tiến độ phần trăm cho những gì không thực sự chia nhỏ được.
+
+        TRAKE nhiều bước (>= 2 event) không stream theo branch: mỗi bước lại
+        chạy một vòng retrieval riêng, nên việc dựng progress-per-step cho
+        đúng nghĩa cần một luồng sự kiện khác hẳn — trường hợp này chỉ phát
+        `search_started` -> `alignment_completed` -> `search_completed`, và
+        nói rõ điều đó trong sự kiện để không ai tưởng nhầm là bug.
+        """
+
+        started = perf_counter()
+        query_id = str(uuid4())
+        task = request.task or TaskType.TEXTUAL_KIS
+        yield {"type": "search_started", "query_id": query_id, "task": task.value}
+
+        plan = await self.planner.plan(request)
+        yield {
+            "type": "query_prepared",
+            "query_id": query_id,
+            "normalized_query": plan.normalized_query,
+            "modality_weights": {key.value: value for key, value in plan.modality_weights.items()},
+        }
+
+        if task == TaskType.TRAKE and len(plan.events) >= 2:
+            response = await self._search_impl(request)
+            await self._record_trace(response, request)
+            yield {
+                "type": "alignment_completed",
+                "query_id": response.query_id,
+                "sequence_count": len(response.trake),
+                "note": "TRAKE nhiều bước không phát sự kiện theo branch — xem docstring search_stream",
+            }
+            yield {
+                "type": "search_completed",
+                "query_id": response.query_id,
+                "response": response.model_dump(mode="json"),
+            }
+            return
+
+        for retriever in self.retrievers:
+            branch_id, execution_id = _branch_identity(retriever)
+            yield {
+                "type": "branch_started", "query_id": query_id,
+                "branch_id": branch_id, "execution_id": execution_id,
+            }
+
+        lists: list[list[Candidate]] = []
+        statuses: list[BranchStatus] = []
+        async for candidates, status in self.orchestrator.stream(plan, self.candidate_limit):
+            lists.append(candidates)
+            statuses.append(status)
+            yield {
+                "type": "branch_failed" if status.is_degraded else "branch_completed",
+                "query_id": query_id,
+                "branch_id": status.branch_id,
+                "execution_id": status.execution_id,
+                "state": status.state,
+                "latency_ms": status.latency_ms,
+                "candidate_count": status.candidate_count,
+                "warning": status.warning,
+            }
+
+        fusion_options = plan.search_options.fusion
+        lists = normalize_all(lists, method=fusion_options.normalized_score_method)
+        lists, thresholded = apply_thresholds(lists, plan)
+        statuses = _annotate_thresholds(statuses, thresholded)
+        rrf_k = fusion_options.rrf_k if "rrf_k" in fusion_options.model_fields_set else self.rrf_k
+        candidates = fuse_candidates(
+            lists, plan.modality_weights, method=fusion_options.method, rrf_k=rrf_k,
+            limit=self.candidate_limit, branches=plan.search_options.branches,
+            minimum_matching_branches=fusion_options.minimum_matching_branches,
+        )
+        candidates = await self._attach_events(candidates)
+        candidates = deduplicate_for_task(
+            candidates, task,
+            scope_override=(
+                fusion_options.dedup_scope
+                if "dedup_scope" in fusion_options.model_fields_set else None
+            ),
+            max_per_video_override=fusion_options.max_results_per_video,
+        )
+        yield {"type": "fusion_completed", "query_id": query_id, "candidate_count": len(candidates)}
+
+        rerank = await self.rerank_pipeline.run(
+            plan.normalized_query, candidates, plan.search_options.rerank
+        )
+        if rerank.stages:
+            yield {
+                "type": "rerank_completed", "query_id": query_id,
+                "stages": [
+                    {"stage": item.stage, "applied": item.applied, "warning": item.warning}
+                    for item in rerank.stages
+                ],
+            }
+        candidates = rerank.candidates
+        hits = await self._hydrate(candidates[: request.top_k], plan.normalized_query)
+        results = _format_results(hits, request.top_k, plan.search_options.results)
+        yield {"type": "evidence_ready", "query_id": query_id, "count": len(results)}
+
+        warnings = (
+            _status_warnings(statuses)
+            + rerank.warnings
+            + [warning for hit in results for warning in hit.warnings]
+        )
+        task_results = await self._run_task_processor(
+            task, plan, request, results, candidates, rerank.packs
+        )
+        response = SearchResponse(
+            query_id=query_id, task=task, took_ms=(perf_counter() - started) * 1000,
+            status="COMPLETED_WITH_WARNINGS" if warnings else "COMPLETED",
+            results=results, branch_status=statuses,
+            query_plan=plan if request.debug else None, warnings=warnings, **task_results,
+        )
+        await self._record_trace(response, request)
+        yield {"type": "search_completed", "query_id": query_id, "response": response.model_dump(mode="json")}
 
     async def _documents_for(self, hits: list[SearchHit]) -> dict[str, SceneDocument]:
         return {

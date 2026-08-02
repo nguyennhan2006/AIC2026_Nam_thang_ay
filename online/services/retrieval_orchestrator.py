@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 from time import perf_counter
+from typing import AsyncIterator
 
 from online.domain.candidate import Candidate
 from online.domain.execution import BranchStatus
@@ -108,14 +109,39 @@ class RetrievalOrchestrator:
         )
         lists = [candidates for candidates, _status in outcomes]
         statuses = [status for _candidates, status in outcomes]
+        self._raise_if_all_degraded(statuses)
+        return lists, statuses
+
+    async def stream(
+        self, plan: QueryPlan, limit: int
+    ) -> AsyncIterator[tuple[list[Candidate], BranchStatus]]:
+        """Như `execute`, nhưng yield từng branch NGAY khi nó xong (PR-09).
+
+        Dùng cho `/v1/search/stream`: UI thấy `branch_completed`/`branch_failed`
+        thật theo thời gian branch đó chạy xong, không phải một loạt sự kiện
+        giả lập sau khi mọi thứ đã xong từ lâu. Thứ tự yield không xác định
+        trước (branch nhanh xong trước), khác với `execute` luôn trả theo thứ
+        tự `self.retrievers`.
+        """
+
+        tasks = [
+            asyncio.ensure_future(self._run_one(retriever, plan, limit))
+            for retriever in self.retrievers
+        ]
+        statuses: list[BranchStatus] = []
+        for finished in asyncio.as_completed(tasks):
+            candidates, status = await finished
+            statuses.append(status)
+            yield candidates, status
+        self._raise_if_all_degraded(statuses)
+
+    @staticmethod
+    def _raise_if_all_degraded(statuses: list[BranchStatus]) -> None:
         if all(status.is_degraded for status in statuses):
-            detail = "; ".join(
-                f"{status.execution_id}={status.state}" for status in statuses
-            )
+            detail = "; ".join(f"{status.execution_id}={status.state}" for status in statuses)
             raise DependencyUnavailableError(
                 f"mọi retrieval branch đều hỏng ({detail}) — không có kết quả nào đáng tin"
             )
-        return lists, statuses
 
 
 __all__ = ["DEFAULT_TIMEOUT_MS", "RetrievalOrchestrator", "resolve_timeout_ms"]

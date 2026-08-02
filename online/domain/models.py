@@ -272,6 +272,9 @@ class SearchResponse(StrictModel):
     qa: list[QaResultItem] = Field(default_factory=list)
     trake: list[TrakeResultItem] = Field(default_factory=list)
     avs: list[AvsResultItem] = Field(default_factory=list)
+    # PR-09: có giá trị khi response này là kết quả của POST
+    # /v1/search-sessions/{id}/replay — trỏ về session gốc.
+    replayed_from: str | None = None
     results: list[SearchHit] = Field(default_factory=list)
     sequences: list[SequenceHit] = Field(default_factory=list)
     # Trạng thái từng branch: UI phải thấy được branch nào timeout/lỗi thay vì

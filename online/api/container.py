@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
+from pathlib import Path
 
 from online.adapters.bm25 import LexicalRetriever
 from online.adapters.color_search import ColorSearchRetriever
@@ -12,6 +14,7 @@ from online.adapters.event_search import EventSearchRetriever, JsonlEventReposit
 from online.adapters.json_metadata import JsonlSceneRepository
 from online.adapters.ocr_fuzzy import OcrFuzzyRetriever
 from online.adapters.rerank import BgeTextReranker, QwenVlReranker
+from online.adapters.session_store import InMemorySessionStore
 from online.adapters.vector_stores import InMemoryVectorStore, QdrantVectorStore
 from online.config import Settings
 from online.services.query_expansion import QueryExpansionRetriever
@@ -21,6 +24,23 @@ from online.services.rerank_pipeline import RerankPipeline
 from online.services.rules import RuleConfig
 from online.services.search import SearchService
 from online.services.vqa import VQAService
+
+
+def _read_dataset_version(metadata_jsonl: Path) -> str | None:
+    """`build_id` của dataset_manifest.json — đủ để phân biệt hai lần export.
+
+    Không lỗi nếu thiếu file (vd metadata trỏ thẳng tới một .jsonl không đi
+    kèm manifest) — session trace khi đó chỉ ghi `dataset_version=None`.
+    """
+
+    manifest_path = metadata_jsonl.with_name("dataset_manifest.json")
+    if not manifest_path.exists():
+        return None
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return None
+    return manifest.get("build_id")
 
 
 @dataclass(slots=True)
@@ -160,6 +180,10 @@ async def build_container(settings: Settings) -> AppContainer:
         rule_config=RuleConfig() if settings.enable_rules else None,
         rerank_pipeline=rerank_pipeline,
         evidence_builder=evidence_builder,
+        # PR-09: mọi search đi qua SearchService.search() đều được ghi trace —
+        # kể cả gọi qua endpoint convenience /search/kis, không chỉ /v1/search.
+        session_store=InMemorySessionStore(),
+        dataset_version=_read_dataset_version(settings.metadata_jsonl),
     )
     return AppContainer(
         settings=settings,
