@@ -83,6 +83,12 @@ async def health(container: Container) -> dict:
         "backend": container.settings.backend,
         "scene_count": len(scenes),
         "dataset": str(container.settings.metadata_jsonl),
+        # PR-11: quan sát vận hành tối thiểu không cần Prometheus — build_id
+        # của chính dataset đang phục vụ, để phân biệt "server cũ trỏ data
+        # mới" khỏi "server mới trỏ data cũ" khi debug production.
+        "dataset_version": container.search_service.dataset_version,
+        "branch_count": len(container.search_service.retrievers),
+        "session_store_enabled": container.search_service.session_store is not None,
     }
 
 
