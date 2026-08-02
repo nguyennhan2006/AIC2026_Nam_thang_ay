@@ -11,10 +11,13 @@ from online.adapters.encoders import HashingTextEncoder, RemoteTextEncoder
 from online.adapters.event_search import EventSearchRetriever, JsonlEventRepository
 from online.adapters.json_metadata import JsonlSceneRepository
 from online.adapters.ocr_fuzzy import OcrFuzzyRetriever
+from online.adapters.rerank import BgeTextReranker, QwenVlReranker
 from online.adapters.vector_stores import InMemoryVectorStore, QdrantVectorStore
 from online.config import Settings
 from online.services.query_expansion import QueryExpansionRetriever
 from online.services.query_prep import PreparedQueryPlanner
+from online.services.evidence_builder import EvidenceBuilder
+from online.services.rerank_pipeline import RerankPipeline
 from online.services.rules import RuleConfig
 from online.services.search import SearchService
 from online.services.vqa import VQAService
@@ -113,6 +116,41 @@ async def build_container(settings: Settings) -> AppContainer:
             )
         retrievers.append(await EventSearchRetriever.build(event_repository))
 
+    evidence_builder = EvidenceBuilder(
+        repository,
+        model_versions={
+            key: value
+            for key, value in (
+                ("text_reranker", settings.rerank_text_model if settings.rerank_text_url else ""),
+                ("vlm_reranker", settings.rerank_vlm_model if settings.rerank_vlm_url else ""),
+                ("dense_backend", settings.backend),
+            )
+            if value
+        },
+    )
+    rerank_pipeline = RerankPipeline(
+        evidence_builder,
+        text_reranker=(
+            BgeTextReranker(
+                settings.rerank_text_url,
+                model_id=settings.rerank_text_model,
+                timeout_sec=settings.request_timeout_sec,
+                api_key=settings.rerank_api_key,
+            )
+            if settings.rerank_text_url
+            else None
+        ),
+        vlm_reranker=(
+            QwenVlReranker(
+                settings.rerank_vlm_url,
+                model_id=settings.rerank_vlm_model,
+                timeout_sec=max(settings.request_timeout_sec, 30.0),
+                api_key=settings.rerank_api_key,
+            )
+            if settings.rerank_vlm_url
+            else None
+        ),
+    )
     search_service = SearchService(
         repository,
         retrievers,
@@ -120,6 +158,8 @@ async def build_container(settings: Settings) -> AppContainer:
         candidate_limit=settings.candidate_limit,
         rrf_k=settings.rrf_k,
         rule_config=RuleConfig() if settings.enable_rules else None,
+        rerank_pipeline=rerank_pipeline,
+        evidence_builder=evidence_builder,
     )
     return AppContainer(
         settings=settings,

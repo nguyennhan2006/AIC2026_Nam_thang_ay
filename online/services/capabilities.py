@@ -49,14 +49,6 @@ UNSUPPORTED: dict[str, tuple[object, str]] = {
         False,
         "chuẩn hóa NFC/khoảng trắng luôn chạy; không tắt được",
     ),
-    "rerank.text.enabled": (
-        True,
-        "BGE reranker cần model server chưa tồn tại (xem docs/14_TECHNICAL_PREPARATION.md Phase 3)",
-    ),
-    "rerank.vlm.enabled": (
-        True,
-        "VLM reranker cần Qwen3-VL server chưa tồn tại",
-    ),
     "rerank.temporal_verifier": (
         True,
         "temporal verifier chưa được cài đặt",
@@ -108,14 +100,30 @@ def _walk(model: BaseModel, prefix: str = "") -> dict[str, object]:
 
 
 def validate_search_options(
-    options: SearchOptions | None, capabilities: list[BranchCapabilities]
+    options: SearchOptions | None,
+    capabilities: list[BranchCapabilities],
+    *,
+    rerank_stages: dict[str, bool] | None = None,
 ) -> None:
-    """Ném `UnsupportedSearchOptionError` nếu có option không chạy thật."""
+    """Ném `UnsupportedSearchOptionError` nếu có option không chạy thật.
+
+    `rerank_stages` cho biết tầng rerank nào ĐANG có model server. Bật một
+    tầng chưa cấu hình là lỗi tường minh chứ không phải "bật rồi nhưng không
+    thấy gì khác".
+    """
 
     if options is None:
         return
     problems: list[str] = []
     explicit = _walk(options)
+    stages = rerank_stages or {}
+
+    for stage, path in (("text", "rerank.text.enabled"), ("vlm", "rerank.vlm.enabled")):
+        if explicit.get(path) is True and not stages.get(stage):
+            problems.append(
+                f"{path}=True: chưa cấu hình {stage} reranker "
+                f"(đặt AIC_RERANK_{stage.upper()}_URL) nên tầng này sẽ không chạy"
+            )
 
     for path, value in explicit.items():
         if path.startswith("branches"):

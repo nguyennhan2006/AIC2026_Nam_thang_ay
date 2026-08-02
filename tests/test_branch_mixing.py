@@ -239,12 +239,16 @@ class SearchCapabilitiesTests(unittest.TestCase):
     def _container(self, retrievers):
         from online.services.registry import RetrieverRegistry
 
+        class FakeRerankPipeline:
+            available_stages = {"text": False, "vlm": False}
+
         class FakeSearchService:
             rule_config = None
 
         service = FakeSearchService()
         service.retrievers = retrievers
         service.registry = RetrieverRegistry(retrievers)
+        service.rerank_pipeline = FakeRerankPipeline()
 
         class FakeContainer:
             event_repository = None

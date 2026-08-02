@@ -10,6 +10,8 @@ from pathlib import Path
 
 from online.api.container import AppContainer
 from online.domain.models import (
+    Candidate,
+    Modality,
     SearchRequest,
     SearchResponse,
     TaskType,
@@ -65,7 +67,9 @@ async def _search_with_task(
         raise TaskConflictError(body_task=request.task.value, path_task=task.value)
     # Option chưa chạy thật -> 422 ngay, không nhận rồi lờ đi (PR-04).
     validate_search_options(
-        request.search_options, container.search_service.registry.capabilities()
+        request.search_options,
+        container.search_service.registry.capabilities(),
+        rerank_stages=container.search_service.rerank_pipeline.available_stages,
     )
     response = await container.search_service.search(
         request.model_copy(update={"task": task})
@@ -155,6 +159,43 @@ async def get_event_neighbors(event_id: str, container: Container) -> dict:
     }
 
 
+@router.get("/evidence/{candidate_id}")
+async def get_evidence(candidate_id: str, container: Container) -> dict:
+    """Evidence pack đầy đủ cho một candidate.
+
+    Candidate id ở tầng scene chính là `scene_id`; ở tầng frame là
+    `keyframe_id`. Pack được dựng lazy nên endpoint này an toàn để UI gọi khi
+    người dùng mở một kết quả ra xem.
+    """
+
+    scene_id = candidate_id.split("_F")[0] if "_F" in candidate_id else candidate_id
+    document = await container.repository.get(scene_id)
+    if document is None:
+        raise HTTPException(status_code=404, detail=f"unknown candidate: {candidate_id}")
+    frame_idx = None
+    if "_F" in candidate_id:
+        try:
+            frame_idx = int(candidate_id.rsplit("_F", 1)[1])
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="invalid keyframe id") from exc
+    candidate = Candidate(
+        candidate_id=candidate_id,
+        entity_type="frame" if frame_idx is not None else "scene",
+        scene_id=document.scene_id,
+        video_id=document.video_id,
+        event_id=document.event_id,
+        frame_idx=frame_idx,
+        source="evidence_lookup",
+        modality=Modality.VISUAL,
+        raw_score=0.0,
+        rank=1,
+    )
+    pack = await container.search_service.evidence_builder.build(candidate)
+    if pack is None:
+        raise HTTPException(status_code=404, detail=f"no evidence for {candidate_id}")
+    return pack.model_dump(mode="json")
+
+
 @router.get("/search/capabilities")
 async def search_capabilities(container: Container) -> dict:
     """Capability đã introspect thật — mọi branch ở đây đang thực sự đăng ký
@@ -184,12 +225,10 @@ async def search_capabilities(container: Container) -> dict:
             f"branches.*.{control}": reason
             for control, reason in sorted(UNSUPPORTED_BRANCH_CONTROLS.items())
         },
+        # Introspect thật: tầng nào có model server thì báo True, không hardcode.
         "rerank": {
             "rules": container.search_service.rule_config is not None,
-            # BGE/Qwen3-VL rerank need a remote model server that does not exist
-            # yet — see docs/14_TECHNICAL_PREPARATION.md Phase 3.
-            "text": False,
-            "vlm": False,
+            **container.search_service.rerank_pipeline.available_stages,
         },
         "events_available": container.event_repository is not None,
     }

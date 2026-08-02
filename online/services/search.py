@@ -22,10 +22,12 @@ from online.domain.execution import BranchStatus
 from online.domain.search_config import ResultOptions
 from online.ports.interfaces import Retriever, SceneRepository
 from online.services.deduplication import deduplicate_for_task
+from online.services.evidence_builder import EvidenceBuilder
 from online.services.fusion import fuse_candidates
 from online.services.negative_constraints import apply_negative_constraints, extract_negative_constraints
 from online.services.query_planner import RuleBasedQueryPlanner
 from online.services.registry import RetrieverRegistry
+from online.services.rerank_pipeline import RerankPipeline
 from online.services.score_normalization import normalize_all
 from online.services.retrieval_orchestrator import RetrievalOrchestrator
 from online.services.rules import RuleConfig, apply_bonus_penalty
@@ -43,6 +45,8 @@ class SearchService:
         candidate_limit: int = 100,
         rrf_k: int = 60,
         rule_config: RuleConfig | None = None,
+        rerank_pipeline: RerankPipeline | None = None,
+        evidence_builder: EvidenceBuilder | None = None,
     ) -> None:
         if not retrievers:
             raise ValueError("at least one retriever is required")
@@ -50,6 +54,10 @@ class SearchService:
         self.retrievers = retrievers
         self.registry = RetrieverRegistry(retrievers)
         self.orchestrator = RetrievalOrchestrator(retrievers)
+        self.evidence_builder = evidence_builder or EvidenceBuilder(repository)
+        # None = không có tầng rerank nào; cascade vẫn chạy được và chỉ ghi
+        # warning "chưa cấu hình", nên hành vi mặc định không đổi.
+        self.rerank_pipeline = rerank_pipeline or RerankPipeline(self.evidence_builder)
         self.planner = planner or RuleBasedQueryPlanner()
         self.candidate_limit = candidate_limit
         self.rrf_k = rrf_k
@@ -278,11 +286,19 @@ class SearchService:
             ),
             max_per_video_override=fusion_options.max_results_per_video,
         )
+        # Rerank chạy SAU dedup: đưa 10 scene liền kề của cùng một sự kiện vào
+        # cross-encoder là đốt ngân sách model cho cùng một nội dung.
+        rerank = await self.rerank_pipeline.run(
+            plan.normalized_query, candidates, plan.search_options.rerank
+        )
+        candidates = rerank.candidates
         hits = await self._hydrate(candidates[: request.top_k], plan.normalized_query)
         results = _format_results(hits, request.top_k, plan.search_options.results)
-        warnings = _status_warnings(statuses) + [
-            warning for hit in results for warning in hit.warnings
-        ]
+        warnings = (
+            _status_warnings(statuses)
+            + rerank.warnings
+            + [warning for hit in results for warning in hit.warnings]
+        )
         return SearchResponse(
             query_id=query_id,
             task=task,

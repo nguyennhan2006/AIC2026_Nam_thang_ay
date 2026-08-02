@@ -1,0 +1,185 @@
+"""Rerank cascade nhiều tầng, có fallback tường minh (PR-06).
+
+    Stage 0  rules          (đã có, online/services/rules.py — chạy trước fusion)
+    Stage 1  text reranker  top 300 -> 80
+    Stage 2  VLM reranker   top 20
+    Stage 3  temporal       chỉ khi query có thứ tự/before-after
+
+Mỗi tầng thu hẹp dần: tầng rẻ lọc cho tầng đắt. Tầng nào không cấu hình hoặc
+gọi lỗi thì **giữ nguyên thứ hạng của tầng trước và ghi warning** — không bao
+giờ trả về danh sách rỗng hay im lặng bỏ qua (nguyên tắc "no silent
+degradation" của docs/11_SERVER_IMPLEMENTATION.md).
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from time import perf_counter
+
+from online.domain.candidate import Candidate
+from online.domain.evidence import EvidencePack
+from online.domain.search_config import RerankOptions
+from online.errors import DependencyUnavailableError
+from online.services.evidence_builder import EvidenceBuilder
+
+
+@dataclass(slots=True)
+class RerankStageResult:
+    stage: str
+    applied: bool
+    input_count: int
+    output_count: int
+    latency_ms: int
+    warning: str | None = None
+
+
+@dataclass(slots=True)
+class RerankOutcome:
+    candidates: list[Candidate]
+    stages: list[RerankStageResult] = field(default_factory=list)
+    packs: dict[str, EvidencePack] = field(default_factory=dict)
+
+    @property
+    def warnings(self) -> list[str]:
+        return [
+            f"rerank.{item.stage}: {item.warning}" for item in self.stages if item.warning
+        ]
+
+
+def _reorder(candidates: list[Candidate], scores: list[float]) -> list[Candidate]:
+    """Sắp lại theo điểm rerank; điểm bằng nhau giữ thứ tự cũ (sort ổn định)."""
+
+    paired = sorted(
+        zip(candidates, scores, strict=True), key=lambda item: -item[1]
+    )
+    return [
+        candidate.model_copy(
+            update={
+                "rank": rank,
+                "payload": {**candidate.payload, "rerank_score": score},
+            }
+        )
+        for rank, (candidate, score) in enumerate(paired, start=1)
+    ]
+
+
+class RerankPipeline:
+    """Chạy cascade cho một danh sách candidate đã fuse + dedup."""
+
+    def __init__(
+        self,
+        evidence_builder: EvidenceBuilder,
+        *,
+        text_reranker=None,
+        vlm_reranker=None,
+    ) -> None:
+        self.evidence_builder = evidence_builder
+        self.text_reranker = text_reranker
+        self.vlm_reranker = vlm_reranker
+
+    @property
+    def available_stages(self) -> dict[str, bool]:
+        return {"text": self.text_reranker is not None, "vlm": self.vlm_reranker is not None}
+
+    async def _packs_for(self, candidates: list[Candidate]) -> list[EvidencePack]:
+        packs: list[EvidencePack] = []
+        for candidate in candidates:
+            # Không cần neighbor context ở tầng rerank: nó chỉ làm dài prompt.
+            pack = await self.evidence_builder.build(candidate, with_neighbors=False)
+            if pack is not None:
+                packs.append(pack)
+        return packs
+
+    async def run(
+        self, query: str, candidates: list[Candidate], options: RerankOptions
+    ) -> RerankOutcome:
+        outcome = RerankOutcome(candidates=candidates)
+        if not candidates:
+            return outcome
+
+        # --- Stage 1: text cross-encoder ---
+        if options.text.enabled and self.text_reranker is not None:
+            head = outcome.candidates[: options.text.input_top_k]
+            tail = outcome.candidates[options.text.input_top_k :]
+            started = perf_counter()
+            try:
+                packs = await self._packs_for(head)
+                scores = await self.text_reranker.score(query, packs)
+                reranked = _reorder(head, scores)
+                kept = reranked[: options.text.output_top_k]
+                # Phần bị cắt khỏi output_top_k KHÔNG bị vứt: nó tụt xuống sau
+                # phần đã rerank, giữ recall cho các mốc 50/100.
+                outcome.candidates = _renumber(kept + reranked[options.text.output_top_k :] + tail)
+                outcome.packs.update({pack.candidate_id: pack for pack in packs})
+                outcome.stages.append(RerankStageResult(
+                    "text", True, len(head), len(kept),
+                    int((perf_counter() - started) * 1000),
+                ))
+            except DependencyUnavailableError as exc:
+                outcome.stages.append(RerankStageResult(
+                    "text", False, len(head), len(head),
+                    int((perf_counter() - started) * 1000),
+                    warning=f"{exc} — giữ nguyên thứ hạng sau fusion",
+                ))
+        elif options.text.enabled:
+            outcome.stages.append(RerankStageResult(
+                "text", False, len(candidates), len(candidates), 0,
+                warning="chưa cấu hình text reranker (AIC_RERANK_TEXT_URL)",
+            ))
+
+        # --- Stage 2: VLM ---
+        if options.vlm.enabled and self.vlm_reranker is not None:
+            head = outcome.candidates[: options.vlm.input_top_k]
+            tail = outcome.candidates[options.vlm.input_top_k :]
+            started = perf_counter()
+            try:
+                packs = await self._packs_for(head)
+                results = await self.vlm_reranker.score(query, packs)
+                scores = [float(item.get("relevance", 0.0)) for item in results]
+                reranked = _reorder(head, scores)
+                enriched = [
+                    candidate.model_copy(
+                        update={
+                            "payload": {
+                                **candidate.payload,
+                                "vlm_verdict": {
+                                    key: value
+                                    for key, value in results[index].items()
+                                    if key != "candidate_id"
+                                },
+                            }
+                        }
+                    )
+                    for index, candidate in enumerate(head)
+                ]
+                order = {item.candidate_id: item.rank for item in reranked}
+                enriched.sort(key=lambda item: order[item.candidate_id])
+                outcome.candidates = _renumber(enriched + tail)
+                outcome.packs.update({pack.candidate_id: pack for pack in packs})
+                outcome.stages.append(RerankStageResult(
+                    "vlm", True, len(head), len(head),
+                    int((perf_counter() - started) * 1000),
+                ))
+            except DependencyUnavailableError as exc:
+                outcome.stages.append(RerankStageResult(
+                    "vlm", False, len(head), len(head),
+                    int((perf_counter() - started) * 1000),
+                    warning=f"{exc} — rơi về kết quả của stage text",
+                ))
+        elif options.vlm.enabled:
+            outcome.stages.append(RerankStageResult(
+                "vlm", False, len(candidates), len(candidates), 0,
+                warning="chưa cấu hình VLM reranker (AIC_RERANK_VLM_URL)",
+            ))
+
+        return outcome
+
+
+def _renumber(candidates: list[Candidate]) -> list[Candidate]:
+    return [
+        candidate.model_copy(update={"rank": rank})
+        for rank, candidate in enumerate(candidates, start=1)
+    ]
+
+
+__all__ = ["RerankOutcome", "RerankPipeline", "RerankStageResult"]

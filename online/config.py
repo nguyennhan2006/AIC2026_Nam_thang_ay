@@ -51,6 +51,16 @@ class Settings:
     enable_action_search: bool
     enable_color_search: bool
     enable_event_search: bool
+    # PR-06 — rerank cascade. None = tầng đó không tồn tại; capabilities báo
+    # False và request bật nó sẽ bị 422 thay vì im lặng không chạy.
+    # Có default để chỗ nào dựng Settings trực tiếp (không qua from_env, vd
+    # tests/test_container_flags.py) vẫn chạy — cùng cách OfflineSettings làm
+    # với nhóm field clip pooling.
+    rerank_text_url: str | None = None
+    rerank_vlm_url: str | None = None
+    rerank_api_key: str | None = None
+    rerank_text_model: str = "bge-reranker-v2-m3"
+    rerank_vlm_model: str = "qwen3-vl-32b"
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -96,4 +106,9 @@ class Settings:
             enable_action_search=_env_bool("AIC_ENABLE_ACTION_SEARCH", False),
             enable_color_search=_env_bool("AIC_ENABLE_COLOR_SEARCH", False),
             enable_event_search=_env_bool("AIC_ENABLE_EVENT_SEARCH", False),
+            rerank_text_url=(os.getenv("AIC_RERANK_TEXT_URL") or None),
+            rerank_vlm_url=(os.getenv("AIC_RERANK_VLM_URL") or None),
+            rerank_api_key=os.getenv("AIC_RERANK_API_KEY") or os.getenv("AIC_GPU_API_KEY"),
+            rerank_text_model=os.getenv("AIC_RERANK_TEXT_MODEL", "bge-reranker-v2-m3"),
+            rerank_vlm_model=os.getenv("AIC_RERANK_VLM_MODEL", "qwen3-vl-32b"),
         )

@@ -197,11 +197,20 @@ class OptionValidationTests(unittest.TestCase):
                     CAPABILITIES,
                 )
 
-    def test_rerank_that_has_no_model_server_is_rejected(self) -> None:
+    def test_enabling_a_rerank_stage_without_a_model_server_is_rejected(self) -> None:
         options = SearchOptions(rerank=RerankOptions(text=TextRerankOptions(enabled=True)))
         with self.assertRaises(UnsupportedSearchOptionError) as ctx:
-            validate_search_options(options, CAPABILITIES)
-        self.assertIn("BGE", str(ctx.exception))
+            validate_search_options(options, CAPABILITIES, rerank_stages={"text": False})
+        self.assertIn("AIC_RERANK_TEXT_URL", str(ctx.exception))
+
+    def test_enabling_a_configured_rerank_stage_is_accepted(self) -> None:
+        # Khi model server đã cấu hình thì bật tầng đó là hợp lệ — nếu không,
+        # cài xong reranker rồi vẫn không dùng được.
+        validate_search_options(
+            SearchOptions(rerank=RerankOptions(text=TextRerankOptions(enabled=True))),
+            CAPABILITIES,
+            rerank_stages={"text": True},
+        )
 
     def test_hyde_and_translation_flags_are_rejected(self) -> None:
         for options in (
