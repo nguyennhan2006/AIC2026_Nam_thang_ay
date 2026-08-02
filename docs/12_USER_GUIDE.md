@@ -7,10 +7,26 @@ Tài liệu này là hướng dẫn **thực hành** — chạy được gì hô
 chưa code); chạy model thật trên Kaggle xem
 [KAGGLE_OFFLINE_GUIDE.md](KAGGLE_OFFLINE_GUIDE.md).
 
-Có **2 bản UI song song**, cùng tính năng/API/format CSV, khác kiến trúc frontend:
-`online/ui/` (vanilla JS, không cần Node.js, backend tự phục vụ tại `/ui/`) và
-`online/ui-react/` (React/Vite, đang xây song song, cần `npm install` — xem mục 5).
-Chưa chốt bản nào thay thế bản nào; dùng bản nào cũng được.
+Có **2 bản UI song song**, khác kiến trúc frontend VÀ khác mức độ tính năng
+(từ PR-10 hai bản không còn "cùng tính năng" nữa):
+
+- `online/ui/` (vanilla JS, không cần Node.js, backend tự phục vụ tại `/ui/`) —
+  vẫn dùng contract cũ (task `kis/avs/sequence/vqa`, tray chọn tay + build CSV
+  phía client). Giữ làm fallback đơn giản, không được cập nhật theo PR-01..09.
+- `online/ui-react/` (React/Vite, cần `npm install` — xem mục 5) — **"Competition
+  Retrieval Studio"**, đã viết lại theo đúng contract mới: task
+  `TEXTUAL_KIS/QA/TRAKE/AVS`, Search Mixing Console đọc từ
+  `GET /v1/search/capabilities` (không hard-code branch), Results Explorer hiện
+  `frame_idx`/branch contribution/safe-frame score, Evidence Inspector gọi
+  `GET /v1/evidence/{id}`, 4 workspace riêng cho KIS/QA/TRAKE/AVS, Submission
+  Board build CSV qua `POST /v1/submissions/build` (validate ở backend, không
+  còn tự build/validate CSV phía client), Compare Lab + Health Drawer đọc
+  session trace (`/v1/search-sessions/*`). Có chế độ stream (SSE thật qua
+  `/v1/search/stream`) bật/tắt được ở Query Studio.
+
+Muốn dùng đúng tính năng mới (mixing console, submission board, evidence
+inspector, TRAKE/QA workspace) thì dùng `online/ui-react/`; `online/ui/` chỉ
+còn phù hợp cho smoke test nhanh không cần Node.js.
 
 ## 1. Cài đặt môi trường local
 

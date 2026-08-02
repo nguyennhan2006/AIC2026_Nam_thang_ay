@@ -96,3 +96,71 @@ details summary { cursor:pointer; color:#9ac9ff; font-size:.85rem; }
   form { grid-template-columns:1fr; } .query-label { grid-row:auto; }
   .card-grid { grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); }
 }
+
+/* ---- PR-10: Competition Retrieval Studio (tabs + workspace-specific) ---- */
+.tab-bar { display:flex; flex-wrap:wrap; gap:6px; margin:20px 0; }
+.tab { background:#122238; color:#9ac9ff; border:1px solid #263950; padding:8px 14px; border-radius:999px; font-weight:600; font-size:.82rem; }
+.tab.active { background:#62d5b4; color:#071510; border-color:#62d5b4; }
+p.muted.small, .muted.small { font-size:.76rem; }
+
+.mixing-console { margin:20px 0; }
+.mixing-table { width:100%; border-collapse:collapse; font-size:.82rem; }
+.mixing-table th, .mixing-table td { padding:7px 10px; border-bottom:1px solid #263950; text-align:left; }
+.mixing-table input.narrow { width:80px; padding:5px 7px; }
+.mixing-table.compact th, .mixing-table.compact td { padding:5px 8px; font-size:.78rem; }
+.row-degraded { background:#2a1a1a55; }
+.degraded-badge { margin-left:8px; padding:1px 7px; border-radius:999px; background:#e5737333; color:#e57373; font-size:.68rem; font-weight:700; }
+.unsupported-options { font-size:.78rem; }
+.unsupported-options code { color:#9ac9ff; }
+
+.branch-status-panel { margin:14px 0; }
+.warning-text { color:#e57373; font-weight:600; font-size:.85rem; }
+
+.explorer-layout { display:grid; grid-template-columns:1fr; gap:16px; }
+.card.card-warning { border-color:#7a5a2c; }
+.evidence-preview { font-size:.78rem; color:#bbc7d8; margin:0; }
+.warning-text.warning-text { margin:0; font-size:.74rem; }
+.inspect-btn { width:100%; margin-top:4px; padding:6px; font-size:.78rem; background:#172d48; color:#9ac9ff; }
+ul.reason.compact li { padding:2px 6px; }
+
+.evidence-panel { padding:18px; border:1px solid #263950; border-radius:14px; background:#0d1929dd; margin:14px 0; }
+.evidence-head { display:flex; justify-content:space-between; align-items:center; }
+.evidence-body section { margin:12px 0; }
+.evidence-body h4 { margin:0 0 6px; color:#9ac9ff; font-size:.82rem; }
+.evidence-thumbs { display:flex; flex-wrap:wrap; gap:10px; }
+.evidence-thumbs figure { margin:0; width:120px; }
+.evidence-thumbs img { width:100%; height:80px; object-fit:cover; border-radius:8px; }
+.evidence-thumbs figcaption { font-size:.68rem; color:#8ea1ba; text-align:center; }
+.neighbor-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; font-size:.82rem; }
+
+.workspace-table { width:100%; border-collapse:collapse; font-size:.84rem; margin:16px 0; }
+.workspace-table th, .workspace-table td { padding:8px 12px; border-bottom:1px solid #263950; text-align:left; }
+
+.trake-workspace { display:grid; gap:14px; margin:16px 0; }
+.trake-card { padding:14px; border:1px solid #263950; border-radius:12px; background:#0e1b2c; }
+.trake-card header { display:flex; gap:10px; align-items:center; }
+.trake-steps { margin:8px 0 0; padding-left:1.2rem; font-size:.82rem; }
+.refinement-dense { color:#63d5b5; }
+.refinement-sparse { color:#8ea1ba; }
+
+.submission-board { margin:16px 0; }
+.zone-summary { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
+.zone-chip { padding:4px 10px; border-radius:999px; background:#172d48; color:#9ac9ff; font-size:.76rem; }
+.submission-result { margin-top:14px; }
+.issue-list { list-style:none; padding:0; margin:8px 0; font-size:.8rem; }
+.issue-error { color:#e57373; }
+.issue-warning { color:#e0b35c; }
+.csv-preview { max-height:260px; overflow:auto; padding:12px; border-radius:9px; background:#07111d; font-size:.78rem; }
+
+.compare-lab { margin:16px 0; }
+.compare-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+.trace-card { margin-top:10px; padding:12px; border:1px solid #263950; border-radius:10px; background:#0e1b2c; font-size:.82rem; }
+
+.stream-log { list-style:none; margin:14px 0; padding:12px; border-radius:9px; background:#07111d; font-size:.78rem; max-height:220px; overflow:auto; display:grid; gap:3px; }
+
+.health-drawer { margin:16px 0; }
+.health-list { list-style:none; padding:0; font-size:.85rem; }
+
+@media (max-width:720px) {
+  .neighbor-grid, .compare-grid { grid-template-columns:1fr; }
+}
