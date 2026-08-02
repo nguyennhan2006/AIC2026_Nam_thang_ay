@@ -224,27 +224,76 @@ class NegativeConstraintsTests(unittest.TestCase):
 
 
 class SearchCapabilitiesTests(unittest.TestCase):
+    """Capability phải khớp CHÍNH XÁC id mà cấu hình per-branch dùng (PR-03)."""
+
+    class _FakeRetriever:
+        def __init__(self, branch_id: str, modality: Modality, *, variant: str = "raw",
+                     backend_kind: str = "lexical") -> None:
+            self.branch_id = branch_id
+            self.execution_id = f"{branch_id}.{variant}"
+            self.name = branch_id
+            self.modality = modality
+            self.backend_kind = backend_kind
+            self.supported_controls = ("enabled", "weight", "top_k")
+
+    def _container(self, retrievers):
+        from online.services.registry import RetrieverRegistry
+
+        class FakeSearchService:
+            rule_config = None
+
+        service = FakeSearchService()
+        service.retrievers = retrievers
+        service.registry = RetrieverRegistry(retrievers)
+
+        class FakeContainer:
+            event_repository = None
+
+        container = FakeContainer()
+        container.search_service = service
+        return container
+
     def test_capabilities_lists_only_registered_retrievers(self) -> None:
         from online.api.routes import search_capabilities
 
-        class FakeRetriever:
-            def __init__(self, name: str, modality: Modality) -> None:
-                self.name = name
-                self.modality = modality
-
-        class FakeSearchService:
-            retrievers = [FakeRetriever("dense_visual", Modality.VISUAL), FakeRetriever("bm25_ocr", Modality.OCR)]
-            rule_config = None
-
-        class FakeContainer:
-            search_service = FakeSearchService()
-            event_repository = None
-
-        result = run(search_capabilities(FakeContainer()))
-        self.assertEqual({item["branch_id"] for item in result["branches"]}, {"dense_visual", "bm25_ocr"})
+        container = self._container([
+            self._FakeRetriever("dense_visual", Modality.VISUAL, backend_kind="vector"),
+            self._FakeRetriever("bm25_ocr", Modality.OCR),
+        ])
+        result = run(search_capabilities(container))
+        self.assertEqual(
+            {item["branch_id"] for item in result["branches"]}, {"dense_visual", "bm25_ocr"}
+        )
         self.assertFalse(result["events_available"])
         self.assertIn("rrf", result["fusion_methods"])
         self.assertFalse(result["rerank"]["vlm"])
+
+    def test_variants_of_one_branch_share_a_branch_id(self) -> None:
+        from online.api.routes import search_capabilities
+
+        container = self._container([
+            self._FakeRetriever("bm25_caption", Modality.CAPTION, variant="raw"),
+            self._FakeRetriever("bm25_caption", Modality.CAPTION, variant="expanded"),
+        ])
+        result = run(search_capabilities(container))
+        self.assertEqual(len(result["branches"]), 1)
+        self.assertEqual(
+            result["branches"][0]["execution_ids"],
+            ["bm25_caption.expanded", "bm25_caption.raw"],
+        )
+
+    def test_lexical_fallback_is_flagged_degraded_not_advertised_as_vector(self) -> None:
+        from online.api.routes import search_capabilities
+
+        container = self._container([
+            self._FakeRetriever(
+                "lexical_hash_fallback", Modality.VISUAL, backend_kind="lexical_fallback"
+            )
+        ])
+        branch = run(search_capabilities(container))["branches"][0]
+        self.assertEqual(branch["backend_kind"], "lexical_fallback")
+        self.assertTrue(branch["degraded"])
+        self.assertIn("ablation", branch["degraded_reason"])
 
 
 class EventRoutesTests(unittest.TestCase):

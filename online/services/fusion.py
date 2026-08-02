@@ -26,7 +26,12 @@ FusionMethod = Literal["rrf", "weighted_sum", "max_score", "intersection", "unio
 def _branch_weight(
     candidate: Candidate, modality_weights: dict[Modality, float], branches: dict[str, BranchRuntimeOptions],
 ) -> float:
+    # `candidate.source` là execution_id (`bm25_caption.expanded`). Tra theo
+    # execution trước, rồi tới branch — cấu hình đặt ở mức branch vẫn áp cho
+    # mọi biến thể query của nó.
     override = branches.get(candidate.source)
+    if override is None and "." in candidate.source:
+        override = branches.get(candidate.source.rsplit(".", 1)[0])
     if override is not None:
         return override.weight if override.enabled else 0.0
     return modality_weights.get(candidate.modality, 0.0)

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import re
 from time import perf_counter
 from uuid import uuid4
@@ -19,10 +18,13 @@ from online.domain.models import (
     SearchResponse,
     TaskType,
 )
+from online.domain.execution import BranchStatus
 from online.ports.interfaces import Retriever, SceneRepository
 from online.services.fusion import fuse_candidates
 from online.services.negative_constraints import apply_negative_constraints, extract_negative_constraints
 from online.services.query_planner import RuleBasedQueryPlanner
+from online.services.registry import RetrieverRegistry
+from online.services.retrieval_orchestrator import RetrievalOrchestrator
 from online.services.rules import RuleConfig, apply_bonus_penalty
 from online.services.temporal import link_event_hits
 
@@ -42,6 +44,8 @@ class SearchService:
             raise ValueError("at least one retriever is required")
         self.repository = repository
         self.retrievers = retrievers
+        self.registry = RetrieverRegistry(retrievers)
+        self.orchestrator = RetrievalOrchestrator(retrievers)
         self.planner = planner or RuleBasedQueryPlanner()
         self.candidate_limit = candidate_limit
         self.rrf_k = rrf_k
@@ -49,10 +53,12 @@ class SearchService:
         # cũ; xem online/services/rules.py và docs/15_RESEARCH_AGENDA.md mục 5.
         self.rule_config = rule_config
 
-    async def _retrieve(self, plan: QueryPlan, limit: int) -> list[Candidate]:
-        lists = await asyncio.gather(
-            *(item.search(plan, limit=limit) for item in self.retrievers)
-        )
+    async def _retrieve(
+        self, plan: QueryPlan, limit: int
+    ) -> tuple[list[Candidate], list[BranchStatus]]:
+        # Orchestrator cô lập lỗi theo từng branch: một branch timeout không
+        # còn kéo đổ cả request như `asyncio.gather` trần trước PR-03.
+        lists, statuses = await self.orchestrator.execute(plan, limit)
         fusion_options = plan.search_options.fusion
         # rrf_k also exists as a deployment-level default (SearchService.rrf_k /
         # AIC_RRF_K); only let a request override it when the caller actually set
@@ -74,7 +80,7 @@ class SearchService:
             if plan.search_options.query.enable_negative_constraints else []
         )
         if not constraints and self.rule_config is None:
-            return candidates
+            return candidates, statuses
         documents = {
             document.scene_id: document
             for document in await self.repository.get_many(
@@ -84,7 +90,7 @@ class SearchService:
         if constraints:
             candidates = apply_negative_constraints(candidates, documents, constraints)
         if self.rule_config is None:
-            return candidates
+            return candidates, statuses
         exact_phrases = [
             phrase for event in plan.events for phrase in event.exact_phrases
         ]
@@ -94,7 +100,7 @@ class SearchService:
             exact_phrases=exact_phrases,
             query=plan.normalized_query,
             config=self.rule_config,
-        )
+        ), statuses
 
     @staticmethod
     def _select_frame(
@@ -202,37 +208,80 @@ class SearchService:
         plan = await self.planner.plan(request)
         if task == TaskType.TRAKE and len(plan.events) >= 2:
             event_hit_lists: list[list[SearchHit]] = []
+            statuses: list[BranchStatus] = []
             for event in plan.events:
                 event_plan = plan.model_copy(
                     update={"normalized_query": event.text, "events": [event]}
                 )
-                candidates = await self._retrieve(event_plan, self.candidate_limit)
+                candidates, step_statuses = await self._retrieve(
+                    event_plan, self.candidate_limit
+                )
+                statuses = _merge_statuses(statuses, step_statuses)
                 event_hit_lists.append(await self._hydrate(candidates, event.text))
             sequences = link_event_hits(event_hit_lists, limit=request.top_k)
+            warnings = _status_warnings(statuses)
             return SearchResponse(
                 query_id=query_id,
                 task=task,
                 took_ms=(perf_counter() - started) * 1000,
+                status="COMPLETED_WITH_WARNINGS" if warnings else "COMPLETED",
                 sequences=sequences,
+                branch_status=statuses,
                 query_plan=plan if request.debug else None,
+                warnings=warnings,
             )
 
-        candidates = await self._retrieve(plan, self.candidate_limit)
+        candidates, statuses = await self._retrieve(plan, self.candidate_limit)
         hits = await self._hydrate(candidates[: request.top_k], plan.normalized_query)
         if task == TaskType.AVS:
             per_video = plan.search_options.fusion.max_results_per_video or 3
             hits = _diversify_avs(hits, request.top_k, per_video=per_video)
         results = hits[: request.top_k]
-        warnings = [warning for hit in results for warning in hit.warnings]
+        warnings = _status_warnings(statuses) + [
+            warning for hit in results for warning in hit.warnings
+        ]
         return SearchResponse(
             query_id=query_id,
             task=task,
             took_ms=(perf_counter() - started) * 1000,
             status="COMPLETED_WITH_WARNINGS" if warnings else "COMPLETED",
             results=results,
+            branch_status=statuses,
             query_plan=plan if request.debug else None,
             warnings=warnings,
         )
+
+
+def _status_warnings(statuses: list[BranchStatus]) -> list[str]:
+    return [
+        f"{status.execution_id}: {status.state} — {status.warning}"
+        for status in statuses
+        if status.is_degraded
+    ]
+
+
+def _merge_statuses(
+    accumulated: list[BranchStatus], new: list[BranchStatus]
+) -> list[BranchStatus]:
+    """Gộp trạng thái qua nhiều bước TRAKE.
+
+    Mỗi step chạy lại toàn bộ branch; giữ lại kết quả xấu nhất của mỗi
+    execution để một lần timeout ở step 2 không bị step 3 thành công che mất.
+    """
+
+    merged = {status.execution_id: status for status in accumulated}
+    for status in new:
+        previous = merged.get(status.execution_id)
+        if previous is None or (status.is_degraded and not previous.is_degraded):
+            merged[status.execution_id] = status
+        elif previous.state == status.state:
+            merged[status.execution_id] = previous.model_copy(
+                update={
+                    "latency_ms": max(previous.latency_ms, status.latency_ms),
+                    "candidate_count": previous.candidate_count + status.candidate_count,
+                }
+            )
+    return [merged[key] for key in sorted(merged)]
 
 
 def _diversify_avs(hits: list[SearchHit], limit: int, per_video: int = 3) -> list[SearchHit]:

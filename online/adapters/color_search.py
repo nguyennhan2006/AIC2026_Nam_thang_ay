@@ -57,8 +57,12 @@ def extract_color_tags(query: str) -> list[str]:
 class ColorSearchRetriever:
     """Exact color-tag overlap between the query and a scene's dominant colors."""
 
-    name = "color_search"
+    branch_id = "color_search"
+    execution_id = "color_search.raw"
+    name = branch_id
     modality = Modality.COLOR
+    backend_kind = "metadata"
+    supported_controls = ("enabled", "weight", "top_k", "timeout_ms")
 
     def __init__(self, documents: list[SceneDocument]) -> None:
         self.documents = [doc for doc in documents if doc.color_names]
@@ -68,9 +72,9 @@ class ColorSearchRetriever:
         return cls(await repository.all())
 
     async def search(self, plan: QueryPlan, *, limit: int) -> list[Candidate]:
-        if effective_weight(plan, self.name, self.modality) <= 0:
+        if effective_weight(plan, self.execution_id, self.modality, self.branch_id) <= 0:
             return []
-        limit = effective_limit(plan, self.name, limit)
+        limit = effective_limit(plan, self.execution_id, limit, self.branch_id)
         query_tags = extract_color_tags(plan.normalized_query)
         if not query_tags:
             return []
@@ -90,7 +94,7 @@ class ColorSearchRetriever:
                 candidate_id=doc.scene_id, entity_type="scene", scene_id=doc.scene_id,
                 video_id=doc.video_id, start_frame=doc.start_frame,
                 end_frame=doc.end_frame_exclusive - 1,
-                source=self.name, modality=self.modality,
+                source=self.execution_id, modality=self.modality,
                 raw_score=score, score_kind="overlap_ratio", rank=rank,
                 payload={"matched_colors": sorted(query_set & set(doc.color_names))},
             )

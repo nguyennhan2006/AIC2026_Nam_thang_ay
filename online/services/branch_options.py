@@ -1,41 +1,57 @@
-"""Per-branch runtime override resolution — Search Mixing Console W5.
+"""Phân giải cấu hình runtime cho một branch (Search Mixing Console W5 + PR-03).
 
-`weighted_rrf` and every retriever currently gate purely on
-`QueryPlan.modality_weights` (5 fixed buckets shared by every retriever in
-that bucket — e.g. `bm25_ocr` and `ocr_fuzzy` cannot be weighted
-independently even though they are different branches). This module adds an
-optional per-branch override layer read from `QueryPlan.search_options.branches
-[branch_name]`, without changing the modality-weight behavior when no
-override is configured (the default: `SearchOptions().branches == {}`).
+`QueryPlan.modality_weights` chỉ có 9 bucket dùng chung cho mọi retriever
+trong bucket đó — `bm25_ocr` và `ocr_fuzzy` không chỉnh trọng số độc lập được.
+Module này thêm lớp override theo từng branch, đọc từ
+`QueryPlan.search_options.branches[...]`.
 
-Precedence: an explicit `BranchRuntimeOptions` entry for a branch always wins
-over its modality's bucket weight — `enabled=False` disables it outright
-regardless of modality weight, and `weight`/`top_k` replace the modality
-default. With no entry for that branch name, behavior is unchanged from
-before this module existed.
+Thứ tự tra cứu (PR-03): `execution_id` trước, rồi `branch_id`. Nhờ vậy có thể
+chỉnh riêng `caption_bm25.expanded` mà không đụng `caption_bm25.raw`, nhưng
+cấu hình đặt ở mức `caption_bm25` vẫn áp cho mọi execution của nó. Không có
+entry nào -> hành vi y như trước khi có module này.
 """
 
 from __future__ import annotations
 
-from online.domain.models import Modality, QueryPlan
+from online.domain.candidate import Modality
+from online.domain.models import QueryPlan
+from online.domain.search_config import BranchRuntimeOptions
 
 
-def effective_weight(plan: QueryPlan, name: str, modality: Modality) -> float:
-    """Return the weight a branch should use, or 0.0 if it must not run."""
+def resolve_options(
+    plan: QueryPlan, execution_id: str, branch_id: str | None = None
+) -> BranchRuntimeOptions | None:
+    """Trả override cụ thể nhất cho một execution, hoặc None nếu không có."""
 
-    override = plan.search_options.branches.get(name)
+    branches = plan.search_options.branches
+    override = branches.get(execution_id)
+    if override is not None:
+        return override
+    if branch_id is None and "." in execution_id:
+        branch_id = execution_id.rsplit(".", 1)[0]
+    return branches.get(branch_id) if branch_id else None
+
+
+def effective_weight(
+    plan: QueryPlan, execution_id: str, modality: Modality, branch_id: str | None = None
+) -> float:
+    """Trọng số branch nên dùng, hoặc 0.0 nếu nó không được phép chạy."""
+
+    override = resolve_options(plan, execution_id, branch_id)
     if override is not None:
         return override.weight if override.enabled else 0.0
     return plan.modality_weights.get(modality, 0.0)
 
 
-def effective_limit(plan: QueryPlan, name: str, default_limit: int) -> int:
-    """Return the candidate limit a branch should request from its index."""
+def effective_limit(
+    plan: QueryPlan, execution_id: str, default_limit: int, branch_id: str | None = None
+) -> int:
+    """Số candidate branch nên xin từ index của nó."""
 
-    override = plan.search_options.branches.get(name)
+    override = resolve_options(plan, execution_id, branch_id)
     if override is not None and override.enabled:
         return min(default_limit, override.top_k)
     return default_limit
 
 
-__all__ = ["effective_weight", "effective_limit"]
+__all__ = ["effective_limit", "effective_weight", "resolve_options"]

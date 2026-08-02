@@ -74,10 +74,18 @@ class BM25Index:
 
 
 class LexicalRetriever:
+    # `branch_id` là danh tính ổn định của adapter; `execution_id` = branch +
+    # biến thể query (PR-03). Candidate mang execution_id ở `source` để
+    # /capabilities và cấu hình per-branch nói về cùng một chuỗi.
+    backend_kind = "lexical"
+    supported_controls = ("enabled", "weight", "top_k", "timeout_ms")
+
     def __init__(self, field: str, index: BM25Index) -> None:
         self.field = field
         self.index = index
-        self.name = f"bm25_{field}"
+        self.branch_id = f"bm25_{field}"
+        self.execution_id = f"{self.branch_id}.raw"
+        self.name = self.branch_id
         self.modality = Modality(field)
 
     @classmethod
@@ -87,9 +95,9 @@ class LexicalRetriever:
         return cls(field, BM25Index(await repository.all(), field))
 
     async def search(self, plan: QueryPlan, *, limit: int) -> list[Candidate]:
-        if effective_weight(plan, self.name, self.modality) <= 0:
+        if effective_weight(plan, self.execution_id, self.modality, self.branch_id) <= 0:
             return []
-        limit = effective_limit(plan, self.name, limit)
+        limit = effective_limit(plan, self.execution_id, limit, self.branch_id)
         query = plan.events[0].text if len(plan.events) == 1 else plan.normalized_query
         results = self.index.search(query, limit * 2)
         filtered = []
@@ -121,7 +129,7 @@ class LexicalRetriever:
                     video_id=scene.video_id,
                     start_frame=scene.start_frame,
                     end_frame=scene.end_frame_exclusive - 1,
-                    source=self.name,
+                    source=self.execution_id,
                     modality=self.modality,
                     raw_score=score,
                     score_kind="bm25",

@@ -200,9 +200,18 @@ class QueryExpansionRetriever:
         self.inner = inner
         self.lexicon = lexicon
         self.max_terms = max_terms
-        self.name = f"{inner.name}_expanded"
+        # Wrapper KHÔNG đổi branch (vẫn cùng adapter/index), chỉ đổi biến thể
+        # query. Trước PR-03 nó đặt name="bm25_caption_expanded" trong khi
+        # candidate bên trong vẫn mang source="bm25_caption", nên cấu hình cho
+        # id mà /capabilities công bố hoàn toàn không có tác dụng.
+        self.branch_id = getattr(inner, "branch_id", None) or inner.name
+        self.execution_id = f"{self.branch_id}.expanded"
+        self.name = self.branch_id
+        self.query_variant = "expanded"
         # Giữ modality của retriever gốc để weighted RRF tính đúng trọng số.
         self.modality = getattr(inner, "modality", None)
+        self.backend_kind = getattr(inner, "backend_kind", "lexical")
+        self.supported_controls = getattr(inner, "supported_controls", ())
 
     async def search(self, plan: QueryPlan, *, limit: int) -> list[Candidate]:
         expanded_events = [
@@ -223,4 +232,7 @@ class QueryExpansionRetriever:
                 "events": expanded_events,
             }
         )
-        return await self.inner.search(expanded_plan, limit=limit)
+        candidates = await self.inner.search(expanded_plan, limit=limit)
+        # Đóng dấu lại `source` bằng execution_id của wrapper: đây là kết quả
+        # của biến thể expanded, và fusion phải tính nó theo đúng cấu hình đó.
+        return [item.model_copy(update={"source": self.execution_id}) for item in candidates]

@@ -148,18 +148,18 @@ async def get_event_neighbors(event_id: str, container: Container) -> dict:
 
 @router.get("/search/capabilities")
 async def search_capabilities(container: Container) -> dict:
-    """Real, introspected capabilities — every branch listed here is actually
-    registered in `container.search_service.retrievers` right now, not an
-    aspirational/hardcoded list (Search Mixing Console clean-code rule #9)."""
+    """Capability đã introspect thật — mọi branch ở đây đang thực sự đăng ký
+    trong `container.search_service.registry`, không phải danh sách mong muốn.
 
-    branches = []
-    for retriever in container.search_service.retrievers:
-        modality = getattr(retriever, "modality", None)
-        branches.append({
-            "branch_id": retriever.name,
-            "modality": modality.value if modality is not None else None,
-            "status": "ready",
-        })
+    `branch_id`/`execution_ids` trả về ở đây chính là chuỗi mà cấu hình
+    `search_options.branches` dùng, và `supported_controls` chỉ liệt kê
+    control branch thật sự đọc — UI không được vẽ control ngoài danh sách này.
+    """
+
+    branches = [
+        item.model_dump(mode="json")
+        for item in container.search_service.registry.capabilities()
+    ]
     return {
         "task_types": [item.value for item in TaskType],
         "branches": branches,

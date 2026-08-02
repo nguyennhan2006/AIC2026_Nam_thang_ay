@@ -79,7 +79,21 @@ async def build_container(settings: Settings) -> AppContainer:
             )
         vector_store = InMemoryVectorStore(rows)
 
-    retrievers = [DenseRetriever(encoder, vector_store), *lexical]
+    # Backend local KHÔNG phải dense visual: HashingTextEncoder +
+    # InMemoryVectorStore là hash trên text caption. Đăng ký đúng tên để
+    # /capabilities không quảng cáo nhầm và ablation không bị đọc sai (PR-03).
+    if settings.backend == "qdrant":
+        dense = DenseRetriever(
+            encoder, vector_store, branch_id="dense_visual", backend_kind="vector"
+        )
+    else:
+        dense = DenseRetriever(
+            encoder,
+            vector_store,
+            branch_id="lexical_hash_fallback",
+            backend_kind="lexical_fallback",
+        )
+    retrievers = [dense, *lexical]
     if settings.enable_ocr_fuzzy:
         retrievers.append(await OcrFuzzyRetriever.build(repository))
     if settings.enable_object_search:

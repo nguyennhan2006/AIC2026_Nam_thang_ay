@@ -150,8 +150,12 @@ def fuzzy_score(
 class OcrFuzzyRetriever:
     """Retriever OCR fuzzy, precompute chuẩn hóa + trigram lúc build."""
 
-    name = "ocr_fuzzy"
+    branch_id = "ocr_fuzzy"
+    execution_id = "ocr_fuzzy.raw"
+    name = branch_id
     modality = Modality.OCR
+    backend_kind = "fuzzy"
+    supported_controls = ("enabled", "weight", "top_k", "min_score", "timeout_ms")
 
     def __init__(
         self,
@@ -201,9 +205,9 @@ class OcrFuzzyRetriever:
         return [q for q in (normalize_vi(item) for item in raw) if q]
 
     async def search(self, plan: QueryPlan, *, limit: int) -> list[Candidate]:
-        if effective_weight(plan, self.name, Modality.OCR) <= 0:
+        if effective_weight(plan, self.execution_id, Modality.OCR, self.branch_id) <= 0:
             return []
-        limit = effective_limit(plan, self.name, limit)
+        limit = effective_limit(plan, self.execution_id, limit, self.branch_id)
         queries = self._queries(plan)
         if not queries:
             return []
@@ -258,7 +262,7 @@ class OcrFuzzyRetriever:
                 video_id=doc.video_id,
                 start_frame=doc.start_frame,
                 end_frame=doc.end_frame_exclusive - 1,
-                source=self.name,
+                source=self.execution_id,
                 modality=self.modality,
                 raw_score=score,
                 score_kind="fuzzy_ratio",

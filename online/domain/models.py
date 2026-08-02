@@ -14,6 +14,7 @@ from online.domain.candidate import (  # noqa: F401 - re-export: nhiều adapter
     FrameQuality,
     Modality,
 )
+from online.domain.execution import BranchStatus  # noqa: F401 - re-export
 from online.domain.scores import BranchScore, ScoreKind  # noqa: F401 - re-export
 from online.domain.search_config import SearchOptions
 from online.domain.tasks import TaskType, normalize_task  # noqa: F401 - re-export
@@ -260,6 +261,9 @@ class SearchResponse(StrictModel):
     status: PipelineStatus = "COMPLETED"
     results: list[SearchHit] = Field(default_factory=list)
     sequences: list[SequenceHit] = Field(default_factory=list)
+    # Trạng thái từng branch: UI phải thấy được branch nào timeout/lỗi thay vì
+    # nhận một danh sách ngắn đi mà không biết vì sao (PR-03).
+    branch_status: list[BranchStatus] = Field(default_factory=list)
     query_plan: QueryPlan | None = None
     warnings: list[str] = Field(default_factory=list)
 

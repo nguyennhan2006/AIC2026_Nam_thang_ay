@@ -99,7 +99,7 @@ class ContainerFlagTests(unittest.TestCase):
         plan = run(service.planner.plan(SearchRequest(
             query='"Gừng cay muối mặn xin đừng quên nhau"', task=TaskType.TEXTUAL_KIS, top_k=5,
         )))
-        candidates = run(service._retrieve(plan, service.candidate_limit))
+        candidates, _statuses = run(service._retrieve(plan, service.candidate_limit))
         target = next(c for c in candidates if c.scene_id == "L01_V001_S0002")
         self.assertIn("ocr_exact", target.payload.get("rule_adjustments", {}))
 

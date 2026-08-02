@@ -72,8 +72,12 @@ class JsonlEventRepository:
 class EventSearchRetriever:
     """BM25 over event text, fanned out to each event's member scenes."""
 
-    name = "event_search"
+    branch_id = "event_search"
+    execution_id = "event_search.raw"
+    name = branch_id
     modality = Modality.EVENT
+    backend_kind = "lexical"
+    supported_controls = ("enabled", "weight", "top_k", "timeout_ms")
 
     def __init__(self, events: list[EventDocument]) -> None:
         self.index = BM25Index(events, "text")
@@ -83,9 +87,9 @@ class EventSearchRetriever:
         return cls(await repository.all())
 
     async def search(self, plan: QueryPlan, *, limit: int) -> list[Candidate]:
-        if effective_weight(plan, self.name, self.modality) <= 0:
+        if effective_weight(plan, self.execution_id, self.modality, self.branch_id) <= 0:
             return []
-        limit = effective_limit(plan, self.name, limit)
+        limit = effective_limit(plan, self.execution_id, limit, self.branch_id)
         query = plan.events[0].text if len(plan.events) == 1 else plan.normalized_query
         results = self.index.search(query, limit)
         candidates: list[Candidate] = []
@@ -98,7 +102,7 @@ class EventSearchRetriever:
                 candidates.append(Candidate(
                     candidate_id=scene_id, entity_type="scene", scene_id=scene_id,
                     event_id=event.event_id, video_id=event.video_id,
-                    source=self.name, modality=self.modality,
+                    source=self.execution_id, modality=self.modality,
                     raw_score=score, score_kind="bm25",
                     rank=len(candidates) + 1,
                     index_id="bm25_event_inmemory",
