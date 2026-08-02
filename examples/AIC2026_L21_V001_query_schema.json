@@ -1,0 +1,28 @@
+{
+  "dataset_name": "AIC2026 L21_V001 Four-Task Mini Benchmark",
+  "video": {
+    "video_id": "L21_V001",
+    "fps": 30.0,
+    "duration_sec": 1261.725896,
+    "total_frames": 37849,
+    "resolution": "1280x720"
+  },
+  "tasks": [
+    "KIS",
+    "VQA",
+    "AVS",
+    "TRAKE"
+  ],
+  "official_submission_formats": {
+    "KIS": "<video_id>, <frame_id>",
+    "VQA": "<video_id>, <frame_id>, <answer>",
+    "TRAKE": "<video_id>, <frame_id_1>, ..., <frame_id_n>",
+    "AVS": "internal evaluation set: ranked segment/frame list with relevance grades"
+  },
+  "notes": [
+    "KIS/VQA intervals accept any frame in the specified event interval.",
+    "TRAKE uses one precise semantic keyframe per ordered event; each GT window is 9 frames.",
+    "No ASR-only query is included because audio was not transcribed and manually verified.",
+    "All queries were designed from direct inspection of L21_V001 visual content and readable on-screen text."
+  ]
+}
