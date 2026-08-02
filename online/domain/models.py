@@ -17,6 +17,12 @@ from online.domain.candidate import (  # noqa: F401 - re-export: nhiều adapter
 from online.domain.execution import BranchStatus  # noqa: F401 - re-export
 from online.domain.scores import BranchScore, ScoreKind  # noqa: F401 - re-export
 from online.domain.search_config import SearchOptions
+from online.domain.task_results import (  # noqa: F401 - re-export
+    AvsResultItem,
+    KisResultItem,
+    QaResultItem,
+    TrakeResultItem,
+)
 from online.domain.tasks import TaskType, normalize_task  # noqa: F401 - re-export
 
 
@@ -259,6 +265,13 @@ class SearchResponse(StrictModel):
     task: TaskType
     took_ms: float
     status: PipelineStatus = "COMPLETED"
+    # Kết quả theo đúng đơn vị nộp bài của từng task (PR-07). `results` vẫn là
+    # danh sách retrieval chung để UI hiển thị; bốn field dưới mới là thứ đi
+    # thẳng vào submission.
+    kis: list[KisResultItem] = Field(default_factory=list)
+    qa: list[QaResultItem] = Field(default_factory=list)
+    trake: list[TrakeResultItem] = Field(default_factory=list)
+    avs: list[AvsResultItem] = Field(default_factory=list)
     results: list[SearchHit] = Field(default_factory=list)
     sequences: list[SequenceHit] = Field(default_factory=list)
     # Trạng thái từng branch: UI phải thấy được branch nào timeout/lỗi thay vì

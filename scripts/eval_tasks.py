@@ -220,29 +220,63 @@ async def evaluate(
         )
         record: dict = {"query_id": item.query_id, "task": item.task.value}
 
-        if item.task in (TaskType.TEXTUAL_KIS, TaskType.QA):
-            rank = _first_rank(response.results, lambda hit: _frame_hit(hit, item))
-            video_rank = _first_rank(
-                response.results, lambda hit: hit.video_id == item.video_id
+        if item.task == TaskType.TEXTUAL_KIS:
+            # KIS chấm trên response.kis (PR-07: KisProcessor.rank), không phải
+            # response.results thô — signature/safe-frame có thể xếp hạng khác
+            # với điểm fusion thuần.
+            rank = next(
+                (
+                    index
+                    for index, row in enumerate(response.kis, start=1)
+                    if row.video_id == item.video_id
+                    and any(interval.contains(row.frame_idx) for interval in item.intervals)
+                ),
+                None,
+            )
+            video_rank = next(
+                (index for index, row in enumerate(response.kis, start=1)
+                 if row.video_id == item.video_id),
+                None,
             )
             record["first_frame_hit_rank"] = rank
             record["first_video_rank"] = video_rank
-            if item.task == TaskType.TEXTUAL_KIS:
-                kis.add(rank, video_rank)
-            else:
-                qa_total += 1
-                qa_evidence.add(rank, video_rank)
-                # Answer hiện lấy từ VQAService; SearchService chưa sinh answer
-                # nên trường này rỗng cho tới PR-07 — đo đúng khoảng cách thật.
-                predicted = getattr(response, "answer", "") or ""
-                answer_ok = answer_matches(predicted, item.accepted_answers)
-                qa_answer_correct += int(answer_ok)
-                qa_joint_correct += int(answer_ok and rank == 1)
-                record["answer_correct"] = answer_ok
+            kis.add(rank, video_rank)
+
+        elif item.task == TaskType.QA:
+            qa_total += 1
+            # Đúng bộ ba (video, frame trong interval, answer đúng) — khớp
+            # nguyên văn luật chấm QA, không chỉ evidence rank.
+            rank = next(
+                (
+                    index
+                    for index, row in enumerate(response.qa, start=1)
+                    if row.video_id == item.video_id
+                    and any(interval.contains(row.frame_idx) for interval in item.intervals)
+                ),
+                None,
+            )
+            video_rank = next(
+                (index for index, row in enumerate(response.qa, start=1)
+                 if row.video_id == item.video_id),
+                None,
+            )
+            qa_evidence.add(rank, video_rank)
+            answer_ok = any(
+                row.video_id == item.video_id
+                and any(interval.contains(row.frame_idx) for interval in item.intervals)
+                and answer_matches(row.answer, item.accepted_answers)
+                for row in response.qa
+            )
+            qa_answer_correct += int(answer_ok)
+            qa_joint_correct += int(answer_ok and rank == 1)
+            record["answer_correct"] = answer_ok
+            record["predicted_answers"] = [row.answer for row in response.qa[:3]]
 
         elif item.task == TaskType.TRAKE:
             trake_total += 1
-            best = response.sequences[0] if response.sequences else None
+            # response.trake (PR-07: TrakeProcessor, video-first) thay cho
+            # response.sequences (bản nối scene cũ, không khóa video).
+            best = response.trake[0] if response.trake else None
             if best is None or best.video_id != item.video_id:
                 trake_r_scores.append(0.0)
                 record["r_score"] = 0.0
@@ -264,17 +298,28 @@ async def evaluate(
                 record["expected_steps"] = len(item.steps)
 
         elif item.task == TaskType.AVS:
-            grades = [
-                max(
+            # response.avs (PR-07: AvsProcessor) đã tự chấm relevance_grade
+            # 0-3 theo inclusion/exclusion của chính nó; ở đây chỉ đối chiếu
+            # với gold để tính nDCG/precision/coverage thật, KHÔNG dùng lại
+            # relevance_grade do processor tự gán (đó là điểm nó tự tin, không
+            # phải điểm đúng theo gold).
+            gold_grade_by_frame = [
+                (interval, interval.relevance_grade) for interval in item.intervals
+            ]
+
+            def _gold_grade(row) -> int:
+                if row.video_id != item.video_id:
+                    return 0
+                return max(
                     (
-                        interval.relevance_grade
-                        for interval in item.intervals
-                        if hit.video_id == item.video_id and interval.contains(hit.best_frame_idx)
+                        grade
+                        for interval, grade in gold_grade_by_frame
+                        if row.best_frame_idx is not None and interval.contains(row.best_frame_idx)
                     ),
                     default=0,
                 )
-                for hit in response.results
-            ]
+
+            grades = [_gold_grade(row) for row in response.avs]
             ideal = [interval.relevance_grade for interval in item.intervals]
             ndcg = ndcg_at_k(grades, ideal, args.top_k)
             precision = sum(1 for value in grades[: args.top_k] if value > 0) / max(
@@ -282,9 +327,11 @@ async def evaluate(
             )
             covered = {
                 interval.event_id
-                for hit in response.results
-                for interval in item.intervals
-                if hit.video_id == item.video_id and interval.contains(hit.best_frame_idx)
+                for row in response.avs
+                for interval, _grade in gold_grade_by_frame
+                if row.video_id == item.video_id
+                and row.best_frame_idx is not None
+                and interval.contains(row.best_frame_idx)
             }
             expected_events = {interval.event_id for interval in item.intervals}
             avs_ndcg.append(ndcg)
@@ -292,7 +339,7 @@ async def evaluate(
             avs_event_coverage.append(
                 len(covered) / len(expected_events) if expected_events else 0.0
             )
-            record.update({"ndcg": ndcg, "precision": precision})
+            record.update({"ndcg": ndcg, "precision": precision, "result_count": len(response.avs)})
 
         per_query.append(record)
         if args.verbose:

@@ -21,10 +21,13 @@ from online.domain.models import (
 from online.domain.execution import BranchStatus
 from online.domain.search_config import ResultOptions
 from online.ports.interfaces import Retriever, SceneRepository
+from online.services.avs import AvsProcessor
 from online.services.deduplication import deduplicate_for_task
 from online.services.evidence_builder import EvidenceBuilder
 from online.services.fusion import fuse_candidates
+from online.services.kis import KisProcessor
 from online.services.negative_constraints import apply_negative_constraints, extract_negative_constraints
+from online.services.qa import QaProcessor
 from online.services.query_planner import RuleBasedQueryPlanner
 from online.services.registry import RetrieverRegistry
 from online.services.rerank_pipeline import RerankPipeline
@@ -33,6 +36,7 @@ from online.services.retrieval_orchestrator import RetrievalOrchestrator
 from online.services.rules import RuleConfig, apply_bonus_penalty
 from online.services.thresholding import apply_thresholds
 from online.services.temporal import link_event_hits
+from online.services.trake import TrakeProcessor
 
 
 class SearchService:
@@ -58,6 +62,12 @@ class SearchService:
         # None = không có tầng rerank nào; cascade vẫn chạy được và chỉ ghi
         # warning "chưa cấu hình", nên hành vi mặc định không đổi.
         self.rerank_pipeline = rerank_pipeline or RerankPipeline(self.evidence_builder)
+        # Bốn processor chuyên biệt (PR-07). Chúng chạy SAU lõi retrieval dùng
+        # chung, đúng kiến trúc "một lõi + bốn task processor".
+        self.kis_processor = KisProcessor()
+        self.qa_processor = QaProcessor()
+        self.trake_processor = TrakeProcessor()
+        self.avs_processor = AvsProcessor()
         self.planner = planner or RuleBasedQueryPlanner()
         self.candidate_limit = candidate_limit
         self.rrf_k = rrf_k
@@ -260,14 +270,31 @@ class SearchService:
                 )
                 statuses = _merge_statuses(statuses, step_statuses)
                 event_hit_lists.append(await self._hydrate(candidates, event.text))
+            documents = await self._documents_for(
+                [hit for hits in event_hit_lists for hit in hits]
+            )
+            # Stage A khóa video trước, rồi mới beam search trong video đó và
+            # tinh chỉnh frame — thay cho link_event_hits chỉ nối scene.
+            trake = self.trake_processor.run(
+                [event.text for event in plan.events],
+                event_hit_lists,
+                documents,
+                limit=request.top_k,
+            )
             sequences = link_event_hits(event_hit_lists, limit=request.top_k)
             warnings = _status_warnings(statuses)
+            if not trake:
+                warnings.append(
+                    "TRAKE: không dựng được chuỗi nào — không có video nào phủ "
+                    "đủ số step tối thiểu"
+                )
             return SearchResponse(
                 query_id=query_id,
                 task=task,
                 took_ms=(perf_counter() - started) * 1000,
                 status="COMPLETED_WITH_WARNINGS" if warnings else "COMPLETED",
                 sequences=sequences,
+                trake=trake,
                 branch_status=statuses,
                 query_plan=plan if request.debug else None,
                 warnings=warnings,
@@ -299,6 +326,9 @@ class SearchService:
             + rerank.warnings
             + [warning for hit in results for warning in hit.warnings]
         )
+        task_results = await self._run_task_processor(
+            task, plan, request, results, candidates, rerank.packs
+        )
         return SearchResponse(
             query_id=query_id,
             task=task,
@@ -308,7 +338,70 @@ class SearchService:
             branch_status=statuses,
             query_plan=plan if request.debug else None,
             warnings=warnings,
+            **task_results,
         )
+
+    async def _documents_for(self, hits: list[SearchHit]) -> dict[str, SceneDocument]:
+        return {
+            document.scene_id: document
+            for document in await self.repository.get_many(
+                sorted({hit.scene_id for hit in hits})
+            )
+        }
+
+    async def _run_task_processor(
+        self,
+        task: TaskType,
+        plan: QueryPlan,
+        request: SearchRequest,
+        results: list[SearchHit],
+        candidates: list[Candidate],
+        packs: dict,
+    ) -> dict:
+        """Chạy processor chuyên biệt của task trên kết quả đã rerank."""
+
+        if not results:
+            return {}
+        if task == TaskType.TEXTUAL_KIS:
+            documents = await self._documents_for(results)
+            return {
+                "kis": self.kis_processor.rank(
+                    plan.original_query, results, documents,
+                    packs=packs, limit=request.top_k,
+                )
+            }
+
+        # QA và AVS đều cần evidence pack đầy đủ; dựng lazy cho đúng phần đầu.
+        by_id = {item.candidate_id: item for item in candidates}
+        head = [by_id[hit.candidate_id] for hit in results if hit.candidate_id in by_id]
+        evidence_packs = []
+        for candidate, hit in zip(head, results, strict=False):
+            pack = packs.get(candidate.candidate_id)
+            if pack is None:
+                pack = await self.evidence_builder.build(
+                    candidate, best_frame_idx=hit.best_frame_idx
+                )
+            elif pack.best_frame_idx is None:
+                pack = pack.model_copy(update={"best_frame_idx": hit.best_frame_idx})
+            if pack is not None:
+                evidence_packs.append(pack)
+        scores = {hit.candidate_id: hit.score for hit in results}
+
+        if task == TaskType.QA:
+            return {
+                "qa": self.qa_processor.answer(
+                    plan.original_query, evidence_packs,
+                    frame_scores=scores, limit=request.top_k,
+                )
+            }
+        if task == TaskType.AVS:
+            return {
+                "avs": self.avs_processor.rank(
+                    plan.original_query, evidence_packs,
+                    retrieval_scores=scores, limit=request.top_k,
+                )
+            }
+        return {}
 
 
 def _annotate_thresholds(
