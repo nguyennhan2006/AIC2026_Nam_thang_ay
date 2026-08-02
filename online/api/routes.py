@@ -17,6 +17,11 @@ from online.domain.models import (
     VQAResponse,
 )
 from online.errors import TaskConflictError
+from online.services.capabilities import (
+    UNSUPPORTED,
+    UNSUPPORTED_BRANCH_CONTROLS,
+    validate_search_options,
+)
 
 
 router = APIRouter(prefix="/v1")
@@ -58,6 +63,10 @@ async def _search_with_task(
 
     if request.task is not None and request.task != task:
         raise TaskConflictError(body_task=request.task.value, path_task=task.value)
+    # Option chưa chạy thật -> 422 ngay, không nhận rồi lờ đi (PR-04).
+    validate_search_options(
+        request.search_options, container.search_service.registry.capabilities()
+    )
     response = await container.search_service.search(
         request.model_copy(update={"task": task})
     )
@@ -166,6 +175,15 @@ async def search_capabilities(container: Container) -> dict:
         # weighted_sum/max_score reuse rank-derived contribution, not a properly
         # score-normalized weighted sum — see online/services/fusion.py docstring.
         "fusion_methods": ["rrf", "weighted_sum", "max_score", "intersection", "union"],
+        # Option bị từ chối kèm lý do: UI hiện được "vì sao control này mờ đi"
+        # thay vì để người dùng thử rồi ăn 422 mà không hiểu.
+        "unsupported_options": {
+            path: reason for path, (_value, reason) in sorted(UNSUPPORTED.items())
+        }
+        | {
+            f"branches.*.{control}": reason
+            for control, reason in sorted(UNSUPPORTED_BRANCH_CONTROLS.items())
+        },
         "rerank": {
             "rules": container.search_service.rule_config is not None,
             # BGE/Qwen3-VL rerank need a remote model server that does not exist

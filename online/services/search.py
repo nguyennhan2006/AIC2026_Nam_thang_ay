@@ -19,13 +19,16 @@ from online.domain.models import (
     TaskType,
 )
 from online.domain.execution import BranchStatus
+from online.domain.search_config import ResultOptions
 from online.ports.interfaces import Retriever, SceneRepository
 from online.services.fusion import fuse_candidates
 from online.services.negative_constraints import apply_negative_constraints, extract_negative_constraints
 from online.services.query_planner import RuleBasedQueryPlanner
 from online.services.registry import RetrieverRegistry
+from online.services.score_normalization import normalize_all
 from online.services.retrieval_orchestrator import RetrievalOrchestrator
 from online.services.rules import RuleConfig, apply_bonus_penalty
+from online.services.thresholding import apply_thresholds
 from online.services.temporal import link_event_hits
 
 
@@ -60,6 +63,12 @@ class SearchService:
         # còn kéo đổ cả request như `asyncio.gather` trần trước PR-03.
         lists, statuses = await self.orchestrator.execute(plan, limit)
         fusion_options = plan.search_options.fusion
+        # Chuẩn hóa trước, cắt ngưỡng sau, rồi mới fuse. Thứ tự này bắt buộc:
+        # RRF dùng *hạng* trong danh sách của branch, nên cắt sau khi fuse sẽ
+        # không cho các candidate còn lại lên hạng (xem services/thresholding.py).
+        lists = normalize_all(lists, method=fusion_options.normalized_score_method)
+        lists, thresholded = apply_thresholds(lists, plan)
+        statuses = _annotate_thresholds(statuses, thresholded)
         # rrf_k also exists as a deployment-level default (SearchService.rrf_k /
         # AIC_RRF_K); only let a request override it when the caller actually set
         # search_options.fusion.rrf_k explicitly (model_fields_set), so a request
@@ -236,7 +245,7 @@ class SearchService:
         if task == TaskType.AVS:
             per_video = plan.search_options.fusion.max_results_per_video or 3
             hits = _diversify_avs(hits, request.top_k, per_video=per_video)
-        results = hits[: request.top_k]
+        results = _format_results(hits, request.top_k, plan.search_options.results)
         warnings = _status_warnings(statuses) + [
             warning for hit in results for warning in hit.warnings
         ]
@@ -250,6 +259,34 @@ class SearchService:
             query_plan=plan if request.debug else None,
             warnings=warnings,
         )
+
+
+def _annotate_thresholds(
+    statuses: list[BranchStatus], thresholded: dict[str, int]
+) -> list[BranchStatus]:
+    """Ghi rõ branch nào bị ngưỡng cắt bao nhiêu candidate.
+
+    Không có dòng này thì `candidate_count` tụt xuống mà không ai biết là do
+    ngưỡng của chính mình hay do index rỗng.
+    """
+
+    if not thresholded:
+        return statuses
+    output: list[BranchStatus] = []
+    for status in statuses:
+        count = thresholded.get(status.execution_id)
+        if not count:
+            output.append(status)
+            continue
+        output.append(
+            status.model_copy(
+                update={
+                    "candidate_count": max(status.candidate_count - count, 0),
+                    "warning": f"{count} candidate bị ngưỡng min_score loại hoặc hạ hạng",
+                }
+            )
+        )
+    return output
 
 
 def _status_warnings(statuses: list[BranchStatus]) -> list[str]:
@@ -282,6 +319,40 @@ def _merge_statuses(
                 }
             )
     return [merged[key] for key in sorted(merged)]
+
+
+_SORT_KEYS: dict[str, str] = {
+    "visual_score": "lexical_hash_fallback.raw",
+    "caption_score": "bm25_caption.raw",
+    "ocr_score": "bm25_ocr.raw",
+    "asr_score": "bm25_asr.raw",
+}
+
+
+def _format_results(
+    hits: list[SearchHit], top_k: int, options: ResultOptions
+) -> list[SearchHit]:
+    """Áp `sort_by` / `display_top_k` — hai field trước PR-04 không ai đọc.
+
+    `display_top_k` chỉ được phép THU HẸP so với `top_k` của request: nó là
+    thiết lập hiển thị, không phải cách lách giới hạn top_k.
+    """
+
+    ordered = hits
+    if options.sort_by == "time":
+        ordered = sorted(hits, key=lambda hit: (hit.video_id, hit.start_frame))
+    elif options.sort_by != "final_score":
+        key = _SORT_KEYS[options.sort_by]
+        ordered = sorted(
+            hits, key=lambda hit: hit.component_scores.get(key, 0.0), reverse=True
+        )
+    if options.display_min_score is not None:
+        ordered = [hit for hit in ordered if hit.score >= options.display_min_score]
+    limit = min(top_k, options.display_top_k)
+    return [
+        hit.model_copy(update={"rank": rank})
+        for rank, hit in enumerate(ordered[:limit], start=1)
+    ]
 
 
 def _diversify_avs(hits: list[SearchHit], limit: int, per_video: int = 3) -> list[SearchHit]:

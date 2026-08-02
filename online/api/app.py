@@ -16,6 +16,7 @@ from online.api.container import build_container
 from online.api.routes import router
 from online.config import Settings
 from online.errors import InvalidQueryError, OnlineError, TaskConflictError
+from online.services.capabilities import UnsupportedSearchOptionError
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -57,6 +58,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     client_errors: dict[type[OnlineError], int] = {
         TaskConflictError: 422,
         InvalidQueryError: 422,
+        UnsupportedSearchOptionError: 422,
     }
 
     @app.exception_handler(OnlineError)
