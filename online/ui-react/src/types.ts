@@ -177,6 +177,12 @@ export interface TrakeResultItem {
   steps: TrakeStep[];
   step_coverage: number;
   ordering_score: number;
+  // PR-14A: step (1-based) không tìm được candidate nào trong video này —
+  // rỗng nghĩa là chain đủ toàn bộ step.
+  missing_steps: number[];
+  // PR-14A: true khi video được giữ dù dưới min_step_coverage (không còn
+  // lựa chọn nào khác) — kết quả suy yếu, cần cảnh báo rõ trong UI.
+  degraded: boolean;
 }
 
 export interface AvsResultItem {

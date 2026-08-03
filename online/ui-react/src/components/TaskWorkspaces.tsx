@@ -84,14 +84,28 @@ export function TrakeWorkspace({ items }: { items: TrakeResultItem[] }) {
   return (
     <div className="trake-workspace">
       {items.map((item) => (
-        <article key={`${item.video_id}-${item.rank}`} className="trake-card">
+        <article
+          key={`${item.video_id}-${item.rank}`}
+          className={item.degraded ? "trake-card trake-card-degraded" : "trake-card"}
+        >
           <header>
             <span className="rank">#{item.rank}</span>
             <strong>{item.video_id}</strong>
             <output>score {item.sequence_score.toFixed(3)}</output>
+            {item.degraded && (
+              <span className="degraded-badge" title="Video được giữ dù dưới ngưỡng min_step_coverage — không còn lựa chọn nào tốt hơn">
+                degraded
+              </span>
+            )}
           </header>
           <p className="muted small">
             step coverage {Math.round(item.step_coverage * 100)}% · ordering {Math.round(item.ordering_score * 100)}%
+            {item.missing_steps.length > 0 && (
+              <>
+                {" "}
+                · <span className="warning-text">thiếu step {item.missing_steps.join(", ")}</span>
+              </>
+            )}
           </p>
           <ol className="trake-steps">
             {item.steps.map((step) => (

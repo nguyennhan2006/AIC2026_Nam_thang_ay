@@ -138,6 +138,7 @@ ul.reason.compact li { padding:2px 6px; }
 
 .trake-workspace { display:grid; gap:14px; margin:16px 0; }
 .trake-card { padding:14px; border:1px solid #263950; border-radius:12px; background:#0e1b2c; }
+.trake-card-degraded { border-color:#e5737366; background:#1a1210; }
 .trake-card header { display:flex; gap:10px; align-items:center; }
 .trake-steps { margin:8px 0 0; padding-left:1.2rem; font-size:.82rem; }
 .refinement-dense { color:#63d5b5; }
