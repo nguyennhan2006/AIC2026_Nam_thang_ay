@@ -51,6 +51,12 @@ OCR trong cùng model), OWLv2, CLIP và Whisper; pin revision qua các biến
 `docs/KAGGLE_OFFLINE_GUIDE.md` để chạy full pipeline thật trên Kaggle notebook khi
 máy local không đủ VRAM/RAM cho model 7B.
 
+Không có GPU rời/máy thuê thì dùng **FPT AI Marketplace** thay tạm (rerank thật,
+QA answer generation qua LLM, enrichment caption/OCR qua
+`scripts/enrich_keyframes_fpt.py`) — set `AIC_FPT_ENABLED=true` +
+`AIC_FPT_API_KEY`, xem `docs/12_USER_GUIDE.md` mục 3b cho đầy đủ biến cần set và
+cách xác nhận đã bật đúng.
+
 ## Triển khai Vast.ai
 
 ```bash
