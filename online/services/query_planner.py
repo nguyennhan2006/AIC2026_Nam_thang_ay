@@ -22,6 +22,12 @@ TEMPORAL_RE = re.compile(
     r"\b(?:sau đó|tiếp theo|kế tiếp|cuối cùng|rồi|then|next|finally)\b",
     flags=re.IGNORECASE,
 )
+# Gold TRAKE query dùng format liệt kê đánh số "(1) ...; (2) ...; (3) ..."
+# (xem examples/AIC2026_L21_V001_queries_4tasks.jsonl) — KHÔNG dùng từ nối
+# tiếp diễn kiểu "sau đó"/"cuối cùng" mà TEMPORAL_RE bắt. Không có nhánh này,
+# mọi query TRAKE thật rơi về đúng 1 event, khiến `len(plan.events) >= 2` ở
+# search.py luôn False và TrakeProcessor không bao giờ chạy.
+NUMBERED_STEP_RE = re.compile(r"\(\d+\)\s*")
 SPEECH_HINTS = {
     "nói",
     "phát biểu",
@@ -51,10 +57,21 @@ class RuleBasedQueryPlanner:
         task = request.task or TaskType.TEXTUAL_KIS
         normalized = normalize_query(request.query)
         exact_phrases = [item.strip() for item in QUOTED_RE.findall(normalized)]
-        parts = [item.strip(" ,.;:") for item in TEMPORAL_RE.split(normalized)]
-        parts = [item for item in parts if item]
-        if task != TaskType.TRAKE or len(parts) < 2:
-            parts = [normalized]
+        parts = [normalized]
+        if task == TaskType.TRAKE:
+            # Ưu tiên format đánh số "(1)...(2)..." — đúng format gold thật.
+            # `[1:]` bỏ phần dẫn trước "(1)" (vd "...căn chỉnh bốn khoảnh khắc:").
+            numbered = [
+                item.strip(" ,.;:") for item in NUMBERED_STEP_RE.split(normalized)[1:]
+            ]
+            numbered = [item for item in numbered if item]
+            if len(numbered) >= 2:
+                parts = numbered
+            else:
+                temporal = [item.strip(" ,.;:") for item in TEMPORAL_RE.split(normalized)]
+                temporal = [item for item in temporal if item]
+                if len(temporal) >= 2:
+                    parts = temporal
         events = [
             QueryEvent(
                 event_idx=index,

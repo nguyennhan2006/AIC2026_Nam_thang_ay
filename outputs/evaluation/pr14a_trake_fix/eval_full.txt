@@ -1,0 +1,71 @@
+gold=40 query  scenes=217  backend=local  top_k=100
+  {'query_id': 'KIS_E01', 'task': 'TEXTUAL_KIS', 'first_frame_hit_rank': 2, 'first_video_rank': 1}
+  {'query_id': 'KIS_E02', 'task': 'TEXTUAL_KIS', 'first_frame_hit_rank': None, 'first_video_rank': 1}
+  {'query_id': 'KIS_E03', 'task': 'TEXTUAL_KIS', 'first_frame_hit_rank': 5, 'first_video_rank': 1}
+  {'query_id': 'KIS_E04', 'task': 'TEXTUAL_KIS', 'first_frame_hit_rank': 1, 'first_video_rank': 1}
+  {'query_id': 'KIS_M01', 'task': 'TEXTUAL_KIS', 'first_frame_hit_rank': 1, 'first_video_rank': 1}
+  {'query_id': 'KIS_M02', 'task': 'TEXTUAL_KIS', 'first_frame_hit_rank': 2, 'first_video_rank': 1}
+  {'query_id': 'KIS_M03', 'task': 'TEXTUAL_KIS', 'first_frame_hit_rank': 1, 'first_video_rank': 1}
+  {'query_id': 'KIS_M04', 'task': 'TEXTUAL_KIS', 'first_frame_hit_rank': 2, 'first_video_rank': 1}
+  {'query_id': 'KIS_H01', 'task': 'TEXTUAL_KIS', 'first_frame_hit_rank': 1, 'first_video_rank': 1}
+  {'query_id': 'KIS_H02', 'task': 'TEXTUAL_KIS', 'first_frame_hit_rank': 2, 'first_video_rank': 1}
+  {'query_id': 'KIS_H03', 'task': 'TEXTUAL_KIS', 'first_frame_hit_rank': None, 'first_video_rank': 1}
+  {'query_id': 'KIS_H04', 'task': 'TEXTUAL_KIS', 'first_frame_hit_rank': 1, 'first_video_rank': 1}
+  {'query_id': 'VQA_E01', 'task': 'QA', 'answer_correct': False, 'predicted_answers': ['3', '60', '3']}
+  {'query_id': 'VQA_E02', 'task': 'QA', 'answer_correct': True, 'predicted_answers': ['5', '2.800', '60']}
+  {'query_id': 'VQA_E03', 'task': 'QA', 'answer_correct': False, 'predicted_answers': ['người', 'nhóm người', 'nhóm người']}
+  {'query_id': 'VQA_E04', 'task': 'QA', 'answer_correct': False, 'predicted_answers': ['bác sĩ', 'người', 'người dẫn chương trình']}
+  {'query_id': 'VQA_M01', 'task': 'QA', 'answer_correct': False, 'predicted_answers': ['cột nước', 'người', 'người']}
+  {'query_id': 'VQA_M02', 'task': 'QA', 'answer_correct': False, 'predicted_answers': ['60', '06', '40']}
+  {'query_id': 'VQA_M03', 'task': 'QA', 'answer_correct': True, 'predicted_answers': ['người đàn ông', 'người', 'người dẫn chương trình']}
+  {'query_id': 'VQA_M04', 'task': 'QA', 'answer_correct': False, 'predicted_answers': ['rùa biển', 'màn hình xanh lá', 'người dẫn chương trình']}
+  {'query_id': 'VQA_H01', 'task': 'QA', 'answer_correct': False, 'predicted_answers': ['người', 'người dẫn chương trình', 'người']}
+  {'query_id': 'VQA_H02', 'task': 'QA', 'answer_correct': False, 'predicted_answers': ['con chó', 'rùa biển', 'con trâu']}
+  {'query_id': 'VQA_H03', 'task': 'QA', 'answer_correct': True, 'predicted_answers': ['người', 'con trâu', 'xe máy']}
+  {'query_id': 'VQA_H04', 'task': 'QA', 'answer_correct': True, 'predicted_answers': ['xe máy', 'người', 'người dẫn chương trình']}
+  {'query_id': 'AVS_E01', 'task': 'AVS', 'ndcg': 0.0, 'precision': 0.0, 'result_count': 0}
+  {'query_id': 'AVS_E02', 'task': 'AVS', 'ndcg': 0.0, 'precision': 0.0, 'result_count': 1}
+  {'query_id': 'AVS_M01', 'task': 'AVS', 'ndcg': 0.0, 'precision': 0.0, 'result_count': 0}
+  {'query_id': 'AVS_M02', 'task': 'AVS', 'ndcg': 0.0, 'precision': 0.0, 'result_count': 0}
+  {'query_id': 'AVS_M03', 'task': 'AVS', 'ndcg': 0.0, 'precision': 0.0, 'result_count': 0}
+  {'query_id': 'AVS_H01', 'task': 'AVS', 'ndcg': 0.0, 'precision': 0.0, 'result_count': 0}
+  {'query_id': 'AVS_H02', 'task': 'AVS', 'ndcg': 0.0, 'precision': 0.0, 'result_count': 0}
+  {'query_id': 'AVS_H03', 'task': 'AVS', 'ndcg': 0.0, 'precision': 0.0, 'result_count': 2}
+  {'query_id': 'TRAKE_E01', 'task': 'TRAKE', 'r_score': 0.25, 'video_correct': True, 'predicted_frames': [5760, 6279, 6386, 6933], 'expected_steps': 4}
+  {'query_id': 'TRAKE_E02', 'task': 'TRAKE', 'r_score': 0.0, 'video_correct': True, 'predicted_frames': [7811, 8268, 8358, 8730], 'expected_steps': 4}
+  {'query_id': 'TRAKE_M01', 'task': 'TRAKE', 'r_score': 0.0, 'video_correct': True, 'predicted_frames': [2036, 2130, 2217, 3782, 3932], 'expected_steps': 5}
+  {'query_id': 'TRAKE_M02', 'task': 'TRAKE', 'r_score': 0.0, 'video_correct': True, 'predicted_frames': [27522, 27726, 28109, 28428], 'expected_steps': 4}
+  {'query_id': 'TRAKE_M03', 'task': 'TRAKE', 'r_score': 0.0, 'video_correct': True, 'predicted_frames': [18741, 20354, 22284, 22485, 22584], 'expected_steps': 5}
+  {'query_id': 'TRAKE_H01', 'task': 'TRAKE', 'r_score': 0.0, 'video_correct': True, 'predicted_frames': [34032, 36006, 36612, 37011], 'expected_steps': 4}
+  {'query_id': 'TRAKE_H02', 'task': 'TRAKE', 'r_score': 0.0, 'video_correct': True, 'predicted_frames': [26820, 32286, 32287, 32531, 34272], 'expected_steps': 5}
+  {'query_id': 'TRAKE_H03', 'task': 'TRAKE', 'r_score': 0.0, 'video_correct': True, 'predicted_frames': [18315, 19860, 20612, 21624], 'expected_steps': 4}
+
+=== TEXTUAL_KIS (12 query) ===
+  R@1                    0.417
+  R@5                    0.833
+  R@20                   0.833
+  R@50                   0.833
+  R@100                  0.833
+  MRR                    0.600
+  vidR@100               1.000
+
+=== QA (12 query) ===
+  R@1                    0.167
+  R@5                    0.417
+  R@20                   0.667
+  R@50                   0.833
+  R@100                  0.917
+  MRR                    0.279
+  vidR@100               1.000
+  answer_accuracy        0.333
+  joint_top1             0.083
+
+=== TRAKE (8 query) ===
+  correct_video_rate     1.000
+  mean_r_score           0.031
+  complete_chain_rate    0.000
+
+=== AVS (8 query) ===
+  nDCG@100               0.000
+  P@100                  0.000
+  event_coverage         0.000

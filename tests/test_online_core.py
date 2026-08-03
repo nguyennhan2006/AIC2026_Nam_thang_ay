@@ -60,6 +60,35 @@ class OnlineCoreTests(unittest.TestCase):
         self.assertEqual(len(plan.events), 3)
         self.assertGreater(plan.modality_weights[Modality.OCR], 1.0)
 
+    def test_query_planner_splits_numbered_step_list_for_trake(self) -> None:
+        # Gold TRAKE thật (examples/AIC2026_L21_V001_queries_4tasks.jsonl) dùng
+        # format liệt kê đánh số "(1)...(2)...", KHÔNG dùng từ nối tiếp diễn —
+        # thiếu nhánh này thì len(plan.events) luôn là 1 và TrakeProcessor
+        # không bao giờ chạy (bug thật, đã xác nhận trên dữ liệu L21_V001).
+        request = SearchRequest(
+            query=(
+                "Tìm video về giếng nước bất ngờ phun cao và căn chỉnh bốn "
+                "khoảnh khắc: (1) cột nước được quay từ xa; (2) một người đàn "
+                "ông tiến sát cột nước; (3) người này cầm chai hoặc vật chứa "
+                "cạnh dòng nước; (4) nhiều người cùng chỉ về phía cột nước."
+            ),
+            task=TaskType.TRAKE,
+        )
+        plan = run(RuleBasedQueryPlanner().plan(request))
+        self.assertEqual(len(plan.events), 4)
+        self.assertEqual(plan.events[0].text, "cột nước được quay từ xa")
+        self.assertEqual(plan.events[3].text, "nhiều người cùng chỉ về phía cột nước")
+
+    def test_single_numbered_marker_does_not_force_a_split(self) -> None:
+        # Chỉ có 1 marker "(n)" không đủ để coi là danh sách bước — tránh cắt
+        # nhầm câu thường tình cờ có một cặp ngoặc đơn chứa số.
+        request = SearchRequest(
+            query="Cảnh quay tại toà nhà số (1) Láng Hạ vào buổi sáng",
+            task=TaskType.TRAKE,
+        )
+        plan = run(RuleBasedQueryPlanner().plan(request))
+        self.assertEqual(len(plan.events), 1)
+
     def test_weighted_rrf_uses_rank_and_modality_weight(self) -> None:
         visual = [
             Candidate(
