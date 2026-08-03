@@ -9,13 +9,13 @@ import { BranchStatusPanel } from "./components/BranchStatusPanel";
 import { CompareLab } from "./components/CompareLab";
 import { EvidenceInspector } from "./components/EvidenceInspector";
 import { HealthDrawer } from "./components/HealthDrawer";
-import { MixingConsole } from "./components/MixingConsole";
 import { QueryStudio } from "./components/QueryStudio";
 import { ResultsExplorer } from "./components/ResultsExplorer";
 import { StreamLog } from "./components/StreamLog";
 import { SubmissionBoard } from "./components/SubmissionBoard";
 import { AvsWorkspace, KisWorkspace, QaWorkspace, TrakeWorkspace } from "./components/TaskWorkspaces";
 import { DatasetStats } from "./features/search/DatasetStats";
+import { WeightPanel } from "./features/weights/WeightPanel";
 import { loadApiBase, loadApiToken, saveApiBase, saveApiToken } from "./storage";
 import type { HealthResponse, SearchOptions, SearchResponse, StreamEvent, TaskType } from "./types";
 
@@ -58,7 +58,12 @@ function App() {
   const [topK, setTopK] = useState(20);
   const [debug, setDebug] = useState(false);
   const [streaming, setStreaming] = useState(false);
-  const [searchOptions, setSearchOptions] = useState<SearchOptions>({});
+  // Draft/applied: kéo slider trong WeightPanel chỉ đổi draftOptions; chỉ khi
+  // search thực sự chạy (runSearch) thì draft mới trở thành "applied" —
+  // hasUnsavedChanges cho biết còn thay đổi chưa gửi lên server (docs §14).
+  const [draftOptions, setDraftOptions] = useState<SearchOptions>({});
+  const [appliedOptions, setAppliedOptions] = useState<SearchOptions>({});
+  const hasUnsavedChanges = JSON.stringify(draftOptions) !== JSON.stringify(appliedOptions);
   const [status, setStatus] = useState("");
   const [result, setResult] = useState<SearchResponse | null>(null);
   const [streamEvents, setStreamEvents] = useState<StreamEvent[]>([]);
@@ -82,7 +87,9 @@ function App() {
     setStatus(streaming ? "Đang stream…" : "Đang tìm kiếm…");
     setResult(null);
     setStreamEvents([]);
-    const body = { query, task, top_k: topK, debug, search_options: searchOptions };
+    // Apply & Search: draft chỉ thực sự áp dụng khi search chạy thật.
+    setAppliedOptions(draftOptions);
+    const body = { query, task, top_k: topK, debug, search_options: draftOptions };
     try {
       if (streaming) {
         abortRef.current?.abort();
@@ -204,7 +211,14 @@ function App() {
                 onHealthCheck={checkHealth}
                 submitting={submitting}
               />
-              <MixingConsole apiConfig={apiConfig} searchOptions={searchOptions} onChange={setSearchOptions} />
+              <WeightPanel
+                apiConfig={apiConfig}
+                task={task}
+                draftOptions={draftOptions}
+                onDraftChange={setDraftOptions}
+                hasUnsavedChanges={hasUnsavedChanges}
+                parsedEvents={result?.query_plan?.events ?? []}
+              />
               {streaming && <StreamLog events={streamEvents} />}
               {result && <BranchStatusPanel statuses={result.branch_status} />}
             </>
