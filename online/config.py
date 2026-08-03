@@ -21,6 +21,41 @@ def _env_bool(name: str, default: bool) -> bool:
     return raw.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _env_float(name: str, default: float) -> float:
+    value = float(os.getenv(name, str(default)))
+    if value <= 0:
+        raise ValueError(f"{name} must be positive")
+    return value
+
+
+def _fpt_settings_kwargs() -> dict[str, object]:
+    """Đọc toàn bộ `AIC_FPT_*`/`AIC_LOG_*` — tách riêng khỏi `Settings.from_env`
+    (đã dài) và để lỗi cấu hình FPT hiện ra ngay khi bật, không phải lúc gọi
+    API giữa thí nghiệm (Gate 0/Gate 1 của
+    AIC2026_FPT_API_SINGLE_VIDEO_TEST_TUNING_GUIDE.md)."""
+
+    enabled = _env_bool("AIC_FPT_ENABLED", False)
+    api_key = os.getenv("AIC_FPT_API_KEY") or None
+    if enabled and not api_key:
+        raise ValueError("AIC_FPT_ENABLED=true requires AIC_FPT_API_KEY")
+    return {
+        "fpt_enabled": enabled,
+        "fpt_base_url": (os.getenv("AIC_FPT_BASE_URL") or "https://mkp-api.fptcloud.com").rstrip("/"),
+        "fpt_api_key": api_key,
+        "fpt_llm_model": os.getenv("AIC_FPT_LLM_MODEL") or None,
+        "fpt_vlm_model": os.getenv("AIC_FPT_VLM_MODEL") or None,
+        "fpt_rerank_model": os.getenv("AIC_FPT_RERANK_MODEL") or None,
+        "fpt_timeout_sec": _env_float("AIC_FPT_TIMEOUT_SEC", 90.0),
+        "fpt_connect_timeout_sec": _env_float("AIC_FPT_CONNECT_TIMEOUT_SEC", 10.0),
+        "fpt_max_retries": _env_int("AIC_FPT_MAX_RETRIES", 3),
+        "fpt_max_concurrency": _env_int("AIC_FPT_MAX_CONCURRENCY", 2),
+        "fpt_retry_backoff_base_sec": _env_float("AIC_FPT_RETRY_BACKOFF_BASE_SEC", 1.0),
+        "fpt_retry_backoff_max_sec": _env_float("AIC_FPT_RETRY_BACKOFF_MAX_SEC", 8.0),
+        "log_request_body": _env_bool("AIC_LOG_REQUEST_BODY", False),
+        "log_provider_response": _env_bool("AIC_LOG_PROVIDER_RESPONSE", False),
+    }
+
+
 @dataclass(frozen=True, slots=True)
 class Settings:
     """Validated runtime settings for local or Qdrant-backed operation."""
@@ -61,6 +96,33 @@ class Settings:
     rerank_api_key: str | None = None
     rerank_text_model: str = "bge-reranker-v2-m3"
     rerank_vlm_model: str = "qwen3-vl-32b"
+    # Dense visual local (PR-13) — text tower phải cùng model với vector ảnh
+    # đã sinh (`scripts/embed_keyframes_local.py`), nếu không hai không gian
+    # embedding lệch nhau và cosine similarity vô nghĩa. Chỉ thật sự nạp model
+    # khi export có embedding thật (online/adapters/frame_vector_store.py);
+    # không có thì container vẫn dùng lexical_hash_fallback như trước.
+    visual_embedding_model: str = "openai/clip-vit-large-patch14"
+    visual_embedding_model_revision: str | None = None
+    # PR-12 — FPT AI Marketplace, dùng TẠM thay server A100 tự host để test/
+    # tune prompt (xem AIC2026_FPT_API_SINGLE_VIDEO_TEST_TUNING_GUIDE.md).
+    # `fpt_enabled=False` là mặc định an toàn: không có field nào ở đây được
+    # đọc nếu tắt, và bật lên mà thiếu key phải lỗi ngay lúc load config chứ
+    # không phải lúc gọi API giữa chừng thí nghiệm.
+    fpt_enabled: bool = False
+    fpt_base_url: str = "https://mkp-api.fptcloud.com"
+    fpt_api_key: str | None = None
+    fpt_llm_model: str | None = None
+    fpt_vlm_model: str | None = None
+    fpt_rerank_model: str | None = None
+    fpt_timeout_sec: float = 90.0
+    fpt_connect_timeout_sec: float = 10.0
+    fpt_max_retries: int = 3
+    fpt_max_concurrency: int = 2
+    fpt_retry_backoff_base_sec: float = 1.0
+    fpt_retry_backoff_max_sec: float = 8.0
+    # Gate 0 (bảo mật) — mặc định tắt ghi log, chỉ bật thủ công khi debug.
+    log_request_body: bool = False
+    log_provider_response: bool = False
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -111,4 +173,7 @@ class Settings:
             rerank_api_key=os.getenv("AIC_RERANK_API_KEY") or os.getenv("AIC_GPU_API_KEY"),
             rerank_text_model=os.getenv("AIC_RERANK_TEXT_MODEL", "bge-reranker-v2-m3"),
             rerank_vlm_model=os.getenv("AIC_RERANK_VLM_MODEL", "qwen3-vl-32b"),
+            visual_embedding_model=os.getenv("AIC_VISUAL_EMBEDDING_MODEL", "openai/clip-vit-large-patch14"),
+            visual_embedding_model_revision=os.getenv("AIC_VISUAL_EMBEDDING_MODEL_REVISION") or None,
+            **_fpt_settings_kwargs(),
         )

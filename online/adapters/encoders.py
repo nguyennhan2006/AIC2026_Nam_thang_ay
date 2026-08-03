@@ -35,6 +35,44 @@ class HashingTextEncoder:
         return [item / norm for item in vector] if norm else vector
 
 
+class LocalClipTextEncoder:
+    """CLIP text tower chạy tại chỗ (CPU), cùng không gian embedding với vector
+    ảnh do `scripts/embed_keyframes_local.py` sinh — bắt buộc để dense_visual
+    local so khớp được query text với keyframe, thay vì hash trên caption.
+
+    `torch`/`transformers` chỉ import lúc gọi `encode()` lần đầu (không phải
+    ở module import) — nhiều test dựng container mà không bao giờ gọi tới
+    nhánh này, import sớm sẽ làm chậm toàn bộ test suite vô ích.
+    """
+
+    def __init__(self, model_path: str, *, revision: str | None = None) -> None:
+        self.model_path = model_path
+        self.revision = revision
+        self._model = None
+        self._processor = None
+
+    def _load(self):
+        if self._model is None:
+            from transformers import CLIPModel, CLIPProcessor
+
+            self._model = CLIPModel.from_pretrained(self.model_path, revision=self.revision).to("cpu").eval()
+            self._processor = CLIPProcessor.from_pretrained(self.model_path, revision=self.revision)
+        return self._model, self._processor
+
+    async def encode(self, text: str) -> list[float]:
+        return await asyncio.to_thread(self._encode_sync, text)
+
+    def _encode_sync(self, text: str) -> list[float]:
+        import torch
+
+        model, processor = self._load()
+        inputs = processor(text=[text], return_tensors="pt", padding=True, truncation=True)
+        with torch.inference_mode():
+            vector = model.get_text_features(**inputs)[0]
+            vector = vector / vector.norm(p=2)
+        return vector.detach().cpu().float().tolist()
+
+
 class RemoteTextEncoder:
     """HTTP adapter for a separately deployed CLIP/SigLIP text encoder."""
 

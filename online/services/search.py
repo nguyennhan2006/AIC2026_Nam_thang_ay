@@ -636,12 +636,23 @@ def _merge_statuses(
     return [merged[key] for key in sorted(merged)]
 
 
-_SORT_KEYS: dict[str, str] = {
-    "visual_score": "lexical_hash_fallback.raw",
-    "caption_score": "bm25_caption.raw",
-    "ocr_score": "bm25_ocr.raw",
-    "asr_score": "bm25_asr.raw",
+_SORT_KEYS: dict[str, tuple[str, ...]] = {
+    # "dense_visual" khi có embedding thật (qdrant, hoặc local + PR-13 đã
+    # chạy), "lexical_hash_fallback" khi backend local chưa có embedding —
+    # container.py chỉ đăng ký MỘT trong hai cho mỗi lần chạy, nên thử theo
+    # thứ tự và dùng key đầu tiên có mặt thay vì đoán cố định một cái.
+    "visual_score": ("dense_visual.raw", "lexical_hash_fallback.raw"),
+    "caption_score": ("bm25_caption.raw",),
+    "ocr_score": ("bm25_ocr.raw",),
+    "asr_score": ("bm25_asr.raw",),
 }
+
+
+def _component_score(hit: SearchHit, candidate_keys: tuple[str, ...]) -> float:
+    for key in candidate_keys:
+        if key in hit.component_scores:
+            return hit.component_scores[key]
+    return 0.0
 
 
 def _format_results(
@@ -657,9 +668,9 @@ def _format_results(
     if options.sort_by == "time":
         ordered = sorted(hits, key=lambda hit: (hit.video_id, hit.start_frame))
     elif options.sort_by != "final_score":
-        key = _SORT_KEYS[options.sort_by]
+        candidate_keys = _SORT_KEYS[options.sort_by]
         ordered = sorted(
-            hits, key=lambda hit: hit.component_scores.get(key, 0.0), reverse=True
+            hits, key=lambda hit: _component_score(hit, candidate_keys), reverse=True
         )
     if options.display_min_score is not None:
         ordered = [hit for hit in ordered if hit.score >= options.display_min_score]

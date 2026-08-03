@@ -9,8 +9,9 @@ from pathlib import Path
 from online.adapters.bm25 import LexicalRetriever
 from online.adapters.color_search import ColorSearchRetriever
 from online.adapters.dense_retriever import DenseRetriever
-from online.adapters.encoders import HashingTextEncoder, RemoteTextEncoder
+from online.adapters.encoders import HashingTextEncoder, LocalClipTextEncoder, RemoteTextEncoder
 from online.adapters.event_search import EventSearchRetriever, JsonlEventRepository
+from online.adapters.frame_vector_store import build_frame_vector_rows
 from online.adapters.json_metadata import JsonlSceneRepository
 from online.adapters.ocr_fuzzy import OcrFuzzyRetriever
 from online.adapters.rerank import BgeTextReranker, QwenVlReranker
@@ -63,6 +64,8 @@ async def build_container(settings: Settings) -> AppContainer:
             retriever = QueryExpansionRetriever(retriever)
         lexical.append(retriever)
 
+    local_frame_rows: list[tuple[str, str, list[float], dict]] = []
+    has_real_embeddings = False
     if settings.backend == "qdrant":
         encoder = RemoteTextEncoder(
             settings.embedding_url or "", settings.request_timeout_sec, settings.embedding_api_key
@@ -75,37 +78,53 @@ async def build_container(settings: Settings) -> AppContainer:
             timeout_sec=settings.request_timeout_sec,
         )
     else:
-        encoder = HashingTextEncoder()
-        rows = []
-        for scene in await repository.all():
-            search_text = " ".join(scene.captions + scene.keywords)
-            rows.append(
-                (
-                    scene.scene_id,
-                    scene.video_id,
-                    await encoder.encode(search_text),
-                    {
-                        "scene_id": scene.scene_id,
-                        "video_id": scene.video_id,
-                        "scene_idx": scene.scene_idx,
-                        # start/end_frame đi kèm payload để candidate từ vector
-                        # store cũng truy ngược được về khoảng frame, không phải
-                        # chờ hydrate mới biết (PR-01 frame contract).
-                        "start_frame": scene.start_frame,
-                        "end_frame": scene.end_frame_exclusive - 1,
-                        "start_sec": scene.start_sec,
-                        "end_sec": scene.end_sec,
-                        "has_ocr": bool(scene.ocr_texts),
-                        "has_asr": bool(scene.asr_texts),
-                    },
-                )
+        local_frame_rows, has_real_embeddings = await build_frame_vector_rows(
+            repository, settings.data_root
+        )
+        if has_real_embeddings:
+            # Export có embedding thật (PR-13, scripts/embed_keyframes_local.py):
+            # text encoder PHẢI cùng model CLIP để chung không gian embedding
+            # với vector ảnh, nếu không cosine similarity vô nghĩa.
+            encoder = LocalClipTextEncoder(
+                settings.visual_embedding_model, revision=settings.visual_embedding_model_revision
             )
-        vector_store = InMemoryVectorStore(rows)
+            vector_store = InMemoryVectorStore(local_frame_rows)
+        else:
+            encoder = HashingTextEncoder()
+            rows = []
+            for scene in await repository.all():
+                search_text = " ".join(scene.captions + scene.keywords)
+                rows.append(
+                    (
+                        scene.scene_id,
+                        scene.video_id,
+                        await encoder.encode(search_text),
+                        {
+                            "scene_id": scene.scene_id,
+                            "video_id": scene.video_id,
+                            "scene_idx": scene.scene_idx,
+                            # start/end_frame đi kèm payload để candidate từ vector
+                            # store cũng truy ngược được về khoảng frame, không phải
+                            # chờ hydrate mới biết (PR-01 frame contract).
+                            "start_frame": scene.start_frame,
+                            "end_frame": scene.end_frame_exclusive - 1,
+                            "start_sec": scene.start_sec,
+                            "end_sec": scene.end_sec,
+                            "has_ocr": bool(scene.ocr_texts),
+                            "has_asr": bool(scene.asr_texts),
+                        },
+                    )
+                )
+            vector_store = InMemoryVectorStore(rows)
 
-    # Backend local KHÔNG phải dense visual: HashingTextEncoder +
-    # InMemoryVectorStore là hash trên text caption. Đăng ký đúng tên để
-    # /capabilities không quảng cáo nhầm và ablation không bị đọc sai (PR-03).
-    if settings.backend == "qdrant":
+    # Backend local KHÔNG PHẢI lúc nào cũng dense visual thật: nếu export
+    # chưa có embedding pack (PR-13 chưa chạy), HashingTextEncoder +
+    # InMemoryVectorStore hash trên text caption — đăng ký đúng tên
+    # `lexical_hash_fallback` để /capabilities không quảng cáo nhầm và
+    # ablation không bị đọc sai (PR-03). Có embedding thật thì dùng cùng tên
+    # `dense_visual` như nhánh qdrant vì bản chất giờ giống nhau (chỉ khác
+    # backend lưu vector).
+    if settings.backend == "qdrant" or has_real_embeddings:
         dense = DenseRetriever(
             encoder, vector_store, branch_id="dense_visual", backend_kind="vector"
         )

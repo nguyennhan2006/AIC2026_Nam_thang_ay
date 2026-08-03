@@ -65,13 +65,15 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 
 from online.adapters.bm25 import LexicalRetriever
 from online.adapters.dense_retriever import DenseRetriever
-from online.adapters.encoders import HashingTextEncoder, RemoteTextEncoder
+from online.adapters.encoders import HashingTextEncoder, LocalClipTextEncoder, RemoteTextEncoder
+from online.adapters.frame_vector_store import build_frame_vector_rows
 from online.adapters.json_metadata import JsonlSceneRepository
 from online.adapters.ocr_fuzzy import OcrFuzzyRetriever
 from online.adapters.vector_stores import InMemoryVectorStore, QdrantVectorStore
@@ -152,6 +154,20 @@ async def build_dense(repository: JsonlSceneRepository, backend: str) -> DenseRe
         )
         return DenseRetriever(encoder, store)
 
+    # local: dùng embedding thật (PR-13, scripts/embed_keyframes_local.py) nếu
+    # export đã có — cùng logic chọn nhánh với online/api/container.py, để số
+    # đo ở đây khớp với hành vi search thật thay vì luôn là hashing fallback.
+    data_root = Path(os.getenv("AIC_DATA_ROOT", "storage")).resolve()
+    frame_rows, has_real_embeddings = await build_frame_vector_rows(repository, data_root)
+    if has_real_embeddings:
+        from online.config import Settings
+
+        settings = Settings.from_env()
+        encoder = LocalClipTextEncoder(
+            settings.visual_embedding_model, revision=settings.visual_embedding_model_revision
+        )
+        return DenseRetriever(encoder, InMemoryVectorStore(frame_rows), branch_id="dense_visual", backend_kind="vector")
+
     encoder = HashingTextEncoder()
     rows = []
     for scene in await repository.all():
@@ -172,7 +188,7 @@ async def build_dense(repository: JsonlSceneRepository, backend: str) -> DenseRe
                 },
             )
         )
-    return DenseRetriever(encoder, InMemoryVectorStore(rows))
+    return DenseRetriever(encoder, InMemoryVectorStore(rows), branch_id="lexical_hash_fallback", backend_kind="lexical_fallback")
 
 
 async def build_service(

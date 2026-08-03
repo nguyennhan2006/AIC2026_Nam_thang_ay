@@ -289,7 +289,15 @@ def _keyframe_from_rows(
         video_id=video_id,
         scene_id=scene_id,
         frame_idx=frame_idx,
-        timestamp_sec=base.get("timestamp_sec", frame_idx / fps),
+        # Luôn tính lại từ frame_idx/fps, không lấy timestamp_sec thô của pack —
+        # cùng nguyên tắc đã áp cho start_sec/end_sec ở _scene_bounds(). Nếu tin
+        # timestamp_sec thô (vd pts_time thật từ ffmpeg trong mapping CSV), nó có
+        # thể lệch frame_idx/fps tới 1 frame do sai số làm tròn khác nhau giữa hai
+        # nguồn — với keyframe nằm sát biên scene, giá trị thô có thể CHẠM đúng
+        # end_sec đã tính lại và làm strict "<" trong Scene validator false-fail
+        # (đã xảy ra thật với L21_V001_S0055_F007811: pts_time=260.4 == end_sec).
+        # Dùng cùng công thức fps ở cả hai phía loại trừ khả năng đó hoàn toàn.
+        timestamp_sec=frame_idx / fps,
         image_path=base["image_path"],
         width=int(base["width"]),
         height=int(base["height"]),
