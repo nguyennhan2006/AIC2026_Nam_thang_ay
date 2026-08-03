@@ -66,6 +66,8 @@ function App() {
   const hasUnsavedChanges = JSON.stringify(draftOptions) !== JSON.stringify(appliedOptions);
   const [status, setStatus] = useState("");
   const [result, setResult] = useState<SearchResponse | null>(null);
+  const [selectedSequenceIndex, setSelectedSequenceIndex] = useState(0);
+  const [activeStepIndex, setActiveStepIndex] = useState<number | null>(null);
   const [streamEvents, setStreamEvents] = useState<StreamEvent[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [evidenceCandidateId, setEvidenceCandidateId] = useState("");
@@ -87,6 +89,8 @@ function App() {
     setStatus(streaming ? "Đang stream…" : "Đang tìm kiếm…");
     setResult(null);
     setStreamEvents([]);
+    setSelectedSequenceIndex(0);
+    setActiveStepIndex(null);
     // Apply & Search: draft chỉ thực sự áp dụng khi search chạy thật.
     setAppliedOptions(draftOptions);
     const body = { query, task, top_k: topK, debug, search_options: draftOptions };
@@ -233,7 +237,20 @@ function App() {
 
           {tab === "kis" && <KisWorkspace items={result?.kis ?? []} />}
           {tab === "qa" && <QaWorkspace items={result?.qa ?? []} />}
-          {tab === "trake" && <TrakeWorkspace items={result?.trake ?? []} />}
+          {tab === "trake" && (
+            <TrakeWorkspace
+              items={result?.trake ?? []}
+              stepQueries={(result?.query_plan?.events ?? []).map((event) => event.text)}
+              apiConfig={apiConfig}
+              selectedIndex={selectedSequenceIndex}
+              onSelectSequence={(index) => {
+                setSelectedSequenceIndex(index);
+                setActiveStepIndex(null);
+              }}
+              activeStepIndex={activeStepIndex}
+              onSelectStep={setActiveStepIndex}
+            />
+          )}
           {tab === "avs" && <AvsWorkspace items={result?.avs ?? []} />}
 
           {tab === "evidence" && (

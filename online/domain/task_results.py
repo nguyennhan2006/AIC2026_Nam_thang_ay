@@ -76,6 +76,13 @@ class TrakeStep(StrictModel):
     confidence: float = Field(ge=0.0, le=1.0)
     # Frame được tinh chỉnh tới mức nào — quan trọng vì cửa sổ GT chỉ ±4 frame.
     refinement: Literal["keyframe_only", "dense_window"] = "keyframe_only"
+    # Đường dẫn ảnh keyframe thật đã chọn — None khi anchor nằm ngoài scene
+    # (không có frame thật để trỏ tới, xem frame_refinement.py). UI dùng để
+    # hiển thị thumbnail cho mỗi step card, không suy đoán theo path convention.
+    image_path: str | None = None
+    # Timestamp thật của frame (giây) — lấy trực tiếp từ FrameEvidence/SearchHit,
+    # không suy ra từ fps (fps không có endpoint nào expose cho frontend).
+    timestamp_sec: float | None = None
 
 
 class TrakeResultItem(StrictModel):

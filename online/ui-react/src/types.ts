@@ -195,6 +195,8 @@ export interface TrakeStep {
   scene_id: string | null;
   confidence: number;
   refinement: "keyframe_only" | "dense_window";
+  image_path: string | null;
+  timestamp_sec: number | null;
 }
 
 export interface TrakeResultItem {

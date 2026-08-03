@@ -1,0 +1,59 @@
+/* Results Panel — video candidates + horizontal Best Sequence + timeline
+   (docs UI competition studio §11). */
+
+.results-subheading { margin: var(--space-4) 0 var(--space-2); font-size: 0.85rem; color: var(--text-secondary); display: flex; align-items: center; gap: var(--space-2); }
+
+/* ---- Video candidate list/card ---- */
+.video-candidate-list { display: flex; flex-direction: column; gap: var(--space-2); }
+.video-candidate-card {
+  display: flex; align-items: stretch; gap: var(--space-2);
+  border: 1px solid var(--border-subtle); border-radius: var(--radius-lg);
+  background: var(--bg-panel-elevated); overflow: hidden;
+}
+.video-candidate-card.active { border-color: var(--accent-blue); box-shadow: 0 0 0 1px var(--accent-blue) inset; }
+.video-candidate-main { flex: 1; display: flex; gap: var(--space-3); padding: var(--space-3); background: transparent; border: none; text-align: left; cursor: pointer; color: inherit; min-width: 0; }
+.video-candidate-thumb-wrap { flex-shrink: 0; }
+.video-candidate-thumb { width: 110px; height: 72px; object-fit: cover; border-radius: var(--radius-sm); background: var(--bg-app); display: block; }
+.video-candidate-thumb-empty { display: grid; place-items: center; color: var(--text-muted); font-size: 0.7rem; }
+.video-candidate-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.video-candidate-head { display: flex; align-items: center; gap: var(--space-2); }
+.video-candidate-head strong { font-size: 0.95rem; }
+.video-candidate-head output { margin-left: auto; color: var(--accent-green); font-family: ui-monospace, monospace; font-size: 0.82rem; }
+.video-candidate-score-bar { height: 4px; border-radius: 999px; background: var(--score-track); overflow: hidden; }
+.video-candidate-score-fill { height: 100%; background: var(--accent-blue); }
+.video-candidate-metrics { display: flex; flex-wrap: wrap; gap: var(--space-3); font-size: 0.72rem; color: var(--text-secondary); }
+.video-candidate-metrics strong { color: var(--text-primary); }
+.video-candidate-expand { width: 32px; border: none; border-left: 1px solid var(--border-subtle); background: transparent; color: var(--text-secondary); cursor: pointer; }
+.video-candidate-detail { list-style: none; margin: 0; padding: var(--space-2) var(--space-3); font-size: 0.76rem; color: var(--text-secondary); border-top: 1px solid var(--border-subtle); flex-basis: 100%; }
+
+/* ---- Sequence viewer (horizontal step cards) ---- */
+.sequence-viewer { margin: var(--space-2) 0; }
+.sequence-viewer-row { display: flex; align-items: stretch; gap: var(--space-2); overflow-x: auto; padding-bottom: var(--space-2); }
+.sequence-step-slot { display: flex; align-items: center; gap: var(--space-2); flex-shrink: 0; }
+.sequence-step-card {
+  width: 190px; flex-shrink: 0; text-align: left; cursor: pointer;
+  display: flex; flex-direction: column; gap: 6px; padding: var(--space-2);
+  border: 1px solid var(--border-subtle); border-radius: var(--radius-md);
+  background: var(--bg-panel-elevated); color: inherit;
+}
+.sequence-step-card.active { border-color: var(--accent-blue); box-shadow: 0 0 0 1px var(--accent-blue) inset; }
+.sequence-step-missing { border-style: dashed; opacity: 0.6; cursor: default; }
+.sequence-step-badge { display: inline-flex; width: 20px; height: 20px; border-radius: 999px; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700; color: #06101d; }
+.sequence-step-text { margin: 0; font-size: 0.78rem; color: var(--text-primary); min-height: 2.2em; }
+.sequence-step-thumb-wrap { position: relative; }
+.sequence-step-thumb { width: 100%; height: 100px; object-fit: cover; border-radius: var(--radius-sm); background: var(--bg-app); display: block; }
+.sequence-step-thumb-empty { display: grid; place-items: center; color: var(--text-muted); font-size: 0.68rem; height: 100px; }
+.sequence-step-time { position: absolute; right: 4px; bottom: 4px; background: rgba(0, 0, 0, 0.65); color: #fff; font-size: 0.65rem; padding: 1px 5px; border-radius: 4px; }
+.sequence-arrow { color: var(--text-muted); font-size: 1.2rem; flex-shrink: 0; }
+
+/* ---- Timeline ---- */
+.sequence-timeline { margin: var(--space-3) 0; }
+.sequence-timeline-track { position: relative; height: 10px; border-radius: 999px; background: var(--score-track); margin: 0 6px; }
+.timeline-marker { position: absolute; top: -3px; width: 16px; height: 16px; border-radius: 999px; border: 2px solid var(--bg-app); transform: translateX(-50%); cursor: pointer; padding: 0; }
+.timeline-marker.active { outline: 2px solid var(--text-primary); outline-offset: 1px; }
+.sequence-timeline-labels { display: flex; justify-content: space-between; font-size: 0.68rem; color: var(--text-muted); margin-top: 4px; }
+
+@media (max-width: 767px) {
+  .video-candidate-main { flex-direction: column; }
+  .sequence-viewer-row { flex-wrap: nowrap; }
+}

@@ -112,6 +112,8 @@ class TrakeProcessor:
                 steps.append(TrakeStep(
                     step=index + 1, frame_idx=hit.best_frame_idx,
                     scene_id=hit.scene_id, confidence=0.3,
+                    image_path=hit.best_keyframe_path,
+                    timestamp_sec=hit.best_timestamp_sec,
                 ))
                 continue
             steps.append(refine_step(

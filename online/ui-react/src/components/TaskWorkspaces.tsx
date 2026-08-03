@@ -1,3 +1,7 @@
+import type { ApiClientConfig } from "../api";
+import { SequenceTimeline } from "../features/results/SequenceTimeline";
+import { SequenceViewer } from "../features/results/SequenceViewer";
+import { VideoCandidateCard } from "../features/results/VideoCandidateCard";
 import type { AvsResultItem, KisResultItem, QaResultItem, TrakeResultItem } from "../types";
 
 /** KIS Safe Frame Workspace — mỗi dòng là một (video_id, frame_idx) sẵn sàng
@@ -76,49 +80,61 @@ export function QaWorkspace({ items }: { items: QaResultItem[] }) {
   );
 }
 
-/** TRAKE Alignment Studio — Stage A (video khóa) -> B (sequence) -> C (frame
- * refinement); mỗi step hiện `refinement` để biết đã tinh chỉnh dày (cửa sổ
- * quanh anchor) hay chỉ dùng keyframe thưa. */
-export function TrakeWorkspace({ items }: { items: TrakeResultItem[] }) {
+export interface TrakeWorkspaceProps {
+  items: TrakeResultItem[];
+  stepQueries: string[];
+  apiConfig: ApiClientConfig;
+  selectedIndex: number;
+  onSelectSequence: (index: number) => void;
+  activeStepIndex: number | null;
+  onSelectStep: (index: number) => void;
+}
+
+/** TRAKE Alignment Studio — video candidates (Stage A) + Best Sequence ngang
+ * (Stage B) + timeline (Stage C tinh chỉnh frame). docs UI competition studio
+ * §11.2/§11.3/§11.4. */
+export function TrakeWorkspace({
+  items,
+  stepQueries,
+  apiConfig,
+  selectedIndex,
+  onSelectSequence,
+  activeStepIndex,
+  onSelectStep,
+}: TrakeWorkspaceProps) {
   if (items.length === 0) return <p className="muted">Chưa có kết quả TRAKE.</p>;
+  const selected = items[Math.min(selectedIndex, items.length - 1)];
+
   return (
     <div className="trake-workspace">
-      {items.map((item) => (
-        <article
-          key={`${item.video_id}-${item.rank}`}
-          className={item.degraded ? "trake-card trake-card-degraded" : "trake-card"}
-        >
-          <header>
-            <span className="rank">#{item.rank}</span>
-            <strong>{item.video_id}</strong>
-            <output>score {item.sequence_score.toFixed(3)}</output>
-            {item.degraded && (
-              <span className="degraded-badge" title="Video được giữ dù dưới ngưỡng min_step_coverage — không còn lựa chọn nào tốt hơn">
-                degraded
-              </span>
-            )}
-          </header>
-          <p className="muted small">
-            step coverage {Math.round(item.step_coverage * 100)}% · ordering {Math.round(item.ordering_score * 100)}%
-            {item.missing_steps.length > 0 && (
-              <>
-                {" "}
-                · <span className="warning-text">thiếu step {item.missing_steps.join(", ")}</span>
-              </>
-            )}
-          </p>
-          <ol className="trake-steps">
-            {item.steps.map((step) => (
-              <li key={step.step}>
-                frame <strong>{step.frame_idx}</strong> · confidence {step.confidence.toFixed(2)} ·{" "}
-                <span className={step.refinement === "dense_window" ? "refinement-dense" : "refinement-sparse"}>
-                  {step.refinement}
-                </span>
-              </li>
-            ))}
-          </ol>
-        </article>
-      ))}
+      <h4 className="results-subheading">Top Video Candidates</h4>
+      <div className="video-candidate-list">
+        {items.map((item, index) => (
+          <VideoCandidateCard
+            key={`${item.video_id}-${item.rank}`}
+            sequence={item}
+            apiConfig={apiConfig}
+            active={index === selectedIndex}
+            onSelect={() => onSelectSequence(index)}
+          />
+        ))}
+      </div>
+
+      {selected && (
+        <>
+          <h4 className="results-subheading">
+            Best Sequence ({selected.video_id}) <span className="muted small">R-Score {selected.ordering_score.toFixed(2)}</span>
+          </h4>
+          <SequenceViewer
+            sequence={selected}
+            stepQueries={stepQueries}
+            apiConfig={apiConfig}
+            activeStepIndex={activeStepIndex}
+            onSelectStep={onSelectStep}
+          />
+          <SequenceTimeline sequence={selected} activeStepIndex={activeStepIndex} onSelectStep={onSelectStep} />
+        </>
+      )}
     </div>
   );
 }

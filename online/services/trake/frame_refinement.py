@@ -64,7 +64,8 @@ def refine_step(
     ]
     if not in_window:
         # Cửa sổ rỗng nghĩa là anchor nằm ngoài scene này; giữ nguyên anchor
-        # thay vì kéo về một frame xa lắc chỉ vì nó tồn tại.
+        # thay vì kéo về một frame xa lắc chỉ vì nó tồn tại. Không có frame
+        # thật ứng với anchor_frame_idx nên image_path để None thay vì đoán.
         return TrakeStep(
             step=step, frame_idx=anchor_frame_idx, scene_id=scene.scene_id,
             confidence=0.2, refinement="dense_window" if dense else "keyframe_only",
@@ -81,6 +82,10 @@ def refine_step(
         scene_id=scene.scene_id,
         confidence=confidence,
         refinement="dense_window" if dense else "keyframe_only",
+        # UI competition studio — thumbnail/timestamp thật cho step card,
+        # không đoán theo convention (xem online/domain/task_results.py).
+        image_path=best.frame.image_path,
+        timestamp_sec=best.frame.timestamp_sec,
     )
 
 

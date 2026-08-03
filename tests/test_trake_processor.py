@@ -223,6 +223,10 @@ class FrameRefinementTests(unittest.TestCase):
         scene = self._scene([(100, "cột nước phun cao"), (110, "người đàn ông tiến sát")])
         step = refine_step(2, "người đàn ông tiến sát", scene, anchor_frame_idx=100)
         self.assertEqual(step.frame_idx, 110)
+        # UI competition studio: step card cần thumbnail/timestamp thật, không
+        # đoán path hay suy ra từ fps (không có endpoint expose fps).
+        self.assertEqual(step.image_path, "f.jpg")
+        self.assertAlmostEqual(step.timestamp_sec, 110 / 30)
 
     def test_anchor_outside_scene_keeps_the_anchor(self) -> None:
         scene = self._scene([(100, "cột nước")])
