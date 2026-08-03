@@ -5,9 +5,7 @@ import { AppShell } from "./app/AppShell";
 import { LeftRail } from "./app/LeftRail";
 import type { AppPage } from "./app/TopNavigation";
 import { TopNavigation } from "./app/TopNavigation";
-import { BranchStatusPanel } from "./components/BranchStatusPanel";
 import { CompareLab } from "./components/CompareLab";
-import { EvidenceInspector } from "./components/EvidenceInspector";
 import { HealthDrawer } from "./components/HealthDrawer";
 import { QueryStudio } from "./components/QueryStudio";
 import { ResultsExplorer } from "./components/ResultsExplorer";
@@ -15,32 +13,23 @@ import { StreamLog } from "./components/StreamLog";
 import { SubmissionBoard } from "./components/SubmissionBoard";
 import { AvsWorkspace, KisWorkspace, QaWorkspace, TrakeWorkspace } from "./components/TaskWorkspaces";
 import { DatasetStats } from "./features/search/DatasetStats";
+import { PreviewPanel } from "./features/inspector/PreviewPanel";
 import { WeightPanel } from "./features/weights/WeightPanel";
 import { loadApiBase, loadApiToken, saveApiBase, saveApiToken } from "./storage";
 import type { HealthResponse, SearchOptions, SearchResponse, StreamEvent, TaskType } from "./types";
 
-const TABS = [
-  "query",
-  "results",
-  "kis",
-  "qa",
-  "trake",
-  "avs",
-  "evidence",
-  "submission",
-  "compare",
-  "health",
-] as const;
+// "query"/"evidence" không còn là tab riêng: QueryStudio+WeightPanel luôn
+// hiện ở đầu trang search, Evidence chuyển vào tab của PreviewPanel (docs
+// §4 "Workbench ba cột" — center chỉ còn kết quả theo task).
+const TABS = ["results", "kis", "qa", "trake", "avs", "submission", "compare", "health"] as const;
 type Tab = (typeof TABS)[number];
 
 const TAB_LABELS: Record<Tab, string> = {
-  query: "Query Studio",
-  results: "Results Explorer",
-  kis: "KIS Safe Frame",
-  qa: "QA Evidence",
-  trake: "TRAKE Alignment",
-  avs: "AVS Relevance",
-  evidence: "Evidence Inspector",
+  results: "Kết quả",
+  kis: "KIS",
+  qa: "QA",
+  trake: "TRAKE",
+  avs: "AVS",
   submission: "Submission Board",
   compare: "Compare Lab",
   health: "Health",
@@ -52,7 +41,7 @@ function App() {
   const [page, setPage] = useState<AppPage>("search");
   const [healthState, setHealthState] = useState<HealthResponse | null>(null);
   const [healthStatus, setHealthStatus] = useState<"checking" | "ok" | "error">("checking");
-  const [tab, setTab] = useState<Tab>("query");
+  const [tab, setTab] = useState<Tab>("results");
   const [task, setTask] = useState<TaskType>("TEXTUAL_KIS");
   const [query, setQuery] = useState("");
   const [topK, setTopK] = useState(20);
@@ -70,7 +59,6 @@ function App() {
   const [activeStepIndex, setActiveStepIndex] = useState<number | null>(null);
   const [streamEvents, setStreamEvents] = useState<StreamEvent[]>([]);
   const [submitting, setSubmitting] = useState(false);
-  const [evidenceCandidateId, setEvidenceCandidateId] = useState("");
   const abortRef = useRef<AbortController | null>(null);
 
   const apiConfig = useMemo(() => ({ base: apiBase, token: apiToken }), [apiBase, apiToken]);
@@ -182,39 +170,35 @@ function App() {
 
           <DatasetStats health={healthState} />
 
-          <nav className="tab-bar">
-            {TABS.map((item) => (
-              <button key={item} type="button" className={tab === item ? "tab active" : "tab"} onClick={() => setTab(item)}>
-                {TAB_LABELS[item]}
-              </button>
-            ))}
-          </nav>
+          <QueryStudio
+            apiBase={apiBase}
+            onApiBaseChange={persistApiBase}
+            apiToken={apiToken}
+            onApiTokenChange={persistApiToken}
+            task={task}
+            onTaskChange={setTask}
+            query={query}
+            onQueryChange={setQuery}
+            topK={topK}
+            onTopKChange={setTopK}
+            debug={debug}
+            onDebugChange={setDebug}
+            streaming={streaming}
+            onStreamingChange={setStreaming}
+            onSubmit={runSearch}
+            onHealthCheck={checkHealth}
+            submitting={submitting}
+          />
 
           <section id="status" aria-live="polite">
             {status}
           </section>
+          {streaming && <StreamLog events={streamEvents} />}
 
-          {tab === "query" && (
-            <>
-              <QueryStudio
-                apiBase={apiBase}
-                onApiBaseChange={persistApiBase}
-                apiToken={apiToken}
-                onApiTokenChange={persistApiToken}
-                task={task}
-                onTaskChange={setTask}
-                query={query}
-                onQueryChange={setQuery}
-                topK={topK}
-                onTopKChange={setTopK}
-                debug={debug}
-                onDebugChange={setDebug}
-                streaming={streaming}
-                onStreamingChange={setStreaming}
-                onSubmit={runSearch}
-                onHealthCheck={checkHealth}
-                submitting={submitting}
-              />
+          {/* Workbench ba cột: Weights (trái) | kết quả theo task (giữa) |
+              Preview & Details (phải, sticky) — docs §4.3. */}
+          <div className="search-workbench">
+            <aside className="workbench-left">
               <WeightPanel
                 apiConfig={apiConfig}
                 task={task}
@@ -223,59 +207,60 @@ function App() {
                 hasUnsavedChanges={hasUnsavedChanges}
                 parsedEvents={result?.query_plan?.events ?? []}
               />
-              {streaming && <StreamLog events={streamEvents} />}
-              {result && <BranchStatusPanel statuses={result.branch_status} />}
-            </>
-          )}
+            </aside>
 
-          {tab === "results" && (
-            <>
-              {result && <BranchStatusPanel statuses={result.branch_status} />}
-              <ResultsExplorer results={result?.results ?? []} sequences={result?.sequences ?? []} apiConfig={apiConfig} />
-            </>
-          )}
+            <section className="workbench-center">
+              <nav className="tab-bar">
+                {TABS.map((item) => (
+                  <button key={item} type="button" className={tab === item ? "tab active" : "tab"} onClick={() => setTab(item)}>
+                    {TAB_LABELS[item]}
+                  </button>
+                ))}
+              </nav>
 
-          {tab === "kis" && <KisWorkspace items={result?.kis ?? []} />}
-          {tab === "qa" && <QaWorkspace items={result?.qa ?? []} />}
-          {tab === "trake" && (
-            <TrakeWorkspace
-              items={result?.trake ?? []}
-              stepQueries={(result?.query_plan?.events ?? []).map((event) => event.text)}
-              apiConfig={apiConfig}
-              selectedIndex={selectedSequenceIndex}
-              onSelectSequence={(index) => {
-                setSelectedSequenceIndex(index);
-                setActiveStepIndex(null);
-              }}
-              activeStepIndex={activeStepIndex}
-              onSelectStep={setActiveStepIndex}
-            />
-          )}
-          {tab === "avs" && <AvsWorkspace items={result?.avs ?? []} />}
+              {tab === "results" && (
+                <ResultsExplorer results={result?.results ?? []} sequences={result?.sequences ?? []} apiConfig={apiConfig} />
+              )}
+              {tab === "kis" && <KisWorkspace items={result?.kis ?? []} />}
+              {tab === "qa" && <QaWorkspace items={result?.qa ?? []} />}
+              {tab === "trake" && (
+                <TrakeWorkspace
+                  items={result?.trake ?? []}
+                  stepQueries={(result?.query_plan?.events ?? []).map((event) => event.text)}
+                  apiConfig={apiConfig}
+                  selectedIndex={selectedSequenceIndex}
+                  onSelectSequence={(index) => {
+                    setSelectedSequenceIndex(index);
+                    setActiveStepIndex(null);
+                  }}
+                  activeStepIndex={activeStepIndex}
+                  onSelectStep={setActiveStepIndex}
+                />
+              )}
+              {tab === "avs" && <AvsWorkspace items={result?.avs ?? []} />}
+              {tab === "submission" && (
+                <SubmissionBoard
+                  apiConfig={apiConfig}
+                  task={task}
+                  kis={result?.kis ?? []}
+                  qa={result?.qa ?? []}
+                  trake={result?.trake ?? []}
+                  avs={result?.avs ?? []}
+                />
+              )}
+              {tab === "compare" && <CompareLab apiConfig={apiConfig} />}
+              {tab === "health" && <HealthDrawer apiConfig={apiConfig} />}
+            </section>
 
-          {tab === "evidence" && (
-            <div>
-              <label>
-                candidate_id (scene_id hoặc keyframe_id)
-                <input value={evidenceCandidateId} onChange={(e) => setEvidenceCandidateId(e.target.value)} placeholder="L21_V001_S0012" />
-              </label>
-              <EvidenceInspector apiConfig={apiConfig} candidateId={evidenceCandidateId || null} />
-            </div>
-          )}
-
-          {tab === "submission" && (
-            <SubmissionBoard
-              apiConfig={apiConfig}
-              task={task}
-              kis={result?.kis ?? []}
-              qa={result?.qa ?? []}
-              trake={result?.trake ?? []}
-              avs={result?.avs ?? []}
-            />
-          )}
-
-          {tab === "compare" && <CompareLab apiConfig={apiConfig} />}
-          {tab === "health" && <HealthDrawer apiConfig={apiConfig} />}
+            <aside className="workbench-right">
+              <PreviewPanel
+                apiConfig={apiConfig}
+                result={result}
+                selectedSequence={result?.trake?.[selectedSequenceIndex] ?? null}
+                activeStepIndex={activeStepIndex}
+              />
+            </aside>
+          </div>
         </>
       )}
 
