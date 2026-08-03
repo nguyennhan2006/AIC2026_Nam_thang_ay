@@ -77,10 +77,12 @@ from online.adapters.fpt_client import FptClient
 from online.adapters.frame_vector_store import build_frame_vector_rows
 from online.adapters.json_metadata import JsonlSceneRepository
 from online.adapters.ocr_fuzzy import OcrFuzzyRetriever
+from online.adapters.qa_llm import FptQaAnswerer
 from online.adapters.rerank import BgeTextReranker, FptTextReranker
 from online.adapters.vector_stores import InMemoryVectorStore, QdrantVectorStore
 from online.domain.models import SearchRequest, TaskType
 from online.services.evidence_builder import EvidenceBuilder
+from online.services.qa import QaProcessor
 from online.services.query_expansion import QueryExpansionRetriever
 from online.services.query_prep import PreparedQueryPlanner
 from online.services.rerank_pipeline import RerankPipeline
@@ -217,6 +219,19 @@ def _build_rerank_pipeline(repository: JsonlSceneRepository) -> RerankPipeline |
     return RerankPipeline(EvidenceBuilder(repository), text_reranker=text_reranker)
 
 
+def _build_qa_processor() -> QaProcessor:
+    """Cùng cấu hình `AIC_FPT_LLM_MODEL` như `online/api/container.py` — nếu
+    thiếu, harness chỉ đo `answer_accuracy` của rule-based `ANSWER_TOOLS`,
+    không phản ánh được cải thiện thật của FPT QA LLM (PR-15)."""
+    from online.config import Settings
+
+    settings = Settings.from_env()
+    llm_answerer = None
+    if settings.fpt_enabled and settings.fpt_llm_model:
+        llm_answerer = FptQaAnswerer(FptClient.from_settings(settings), model_id=settings.fpt_llm_model)
+    return QaProcessor(llm_answerer=llm_answerer, llm_top_n=settings.fpt_qa_top_n)
+
+
 async def build_service(
     mode: str,
     repository: JsonlSceneRepository,
@@ -248,6 +263,10 @@ async def build_service(
             "--use-rerank yêu cầu AIC_FPT_ENABLED=true + AIC_FPT_RERANK_MODEL "
             "(hoặc AIC_RERANK_TEXT_URL cho worker tự host) trong env"
         )
+    # --use-rerank cũng bật QA answer generation qua FPT LLM (cùng cờ, vì cả
+    # hai đều chỉ có ý nghĩa khi đo ảnh hưởng thật của FPT so với baseline
+    # rule-based/no-rerank) — không cần cờ CLI thứ hai.
+    qa_processor = _build_qa_processor() if use_rerank else None
     return SearchService(
         repository,
         retrievers,
@@ -255,6 +274,7 @@ async def build_service(
         candidate_limit=candidate_limit,
         rule_config=RuleConfig() if use_rules else None,
         rerank_pipeline=rerank_pipeline,
+        qa_processor=qa_processor,
     )
 
 
@@ -360,8 +380,9 @@ async def main() -> None:
     parser.add_argument("--use-query-prep", action="store_true",
                         help="bật tách target/ocr/context (Phương án F)")
     parser.add_argument("--use-rerank", action="store_true",
-                        help="bật text rerank thật (FPT ưu tiên, fallback worker tự host qua "
-                             "AIC_RERANK_TEXT_URL) — cần env tương ứng, xem online/config.py")
+                        help="bật text rerank + QA answer generation qua FPT (fallback worker tự "
+                             "host qua AIC_RERANK_TEXT_URL cho rerank, không có fallback cho QA) "
+                             "— cần env tương ứng, xem online/config.py")
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--json", type=Path, default=None,
                         help="ghi kết quả JSON để lưu vết ablation")

@@ -187,6 +187,7 @@ async def evaluate(
         use_rules=args.use_rules,
         use_expansion=args.use_expansion,
         use_query_prep=args.use_query_prep,
+        use_rerank=args.use_rerank,
         candidate_limit=max(args.top_k, 100),
     )
     kis = RankedMetrics()
@@ -383,6 +384,10 @@ async def _main() -> None:
     parser.add_argument("--use-rules", action="store_true")
     parser.add_argument("--use-expansion", action="store_true")
     parser.add_argument("--use-query-prep", action="store_true")
+    parser.add_argument("--use-rerank", action="store_true",
+                         help="bật text rerank + QA answer generation qua FPT thật (xem "
+                              "scripts/eval_kis.py::build_service) — không có cờ này, answer_accuracy "
+                              "chỉ đo rule-based ANSWER_TOOLS, không phản ánh FPT QA LLM")
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--json-out", type=Path, default=None)
     args = parser.parse_args()
