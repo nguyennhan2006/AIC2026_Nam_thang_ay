@@ -1,5 +1,10 @@
-import { useMemo, useRef, useState } from "react";
-import { ApiError, health, search, searchStream, unifiedSearch } from "./api";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ApiError, health as fetchHealth, search, searchStream, unifiedSearch } from "./api";
+import { AppFooter } from "./app/AppFooter";
+import { AppShell } from "./app/AppShell";
+import { LeftRail } from "./app/LeftRail";
+import type { AppPage } from "./app/TopNavigation";
+import { TopNavigation } from "./app/TopNavigation";
 import { BranchStatusPanel } from "./components/BranchStatusPanel";
 import { CompareLab } from "./components/CompareLab";
 import { EvidenceInspector } from "./components/EvidenceInspector";
@@ -10,8 +15,9 @@ import { ResultsExplorer } from "./components/ResultsExplorer";
 import { StreamLog } from "./components/StreamLog";
 import { SubmissionBoard } from "./components/SubmissionBoard";
 import { AvsWorkspace, KisWorkspace, QaWorkspace, TrakeWorkspace } from "./components/TaskWorkspaces";
+import { DatasetStats } from "./features/search/DatasetStats";
 import { loadApiBase, loadApiToken, saveApiBase, saveApiToken } from "./storage";
-import type { SearchOptions, SearchResponse, StreamEvent, TaskType } from "./types";
+import type { HealthResponse, SearchOptions, SearchResponse, StreamEvent, TaskType } from "./types";
 
 const TABS = [
   "query",
@@ -43,6 +49,9 @@ const TAB_LABELS: Record<Tab, string> = {
 function App() {
   const [apiBase, setApiBase] = useState(loadApiBase);
   const [apiToken, setApiToken] = useState(loadApiToken);
+  const [page, setPage] = useState<AppPage>("search");
+  const [healthState, setHealthState] = useState<HealthResponse | null>(null);
+  const [healthStatus, setHealthStatus] = useState<"checking" | "ok" | "error">("checking");
   const [tab, setTab] = useState<Tab>("query");
   const [task, setTask] = useState<TaskType>("TEXTUAL_KIS");
   const [query, setQuery] = useState("");
@@ -112,86 +121,146 @@ function App() {
 
   async function checkHealth() {
     setStatus("Đang kiểm tra server…");
+    setHealthStatus("checking");
     try {
-      const data = await health(apiConfig);
+      const data = await fetchHealth(apiConfig);
+      setHealthState(data);
+      setHealthStatus("ok");
       setStatus(`Server OK · ${data.backend} · ${data.scene_count} scenes`);
     } catch (error) {
+      setHealthStatus("error");
       setStatus(`Không kết nối được: ${error instanceof ApiError ? error.message : String(error)}`);
     }
   }
 
+  // Nạp health/dataset stats ngay khi mở app hoặc đổi API base — footer và
+  // dataset stats cards cần dữ liệu thật ngay cả khi người dùng chưa bấm
+  // "Kiểm tra server" thủ công.
+  useEffect(() => {
+    let cancelled = false;
+    setHealthStatus("checking");
+    fetchHealth(apiConfig)
+      .then((data) => {
+        if (cancelled) return;
+        setHealthState(data);
+        setHealthStatus("ok");
+      })
+      .catch(() => {
+        if (!cancelled) setHealthStatus("error");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [apiConfig]);
+
   return (
-    <main>
-      <header>
-        <p className="eyebrow">AIC 2026 · Competition Retrieval Studio</p>
-        <h1>Universal Multimodal Retrieval Engine</h1>
-        <p className="subtitle">
-          Một lõi retrieval dùng chung + bốn task processor chuyên biệt (Textual KIS, Q&amp;A, TRAKE, AVS).
-        </p>
-      </header>
-
-      <nav className="tab-bar">
-        {TABS.map((item) => (
-          <button key={item} type="button" className={tab === item ? "tab active" : "tab"} onClick={() => setTab(item)}>
-            {TAB_LABELS[item]}
-          </button>
-        ))}
-      </nav>
-
-      <section id="status" aria-live="polite">
-        {status}
-      </section>
-
-      {tab === "query" && (
+    <AppShell
+      topNav={<TopNavigation page={page} onPageChange={setPage} backendStatus={healthStatus} backendLabel={healthState?.backend ?? apiBase} />}
+      leftRail={<LeftRail page={page} onPageChange={setPage} />}
+      footer={<AppFooter health={healthState} />}
+    >
+      {page === "search" && (
         <>
-          <QueryStudio
-            apiBase={apiBase}
-            onApiBaseChange={persistApiBase}
-            apiToken={apiToken}
-            onApiTokenChange={persistApiToken}
-            task={task}
-            onTaskChange={setTask}
-            query={query}
-            onQueryChange={setQuery}
-            topK={topK}
-            onTopKChange={setTopK}
-            debug={debug}
-            onDebugChange={setDebug}
-            streaming={streaming}
-            onStreamingChange={setStreaming}
-            onSubmit={runSearch}
-            onHealthCheck={checkHealth}
-            submitting={submitting}
-          />
-          <MixingConsole apiConfig={apiConfig} searchOptions={searchOptions} onChange={setSearchOptions} />
-          {streaming && <StreamLog events={streamEvents} />}
-          {result && <BranchStatusPanel statuses={result.branch_status} />}
+          <header className="page-header">
+            <p className="eyebrow">AIC 2026 · Competition Retrieval Studio</p>
+            <h1>Universal Multimodal Retrieval Engine</h1>
+            <p className="subtitle">
+              Một lõi retrieval dùng chung + bốn task processor chuyên biệt (Textual KIS, Q&amp;A, TRAKE, AVS).
+            </p>
+          </header>
+
+          <DatasetStats health={healthState} />
+
+          <nav className="tab-bar">
+            {TABS.map((item) => (
+              <button key={item} type="button" className={tab === item ? "tab active" : "tab"} onClick={() => setTab(item)}>
+                {TAB_LABELS[item]}
+              </button>
+            ))}
+          </nav>
+
+          <section id="status" aria-live="polite">
+            {status}
+          </section>
+
+          {tab === "query" && (
+            <>
+              <QueryStudio
+                apiBase={apiBase}
+                onApiBaseChange={persistApiBase}
+                apiToken={apiToken}
+                onApiTokenChange={persistApiToken}
+                task={task}
+                onTaskChange={setTask}
+                query={query}
+                onQueryChange={setQuery}
+                topK={topK}
+                onTopKChange={setTopK}
+                debug={debug}
+                onDebugChange={setDebug}
+                streaming={streaming}
+                onStreamingChange={setStreaming}
+                onSubmit={runSearch}
+                onHealthCheck={checkHealth}
+                submitting={submitting}
+              />
+              <MixingConsole apiConfig={apiConfig} searchOptions={searchOptions} onChange={setSearchOptions} />
+              {streaming && <StreamLog events={streamEvents} />}
+              {result && <BranchStatusPanel statuses={result.branch_status} />}
+            </>
+          )}
+
+          {tab === "results" && (
+            <>
+              {result && <BranchStatusPanel statuses={result.branch_status} />}
+              <ResultsExplorer results={result?.results ?? []} sequences={result?.sequences ?? []} apiConfig={apiConfig} />
+            </>
+          )}
+
+          {tab === "kis" && <KisWorkspace items={result?.kis ?? []} />}
+          {tab === "qa" && <QaWorkspace items={result?.qa ?? []} />}
+          {tab === "trake" && <TrakeWorkspace items={result?.trake ?? []} />}
+          {tab === "avs" && <AvsWorkspace items={result?.avs ?? []} />}
+
+          {tab === "evidence" && (
+            <div>
+              <label>
+                candidate_id (scene_id hoặc keyframe_id)
+                <input value={evidenceCandidateId} onChange={(e) => setEvidenceCandidateId(e.target.value)} placeholder="L21_V001_S0012" />
+              </label>
+              <EvidenceInspector apiConfig={apiConfig} candidateId={evidenceCandidateId || null} />
+            </div>
+          )}
+
+          {tab === "submission" && (
+            <SubmissionBoard
+              apiConfig={apiConfig}
+              task={task}
+              kis={result?.kis ?? []}
+              qa={result?.qa ?? []}
+              trake={result?.trake ?? []}
+              avs={result?.avs ?? []}
+            />
+          )}
+
+          {tab === "compare" && <CompareLab apiConfig={apiConfig} />}
+          {tab === "health" && <HealthDrawer apiConfig={apiConfig} />}
         </>
       )}
 
-      {tab === "results" && (
+      {page === "history" && <CompareLab apiConfig={apiConfig} />}
+
+      {page === "dataset" && (
         <>
-          {result && <BranchStatusPanel statuses={result.branch_status} />}
-          <ResultsExplorer results={result?.results ?? []} sequences={result?.sequences ?? []} apiConfig={apiConfig} />
+          <h2>Dataset</h2>
+          <DatasetStats health={healthState} />
+          <p className="muted">
+            Dataset: {healthState?.dataset ?? "—"} · build {healthState?.dataset_version ?? "—"}
+          </p>
         </>
       )}
 
-      {tab === "kis" && <KisWorkspace items={result?.kis ?? []} />}
-      {tab === "qa" && <QaWorkspace items={result?.qa ?? []} />}
-      {tab === "trake" && <TrakeWorkspace items={result?.trake ?? []} />}
-      {tab === "avs" && <AvsWorkspace items={result?.avs ?? []} />}
-
-      {tab === "evidence" && (
-        <div>
-          <label>
-            candidate_id (scene_id hoặc keyframe_id)
-            <input value={evidenceCandidateId} onChange={(e) => setEvidenceCandidateId(e.target.value)} placeholder="L21_V001_S0012" />
-          </label>
-          <EvidenceInspector apiConfig={apiConfig} candidateId={evidenceCandidateId || null} />
-        </div>
-      )}
-
-      {tab === "submission" && (
+      {page === "submission" && (
         <SubmissionBoard
           apiConfig={apiConfig}
           task={task}
@@ -202,9 +271,8 @@ function App() {
         />
       )}
 
-      {tab === "compare" && <CompareLab apiConfig={apiConfig} />}
-      {tab === "health" && <HealthDrawer apiConfig={apiConfig} />}
-    </main>
+      {page === "system" && <HealthDrawer apiConfig={apiConfig} />}
+    </AppShell>
   );
 }
 

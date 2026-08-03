@@ -78,6 +78,7 @@ async def health(container: Container) -> dict:
     vector_ready = await container.vector_store.health()
     if not vector_ready:
         raise HTTPException(status_code=503, detail="vector backend is not ready")
+    manifest = container.dataset_manifest or {}
     return {
         "status": "ok",
         "backend": container.settings.backend,
@@ -89,6 +90,13 @@ async def health(container: Container) -> dict:
         "dataset_version": container.search_service.dataset_version,
         "branch_count": len(container.search_service.retrievers),
         "session_store_enabled": container.search_service.session_store is not None,
+        # UI competition studio — dataset stats cards (Scenes/Keyframes/Videos/
+        # ASR segments). video_count/keyframe_count đọc từ dataset_manifest.json
+        # (đã tính sẵn lúc offline assemble); None nếu export không kèm manifest
+        # thay vì đoán bằng 0 — UI phải hiển thị "—" chứ không phải "0" sai lệch.
+        "video_count": manifest.get("video_count"),
+        "keyframe_count": manifest.get("keyframe_count"),
+        "asr_segment_count": sum(len(scene.asr_texts) for scene in scenes),
     }
 
 

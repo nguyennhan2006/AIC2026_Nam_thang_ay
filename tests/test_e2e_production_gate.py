@@ -46,6 +46,11 @@ class ProductionGateTests(unittest.TestCase):
         self.assertGreater(body["scene_count"], 0)
         self.assertGreater(body["branch_count"], 0)
         self.assertTrue(body["session_store_enabled"])
+        # UI competition studio dataset stats — None (không phải 0) khi export
+        # không kèm dataset_manifest.json, không đoán số.
+        self.assertIn("video_count", body)
+        self.assertIn("keyframe_count", body)
+        self.assertGreaterEqual(body["asr_segment_count"], 0)
 
     def test_02_capabilities_lists_real_registered_branches(self) -> None:
         response = self.client.get("/v1/search/capabilities")

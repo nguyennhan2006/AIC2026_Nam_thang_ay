@@ -27,21 +27,21 @@ from online.services.search import SearchService
 from online.services.vqa import VQAService
 
 
-def _read_dataset_version(metadata_jsonl: Path) -> str | None:
-    """`build_id` của dataset_manifest.json — đủ để phân biệt hai lần export.
+def _read_dataset_manifest(metadata_jsonl: Path) -> dict | None:
+    """Nội dung `dataset_manifest.json` cạnh export — dùng cho `dataset_version`
+    (session trace) và dataset stats (`/v1/health`, UI competition studio).
 
     Không lỗi nếu thiếu file (vd metadata trỏ thẳng tới một .jsonl không đi
-    kèm manifest) — session trace khi đó chỉ ghi `dataset_version=None`.
+    kèm manifest) — caller khi đó chỉ nhận `None` và tự quyết định fallback.
     """
 
     manifest_path = metadata_jsonl.with_name("dataset_manifest.json")
     if not manifest_path.exists():
         return None
     try:
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        return json.loads(manifest_path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
         return None
-    return manifest.get("build_id")
 
 
 @dataclass(slots=True)
@@ -52,10 +52,12 @@ class AppContainer:
     vqa_service: VQAService
     vector_store: object
     event_repository: JsonlEventRepository | None = None
+    dataset_manifest: dict | None = None
 
 
 async def build_container(settings: Settings) -> AppContainer:
     repository = await JsonlSceneRepository.load(settings.metadata_jsonl)
+    dataset_manifest = _read_dataset_manifest(settings.metadata_jsonl)
     lexical = []
     for field in ("caption", "ocr", "asr", "keyword"):
         retriever = await LexicalRetriever.build(field, repository)
@@ -202,7 +204,7 @@ async def build_container(settings: Settings) -> AppContainer:
         # PR-09: mọi search đi qua SearchService.search() đều được ghi trace —
         # kể cả gọi qua endpoint convenience /search/kis, không chỉ /v1/search.
         session_store=InMemorySessionStore(),
-        dataset_version=_read_dataset_version(settings.metadata_jsonl),
+        dataset_version=(dataset_manifest or {}).get("build_id"),
     )
     return AppContainer(
         settings=settings,
@@ -211,4 +213,5 @@ async def build_container(settings: Settings) -> AppContainer:
         vqa_service=VQAService(search_service, repository),
         vector_store=vector_store,
         event_repository=event_repository,
+        dataset_manifest=dataset_manifest,
     )

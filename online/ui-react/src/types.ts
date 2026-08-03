@@ -33,14 +33,26 @@ export interface FusionOptions {
   max_results_per_video?: number | null;
 }
 
-export interface RerankStageOptions {
+export interface TextRerankOptions {
   enabled?: boolean;
+  input_top_k?: number;
+  output_top_k?: number;
+  // weight khai báo ở backend nhưng KHÔNG có consumer nào đọc (reranker hiện
+  // re-order trực tiếp, không blend theo trọng số) — không vẽ control cho nó.
+}
+
+export interface VlmRerankOptions {
+  enabled?: boolean;
+  input_top_k?: number;
+  frames_per_candidate?: number;
+  timeout_ms?: number;
 }
 
 export interface RerankOptions {
-  enable_rules?: boolean;
-  text?: RerankStageOptions;
-  vlm?: RerankStageOptions;
+  // enable_rules KHÔNG có trong request thật (đây là cấu hình deployment,
+  // AIC_ENABLE_RULES) — không gửi field này lên server.
+  text?: TextRerankOptions;
+  vlm?: VlmRerankOptions;
 }
 
 export interface ResultOptions {
@@ -48,10 +60,26 @@ export interface ResultOptions {
   sort_by?: "final_score" | "visual_score" | "caption_score" | "ocr_score" | "asr_score" | "time";
 }
 
+// Chỉ field ĐÃ CÓ CONSUMER thật ở backend (PR-15 audit + TRAKE temporal
+// wiring) — không phải toàn bộ TemporalOptions của Pydantic (một số field
+// như same_video_required/ordered_steps_required là bất biến thuật toán,
+// server 422 nếu cố đổi, nên UI không hiển thị control cho chúng).
+export interface TemporalOptions {
+  maximum_gap_sec?: number;
+  allow_missing_optional_step?: boolean;
+  order_weight?: number;
+  gap_penalty_per_sec?: number;
+  missing_step_penalty?: number;
+  // Index theo thứ tự event 0-based; key là tên Modality ("visual"/"caption"/
+  // "ocr"/"asr"/"keyword"/"object"/"action"/"color"/"event").
+  step_modality_weights?: Record<string, number>[];
+}
+
 export interface SearchOptions {
   branches?: Record<string, BranchRuntimeOptions>;
   fusion?: FusionOptions;
   rerank?: RerankOptions;
+  temporal?: TemporalOptions;
   results?: ResultOptions;
 }
 
@@ -363,6 +391,13 @@ export interface HealthResponse {
   backend: string;
   scene_count: number;
   dataset: string;
+  dataset_version?: string | null;
+  branch_count?: number;
+  session_store_enabled?: boolean;
+  // None khi export không kèm dataset_manifest.json — không suy đoán bằng 0.
+  video_count?: number | null;
+  keyframe_count?: number | null;
+  asr_segment_count?: number;
 }
 
 /** Vùng ranking chiến thuật (docs 01082026 §17 / online/competition/rules.py). */
