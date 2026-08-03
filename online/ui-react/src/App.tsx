@@ -160,39 +160,38 @@ function App() {
     >
       {page === "search" && (
         <>
-          <header className="page-header">
-            <p className="eyebrow">AIC 2026 · Competition Retrieval Studio</p>
-            <h1>Universal Multimodal Retrieval Engine</h1>
-            <p className="subtitle">
-              Một lõi retrieval dùng chung + bốn task processor chuyên biệt (Textual KIS, Q&amp;A, TRAKE, AVS).
-            </p>
-          </header>
+          {/* Query section: controls (trái) + dataset stats (phải), cùng
+              hàng trên desktop — bỏ header lặp lại thương hiệu (đã có ở
+              TopNavigation) để gọn hơn (docs §4.2, yêu cầu "tối giản"). */}
+          <div className="query-section">
+            <QueryStudio
+              apiBase={apiBase}
+              onApiBaseChange={persistApiBase}
+              apiToken={apiToken}
+              onApiTokenChange={persistApiToken}
+              task={task}
+              onTaskChange={setTask}
+              query={query}
+              onQueryChange={setQuery}
+              topK={topK}
+              onTopKChange={setTopK}
+              debug={debug}
+              onDebugChange={setDebug}
+              streaming={streaming}
+              onStreamingChange={setStreaming}
+              onSubmit={runSearch}
+              onHealthCheck={checkHealth}
+              submitting={submitting}
+              parsedEvents={result?.query_plan?.events ?? []}
+            />
+            <DatasetStats health={healthState} />
+          </div>
 
-          <DatasetStats health={healthState} />
-
-          <QueryStudio
-            apiBase={apiBase}
-            onApiBaseChange={persistApiBase}
-            apiToken={apiToken}
-            onApiTokenChange={persistApiToken}
-            task={task}
-            onTaskChange={setTask}
-            query={query}
-            onQueryChange={setQuery}
-            topK={topK}
-            onTopKChange={setTopK}
-            debug={debug}
-            onDebugChange={setDebug}
-            streaming={streaming}
-            onStreamingChange={setStreaming}
-            onSubmit={runSearch}
-            onHealthCheck={checkHealth}
-            submitting={submitting}
-          />
-
-          <section id="status" aria-live="polite">
-            {status}
-          </section>
+          {status && (
+            <section id="status" aria-live="polite">
+              {status}
+            </section>
+          )}
           {streaming && <StreamLog events={streamEvents} />}
 
           {/* Workbench ba cột: Weights (trái) | kết quả theo task (giữa) |

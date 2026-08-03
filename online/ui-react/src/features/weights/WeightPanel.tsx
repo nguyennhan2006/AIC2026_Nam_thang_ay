@@ -294,6 +294,22 @@ export function WeightPanel({ apiConfig, task, draftOptions, onDraftChange, hasU
             onChange={(e) => updateFusion({ minimum_matching_branches: Number(e.target.value) })}
           />
         </label>
+        <label
+          className="weight-field"
+          title="KIS mặc định giới hạn 5 kết quả/video (dedup chống một video chiếm hết top-K khi dataset có nhiều video) — với dataset chỉ 1 video, giới hạn này khiến top_k cao hơn 5 không có tác dụng. Để trống = dùng mặc định của task."
+        >
+          Max results / video
+          <input
+            type="number"
+            min={1}
+            className="narrow"
+            placeholder="mặc định theo task"
+            value={draftOptions.fusion?.max_results_per_video ?? ""}
+            onChange={(e) =>
+              updateFusion({ max_results_per_video: e.target.value === "" ? null : Number(e.target.value) })
+            }
+          />
+        </label>
       </section>
 
       <section className="weight-group">

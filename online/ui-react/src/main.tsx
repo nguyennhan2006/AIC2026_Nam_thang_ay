@@ -6,6 +6,7 @@ import './styles/shell.css'
 import './styles/weights.css'
 import './styles/results.css'
 import './styles/workbench.css'
+import './styles/query.css'
 import App from './App.tsx'
 
 createRoot(document.getElementById('root')!).render(

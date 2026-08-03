@@ -75,14 +75,11 @@ body { margin: 0; background: var(--bg-app); color: var(--text-primary); font-fa
 }
 .footer-team { margin-left: auto; }
 
-/* page-header (search page) — h1/.eyebrow/.subtitle của index.css được canh
-   theo layout centered cũ (font rất lớn); thu nhỏ lại cho vừa app-main. */
-.page-header { margin-bottom: var(--space-4); }
-.page-header h1 { font-size: 1.6rem; margin: 0.2em 0; }
-.page-header .subtitle { font-size: 0.85rem; }
-
 /* ---- Dataset stats cards ---- */
 .dataset-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-2); }
+/* Trong query-section, DatasetStats nằm ở cột phụ hẹp (420px) — 2x2 vừa hơn
+   4x1 (docs §8: "Stats cards có thể chuyển 2x2"). */
+.query-section .dataset-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .stat-card {
   display: flex; align-items: center; gap: var(--space-2);
   padding: var(--space-3); border-radius: var(--radius-lg);
