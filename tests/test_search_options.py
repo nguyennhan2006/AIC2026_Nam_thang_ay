@@ -254,7 +254,10 @@ class OptionValidationTests(unittest.TestCase):
                         threshold_policy="hard", timeout_ms=500,
                     )
                 },
-                fusion=FusionOptions(method="weighted_sum", rrf_k=30, fusion_top_k=500),
+                # fusion_top_k KHÔNG có trong danh sách này — audit UI competition
+                # studio phát hiện field này chưa từng có consumer nào đọc (giờ bị
+                # UNSUPPORTED từ chối tường minh, xem capabilities.py).
+                fusion=FusionOptions(method="weighted_sum", rrf_k=30),
                 results=ResultOptions(display_top_k=20, sort_by="time"),
             ),
             CAPABILITIES,

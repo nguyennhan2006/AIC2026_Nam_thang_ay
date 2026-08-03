@@ -13,6 +13,9 @@ chỉ có một phần của Stage B, không hề khóa video và không tinh ch
 
 from __future__ import annotations
 
+from dataclasses import replace as _dataclass_replace
+from typing import TYPE_CHECKING
+
 from online.domain.models import SceneDocument, SearchHit
 from online.domain.task_results import TrakeResultItem, TrakeStep
 from online.services.trake.frame_refinement import RefinementConfig, refine_step
@@ -27,6 +30,9 @@ from online.services.trake.video_retriever import (
     VideoRetrieverConfig,
     rank_videos,
 )
+
+if TYPE_CHECKING:
+    from online.domain.search_config import TemporalOptions
 
 
 class TrakeProcessor:
@@ -141,6 +147,48 @@ class TrakeProcessor:
         )
 
 
+def trake_processor_for_request(
+    base: "TrakeProcessor", options: "TemporalOptions"
+) -> "TrakeProcessor":
+    """Override đúng tham số ĐÃ CÓ SẴN của `base` theo `options`, không đổi gì
+    khác — dùng cho UI competition studio (TRAKE Alignment sliders) để tinh
+    chỉnh theo từng request thay vì cố định lúc container build.
+
+    Chỉ field caller ĐẶT TƯỜNG MINH mới ghi đè (`model_fields_set`), nên
+    request không gửi `search_options` vẫn dùng đúng `base` (không đổi hành vi
+    cũ) — cùng nguyên tắc `fusion.rrf_k` đã áp dụng ở `_retrieve()`.
+    """
+
+    fields_set = options.model_fields_set
+    video_config = base.video_config
+    sequence_config = base.sequence_config
+
+    if "order_weight" in fields_set and options.order_weight is not None:
+        video_config = _dataclass_replace(video_config, ordering_weight=options.order_weight)
+    if "gap_penalty_per_sec" in fields_set and options.gap_penalty_per_sec is not None:
+        sequence_config = _dataclass_replace(
+            sequence_config, gap_penalty_per_sec=options.gap_penalty_per_sec
+        )
+    if "missing_step_penalty" in fields_set and options.missing_step_penalty is not None:
+        sequence_config = _dataclass_replace(
+            sequence_config, missing_step_penalty=options.missing_step_penalty
+        )
+    if "maximum_gap_sec" in fields_set:
+        sequence_config = _dataclass_replace(sequence_config, max_gap_sec=options.maximum_gap_sec)
+    if "allow_missing_optional_step" in fields_set:
+        sequence_config = _dataclass_replace(
+            sequence_config, allow_missing_steps=options.allow_missing_optional_step
+        )
+
+    if video_config is base.video_config and sequence_config is base.sequence_config:
+        return base
+    return TrakeProcessor(
+        video_config=video_config,
+        sequence_config=sequence_config,
+        refinement_config=base.refinement_config,
+    )
+
+
 __all__ = [
     "RefinementConfig",
     "SequenceConfig",
@@ -151,5 +199,6 @@ __all__ = [
     "local_variants",
     "rank_videos",
     "refine_step",
+    "trake_processor_for_request",
     "search_sequences",
 ]

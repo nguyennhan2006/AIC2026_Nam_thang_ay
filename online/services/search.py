@@ -38,7 +38,7 @@ from online.services.retrieval_orchestrator import RetrievalOrchestrator, _branc
 from online.services.rules import RuleConfig, apply_bonus_penalty
 from online.services.thresholding import apply_thresholds
 from online.services.temporal import link_event_hits
-from online.services.trake import TrakeProcessor
+from online.services.trake import TrakeProcessor, trake_processor_for_request
 
 
 class SearchService:
@@ -309,19 +309,21 @@ class SearchService:
         task = request.task or TaskType.TEXTUAL_KIS
         plan = await self.planner.plan(request)
         if task == TaskType.TRAKE and len(plan.events) >= 2:
+            step_overrides = plan.search_options.temporal.step_modality_weights
             event_hit_lists: list[list[SearchHit]] = []
             statuses: list[BranchStatus] = []
-            for event in plan.events:
+            for index, event in enumerate(plan.events):
                 # PR-14A: trọng số modality riêng cho TỪNG step — trước đây mọi
                 # step dùng chung weight suy từ cả câu multi-event, nên step
                 # không có OCR/ASR vẫn bị đẩy nhánh sai theo step khác.
+                weights = compute_modality_weights(event.text, event.exact_phrases)
+                if index < len(step_overrides):
+                    weights.update(step_overrides[index])
                 event_plan = plan.model_copy(
                     update={
                         "normalized_query": event.text,
                         "events": [event],
-                        "modality_weights": compute_modality_weights(
-                            event.text, event.exact_phrases
-                        ),
+                        "modality_weights": weights,
                     }
                 )
                 candidates, step_statuses = await self._retrieve(
@@ -334,7 +336,10 @@ class SearchService:
             )
             # Stage A khóa video trước, rồi mới beam search trong video đó và
             # tinh chỉnh frame — thay cho link_event_hits chỉ nối scene.
-            trake = self.trake_processor.run(
+            trake_processor = trake_processor_for_request(
+                self.trake_processor, plan.search_options.temporal
+            )
+            trake = trake_processor.run(
                 [event.text for event in plan.events],
                 event_hit_lists,
                 documents,

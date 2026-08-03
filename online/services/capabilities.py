@@ -62,6 +62,54 @@ UNSUPPORTED: dict[str, tuple[object, str]] = {
         "dedup theo độ tương đồng thị giác (embedding) chưa được cài đặt; "
         "dùng fusion.dedup_scope thay thế",
     ),
+    # Field khai báo nhưng không có consumer nào đọc — phát hiện khi audit UI
+    # competition studio (rà từng field trong SearchOptions xem có code nào
+    # thật sự dùng không). Từ chối tường minh thay vì nhận rồi bỏ qua.
+    "fusion.fusion_top_k": (
+        None,
+        "chưa có consumer nào đọc field này; giới hạn candidate thực tế là "
+        "candidate_limit của SearchService, không đổi được qua request",
+    ),
+    "rerank.enable_rules": (
+        None,
+        "bật/tắt rule bonus/penalty là cấu hình deployment (AIC_ENABLE_RULES), "
+        "không đổi được theo từng request",
+    ),
+    "rerank.text.weight": (
+        None,
+        "text reranker hiện thay thế thứ hạng trực tiếp (re-order), không "
+        "blend theo trọng số nên field này chưa có tác dụng",
+    ),
+    "rerank.vlm.weight": (
+        None,
+        "VLM reranker hiện thay thế thứ hạng trực tiếp (re-order), không "
+        "blend theo trọng số nên field này chưa có tác dụng",
+    ),
+    "temporal.enabled": (
+        False,
+        "TRAKE luôn chạy căn chỉnh chuỗi khi query có >= 2 event; không tắt được",
+    ),
+    "temporal.same_video_required": (
+        False,
+        "Stage A luôn khóa đúng một video trước khi căn chỉnh (luật TRAKE: sai "
+        "video = 0 điểm); không tắt được",
+    ),
+    "temporal.ordered_steps_required": (
+        False,
+        "beam search luôn yêu cầu frame tăng dần giữa các step; không tắt được",
+    ),
+    "temporal.minimum_gap_sec": (
+        None,
+        "chưa có override theo giây; SequenceConfig chỉ có min_gap_frames cố định",
+    ),
+    "temporal.neighbor_before_sec": (
+        None,
+        "chưa nối vào NeighborContext của evidence pack",
+    ),
+    "temporal.neighbor_after_sec": (
+        None,
+        "chưa nối vào NeighborContext của evidence pack",
+    ),
 }
 
 # Giá trị được chấp nhận cho field vốn bị từ chối "mọi giá trị".

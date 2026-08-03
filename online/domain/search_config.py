@@ -16,6 +16,7 @@ from typing import Literal
 from pydantic import Field, JsonValue
 
 from online.domain.base import StrictModel
+from online.domain.candidate import Modality
 
 
 class BranchRuntimeOptions(StrictModel):
@@ -100,6 +101,17 @@ class TemporalOptions(StrictModel):
     allow_missing_optional_step: bool = False
     neighbor_before_sec: float = 5
     neighbor_after_sec: float = 10
+    # UI competition studio — expose đúng tham số ĐÃ CÓ SẴN trong
+    # VideoRetrieverConfig/SequenceConfig (online/services/trake/) qua request
+    # thay vì cố định lúc container build. KHÔNG đổi thuật toán: chỉ cho override
+    # số, không thêm bước tính mới. None = giữ giá trị mặc định của deployment.
+    order_weight: float | None = Field(default=None, ge=0.0, le=5.0)
+    gap_penalty_per_sec: float | None = Field(default=None, ge=0.0, le=1.0)
+    missing_step_penalty: float | None = Field(default=None, ge=0.0, le=5.0)
+    # Override trọng số modality riêng cho từng step TRAKE (thay compute_modality_
+    # weights() tự động) — index theo thứ tự event 0-based; thiếu step nào thì
+    # step đó vẫn dùng suy luận tự động từ nội dung như trước.
+    step_modality_weights: list[dict[Modality, float]] = Field(default_factory=list)
 
 
 class ResultOptions(StrictModel):

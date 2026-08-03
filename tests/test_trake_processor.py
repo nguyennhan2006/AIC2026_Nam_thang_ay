@@ -10,7 +10,8 @@ import unittest
 
 from online.domain.candidate import FrameEvidence
 from online.domain.models import SceneDocument, SearchHit
-from online.services.trake import TrakeProcessor
+from online.domain.search_config import TemporalOptions
+from online.services.trake import TrakeProcessor, trake_processor_for_request
 from online.services.trake.frame_refinement import RefinementConfig, refine_step
 from online.services.trake.sequence_search import (
     SequenceConfig,
@@ -318,6 +319,48 @@ class TrakeProcessorTests(unittest.TestCase):
         results = TrakeProcessor().run(["a", "b", "c", "d"], step_hits, documents)
         self.assertTrue(results)
         self.assertTrue(results[0].degraded)
+
+
+class TrakeProcessorForRequestTests(unittest.TestCase):
+    """UI competition studio: TRAKE Alignment sliders phải override đúng tham
+    số đã có sẵn trong VideoRetrieverConfig/SequenceConfig, không đổi gì khác,
+    và không đổi hành vi khi request không đặt search_options (PR-15)."""
+
+    def test_no_explicit_fields_returns_the_same_base_instance(self) -> None:
+        base = TrakeProcessor()
+        result = trake_processor_for_request(base, TemporalOptions())
+        self.assertIs(result, base)
+
+    def test_order_weight_overrides_video_config_only(self) -> None:
+        base = TrakeProcessor()
+        options = TemporalOptions(order_weight=0.9)
+        result = trake_processor_for_request(base, options)
+        self.assertEqual(result.video_config.ordering_weight, 0.9)
+        self.assertEqual(result.sequence_config, base.sequence_config)
+        self.assertIsNot(result, base)
+
+    def test_gap_penalty_and_missing_step_penalty_override_sequence_config(self) -> None:
+        base = TrakeProcessor()
+        options = TemporalOptions(gap_penalty_per_sec=0.01, missing_step_penalty=0.9)
+        result = trake_processor_for_request(base, options)
+        self.assertEqual(result.sequence_config.gap_penalty_per_sec, 0.01)
+        self.assertEqual(result.sequence_config.missing_step_penalty, 0.9)
+        self.assertEqual(result.video_config, base.video_config)
+
+    def test_maximum_gap_and_allow_missing_step_are_overridable_even_at_default_value(self) -> None:
+        # Đây là field bool/threshold (không phải Optional) — chỉ ghi đè khi
+        # caller đặt tường minh (model_fields_set), kể cả khi giá trị trùng
+        # default, để phân biệt "không gửi" với "gửi đúng giá trị mặc định".
+        base = TrakeProcessor()
+        options = TemporalOptions(maximum_gap_sec=45.0, allow_missing_optional_step=True)
+        result = trake_processor_for_request(base, options)
+        self.assertEqual(result.sequence_config.max_gap_sec, 45.0)
+        self.assertTrue(result.sequence_config.allow_missing_steps)
+
+    def test_refinement_config_is_never_touched(self) -> None:
+        base = TrakeProcessor(refinement_config=RefinementConfig(window_frames=99))
+        result = trake_processor_for_request(base, TemporalOptions(order_weight=0.1))
+        self.assertIs(result.refinement_config, base.refinement_config)
 
 
 if __name__ == "__main__":
