@@ -86,6 +86,14 @@ class TrakeResultItem(StrictModel):
     steps: list[TrakeStep] = Field(default_factory=list)
     step_coverage: float = Field(default=0.0, ge=0.0, le=1.0)
     ordering_score: float = Field(default=0.0, ge=0.0, le=1.0)
+    # Số thứ tự (1-based) của các step KHÔNG tìm được candidate nào trong
+    # video này — rỗng nghĩa là chain đầy đủ. Không có field này thì output
+    # không phân biệt được "chain đủ 5 step" với "chain 5 frame nhưng thật ra
+    # chỉ có 3 step thật, 2 frame còn lại là step khác bị dồn vào" (PR-14A).
+    missing_steps: list[int] = Field(default_factory=list)
+    # True khi video được chọn dù dưới min_step_coverage (không còn lựa chọn
+    # nào khác) — kết quả suy yếu, tầng hiển thị nên cảnh báo rõ với người dùng.
+    degraded: bool = False
 
     @model_validator(mode="after")
     def require_strictly_increasing_frames(self) -> "TrakeResultItem":

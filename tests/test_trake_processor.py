@@ -42,10 +42,32 @@ class VideoRetrieverTests(unittest.TestCase):
         self.assertEqual(videos[0].video_id, "L21_V001")
         self.assertEqual(videos[0].step_coverage, 1.0)
 
-    def test_video_below_min_coverage_is_dropped(self) -> None:
+    def test_video_below_min_coverage_is_kept_as_degraded_fallback(self) -> None:
+        # PR-14A: khi KHÔNG video nào đạt ngưỡng nhưng có bằng chứng thật (ở
+        # đây chỉ 1/4 step), giữ lại ứng viên tốt nhất thay vì trả rỗng hoàn
+        # toàn — một sequence suy yếu vẫn hơn "TRAKE luôn 0" (xem docstring
+        # rank_videos()). Đánh dấu below_min_coverage=True để tầng trên biết.
         step_hits = [[hit("L21_V001", 0, 100, 0.9)], [], [], []]
         videos = rank_videos(step_hits, VideoRetrieverConfig(min_step_coverage=0.5))
-        self.assertEqual(videos, [])
+        self.assertEqual(len(videos), 1)
+        self.assertEqual(videos[0].video_id, "L21_V001")
+        self.assertTrue(videos[0].below_min_coverage)
+
+    def test_video_meeting_coverage_is_not_marked_degraded(self) -> None:
+        step_hits = [[hit("L21_V001", 0, 100, 0.9)], [hit("L21_V001", 1, 200, 0.9)]]
+        videos = rank_videos(step_hits, VideoRetrieverConfig(min_step_coverage=0.5))
+        self.assertFalse(videos[0].below_min_coverage)
+
+    def test_better_alternative_still_excludes_the_low_coverage_one(self) -> None:
+        # Có video khác đạt ngưỡng đầy đủ -> KHÔNG cần fallback, video thiếu
+        # coverage vẫn bị loại như cũ (chỉ fallback khi không còn lựa chọn nào).
+        step_hits = [
+            [hit("L21_V001", 0, 100, 0.5), hit("L21_V002", 0, 999, 0.99)],
+            [hit("L21_V001", 1, 200, 0.5)],
+            [hit("L21_V001", 2, 300, 0.5)],
+        ]
+        videos = rank_videos(step_hits, VideoRetrieverConfig(min_step_coverage=0.5))
+        self.assertEqual([item.video_id for item in videos], ["L21_V001"])
 
     def test_ordered_pairs_score_higher_than_reversed_ones(self) -> None:
         # Cả hai step đều có bằng chứng ở cả hai video; chỉ khác nhau thứ tự
@@ -108,6 +130,76 @@ class SequenceSearchTests(unittest.TestCase):
         variants = local_variants(hypotheses[0])
         for variant in variants:
             self.assertTrue(all(b > a for a, b in zip(variant, variant[1:])))
+
+    def test_reversed_evidence_cannot_form_a_path_only_the_forward_one_does(self) -> None:
+        # E1 chỉ có bằng chứng ở frame 300, E2 chỉ có ở frame 100 (trước E1) —
+        # một chain đúng thứ tự không thể tồn tại; hệ thống phải rơi về
+        # "bỏ qua step" (khi cho phép) thay vì tạo path đảo thứ tự.
+        step_hits = [[hit("L21_V001", 0, 300, 0.9)], [hit("L21_V001", 1, 100, 0.9)]]
+        hypotheses = search_sequences(
+            "L21_V001", step_hits, SequenceConfig(allow_missing_steps=True)
+        )
+        for hypothesis in hypotheses:
+            frames = hypothesis.frame_ids
+            self.assertTrue(all(b > a for a, b in zip(frames, frames[1:])))
+
+    def test_complete_chain_beats_chain_with_a_missing_step(self) -> None:
+        step_hits = [
+            [hit("L21_V001", 0, 100, 0.9)],
+            [hit("L21_V001", 1, 200, 0.9)],
+            [hit("L21_V001", 2, 300, 0.9)],
+        ]
+        hypotheses = search_sequences(
+            "L21_V001", step_hits, SequenceConfig(allow_missing_steps=True)
+        )
+        best = hypotheses[0]
+        self.assertEqual(best.covered, 3)
+        self.assertTrue(all(h.score <= best.score for h in hypotheses))
+
+    def test_two_steps_can_land_in_the_same_scene_if_frames_differ(self) -> None:
+        # Scene dài có thể chứa hai khoảnh khắc khác nhau — sequence_search so
+        # theo frame_idx chứ không theo scene_id (đúng docstring module).
+        step_hits = [
+            [hit("L21_V001", 0, 100, 0.9, scene_id="L21_V001_S0000")],
+            [hit("L21_V001", 0, 105, 0.9, scene_id="L21_V001_S0000")],
+        ]
+        hypotheses = search_sequences(
+            "L21_V001", step_hits, SequenceConfig(allow_missing_steps=False)
+        )
+        self.assertTrue(hypotheses)
+        self.assertEqual(hypotheses[0].frame_ids, [100, 105])
+
+    def test_larger_gap_scores_lower_than_smaller_gap_within_allowed_range(self) -> None:
+        config = SequenceConfig(allow_missing_steps=False, max_gap_sec=600.0)
+        close = search_sequences(
+            "L21_V001",
+            [[hit("L21_V001", 0, 100, 0.9)], [hit("L21_V001", 1, 130, 0.9)]],
+            config,
+        )[0]
+        far = search_sequences(
+            "L21_V001",
+            [[hit("L21_V001", 0, 100, 0.9)], [hit("L21_V001", 1, 100 + 30 * 200, 0.9)]],
+            config,
+        )[0]
+        self.assertGreater(close.score, far.score)
+
+    def test_deterministic_tie_break_prefers_smaller_frame_ids(self) -> None:
+        # Hai candidate cùng score cho step 2 -> tie-break phải ổn định (chọn
+        # frame nhỏ hơn), không phụ thuộc thứ tự ngẫu nhiên của input.
+        step_hits = [
+            [hit("L21_V001", 0, 100, 0.9)],
+            [hit("L21_V001", 1, 250, 0.5), hit("L21_V001", 1, 200, 0.5)],
+        ]
+        first = search_sequences("L21_V001", step_hits, SequenceConfig(allow_missing_steps=False))
+        step_hits_reordered = [
+            [hit("L21_V001", 0, 100, 0.9)],
+            [hit("L21_V001", 1, 200, 0.5), hit("L21_V001", 1, 250, 0.5)],
+        ]
+        second = search_sequences(
+            "L21_V001", step_hits_reordered, SequenceConfig(allow_missing_steps=False)
+        )
+        self.assertEqual(first[0].frame_ids, second[0].frame_ids)
+        self.assertEqual(first[0].frame_ids, [100, 200])
 
 
 class FrameRefinementTests(unittest.TestCase):
@@ -199,6 +291,33 @@ class TrakeProcessorTests(unittest.TestCase):
     def test_no_coverage_anywhere_returns_empty(self) -> None:
         results = TrakeProcessor().run(["a", "b"], [[], []], {})
         self.assertEqual(results, [])
+
+    def test_missing_step_is_reported_not_silently_dropped(self) -> None:
+        # step 2 (giữa) không có bằng chứng -> chain vẫn phải khác rỗng
+        # (partial chain), và output phải ghi rõ step nào thiếu (PR-14A Gate C).
+        step_hits = [
+            [hit("L21_V001", 0, 100, 0.9)],
+            [],
+            [hit("L21_V001", 2, 300, 0.9)],
+        ]
+        documents = {
+            f"L21_V001_S{i:04d}": self._document("L21_V001", i, frame)
+            for i, frame in zip((0, 2), (100, 300))
+        }
+        results = TrakeProcessor().run(["a", "b", "c"], step_hits, documents)
+        self.assertTrue(results)
+        self.assertEqual(results[0].missing_steps, [2])
+
+    def test_only_one_video_below_threshold_is_marked_degraded_not_dropped(self) -> None:
+        # Chỉ 1/4 step có bằng chứng, đúng ngưỡng min_step_coverage mặc định
+        # (0.5) sẽ loại video này -> rank_videos fallback giữ lại (below_min_
+        # coverage=True) thay vì trả rỗng hoàn toàn; TrakeProcessor phải
+        # truyền cờ degraded đó ra tới kết quả cuối.
+        step_hits = [[hit("L21_V001", 0, 100, 0.9)], [], [], []]
+        documents = {"L21_V001_S0000": self._document("L21_V001", 0, 100)}
+        results = TrakeProcessor().run(["a", "b", "c", "d"], step_hits, documents)
+        self.assertTrue(results)
+        self.assertTrue(results[0].degraded)
 
 
 if __name__ == "__main__":

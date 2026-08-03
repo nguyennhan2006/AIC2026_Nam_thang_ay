@@ -50,6 +50,33 @@ def normalize_query(text: str) -> str:
     return normalized
 
 
+def compute_modality_weights(text: str, exact_phrases: list[str]) -> dict[Modality, float]:
+    """Suy modality weight từ MỘT đoạn text — dùng cho cả full query lẫn
+    từng event riêng của TRAKE (PR-14A: trước đây mọi step TRAKE dùng chung
+    weight của cả câu, nên step không có OCR/ASR vẫn bị đẩy nhánh sai)."""
+
+    lowered = text.casefold()
+    weights = {
+        Modality.VISUAL: 1.0,
+        Modality.CAPTION: 1.0,
+        Modality.OCR: 0.35,
+        Modality.ASR: 0.25,
+        Modality.KEYWORD: 0.65,
+        # Buckets mới (W3) chỉ có hiệu lực khi container thực sự đăng ký
+        # retriever tương ứng (mặc định tắt, xem AIC_ENABLE_* ở online/config.py)
+        # — giá trị ở đây chỉ là default hợp lý cho lúc retriever được bật.
+        Modality.OBJECT: 0.5,
+        Modality.ACTION: 0.5,
+        Modality.COLOR: 0.4,
+        Modality.EVENT: 0.3,
+    }
+    if exact_phrases or any(hint in lowered for hint in TEXT_HINTS):
+        weights[Modality.OCR] = 2.0
+    if any(hint in lowered for hint in SPEECH_HINTS):
+        weights[Modality.ASR] = 1.7
+    return weights
+
+
 class RuleBasedQueryPlanner:
     """Safe V1 planner; an LLM planner can replace it through the same output model."""
 
@@ -80,25 +107,7 @@ class RuleBasedQueryPlanner:
             )
             for index, text in enumerate(parts)
         ]
-        lowered = normalized.casefold()
-        weights = {
-            Modality.VISUAL: 1.0,
-            Modality.CAPTION: 1.0,
-            Modality.OCR: 0.35,
-            Modality.ASR: 0.25,
-            Modality.KEYWORD: 0.65,
-            # Buckets mới (W3) chỉ có hiệu lực khi container thực sự đăng ký
-            # retriever tương ứng (mặc định tắt, xem AIC_ENABLE_* ở online/config.py)
-            # — giá trị ở đây chỉ là default hợp lý cho lúc retriever được bật.
-            Modality.OBJECT: 0.5,
-            Modality.ACTION: 0.5,
-            Modality.COLOR: 0.4,
-            Modality.EVENT: 0.3,
-        }
-        if exact_phrases or any(hint in lowered for hint in TEXT_HINTS):
-            weights[Modality.OCR] = 2.0
-        if any(hint in lowered for hint in SPEECH_HINTS):
-            weights[Modality.ASR] = 1.7
+        weights = compute_modality_weights(normalized, exact_phrases)
         return QueryPlan(
             task=task,
             original_query=request.query,

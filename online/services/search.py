@@ -30,7 +30,7 @@ from online.services.fusion import fuse_candidates
 from online.services.kis import KisProcessor
 from online.services.negative_constraints import apply_negative_constraints, extract_negative_constraints
 from online.services.qa import QaProcessor
-from online.services.query_planner import RuleBasedQueryPlanner
+from online.services.query_planner import RuleBasedQueryPlanner, compute_modality_weights
 from online.services.registry import RetrieverRegistry
 from online.services.rerank_pipeline import RerankPipeline
 from online.services.score_normalization import normalize_all
@@ -312,8 +312,17 @@ class SearchService:
             event_hit_lists: list[list[SearchHit]] = []
             statuses: list[BranchStatus] = []
             for event in plan.events:
+                # PR-14A: trọng số modality riêng cho TỪNG step — trước đây mọi
+                # step dùng chung weight suy từ cả câu multi-event, nên step
+                # không có OCR/ASR vẫn bị đẩy nhánh sai theo step khác.
                 event_plan = plan.model_copy(
-                    update={"normalized_query": event.text, "events": [event]}
+                    update={
+                        "normalized_query": event.text,
+                        "events": [event],
+                        "modality_weights": compute_modality_weights(
+                            event.text, event.exact_phrases
+                        ),
+                    }
                 )
                 candidates, step_statuses = await self._retrieve(
                     event_plan, self.candidate_limit
@@ -334,10 +343,17 @@ class SearchService:
             sequences = link_event_hits(event_hit_lists, limit=request.top_k)
             warnings = _status_warnings(statuses)
             if not trake:
-                warnings.append(
-                    "TRAKE: không dựng được chuỗi nào — không có video nào phủ "
-                    "đủ số step tối thiểu"
-                )
+                if not any(event_hit_lists):
+                    warnings.append(
+                        "TRAKE: không có candidate cho bất kỳ step nào — kiểm tra "
+                        "retrieval branch (dense_visual/bm25) có trả kết quả không"
+                    )
+                else:
+                    warnings.append(
+                        "TRAKE: có candidate cho step nhưng không dựng được chuỗi "
+                        "hợp lệ — kiểm tra ràng buộc thứ tự tăng dần/khoảng cách "
+                        "(SequenceConfig.max_gap_sec, min_gap_frames)"
+                    )
             return SearchResponse(
                 query_id=query_id,
                 task=task,

@@ -15,7 +15,7 @@ một step như `link_event_hits` trước PR-07 vẫn làm.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from online.domain.models import SearchHit
 
@@ -30,6 +30,10 @@ class VideoCandidate:
     duplicate_penalty: float
     # Hit tốt nhất của từng step trong video này, index theo thứ tự step.
     best_per_step: tuple[SearchHit | None, ...] = ()
+    # True khi video này lọt qua chỉ vì KHÔNG còn ứng viên nào khác đạt
+    # min_step_coverage — kết quả cho video này nên bị coi là suy yếu (partial),
+    # không phải một match đáng tin như bình thường (xem rank_videos()).
+    below_min_coverage: bool = False
 
     @property
     def covered_steps(self) -> int:
@@ -62,7 +66,15 @@ def _best_per_step(
 def rank_videos(
     step_hits: list[list[SearchHit]], config: VideoRetrieverConfig | None = None
 ) -> list[VideoCandidate]:
-    """Xếp hạng video theo bằng chứng gộp của mọi step."""
+    """Xếp hạng video theo bằng chứng gộp của mọi step.
+
+    KHÔNG bao giờ trả rỗng chỉ vì mọi video đều dưới `min_step_coverage`, MIỄN
+    có ít nhất một video có bằng chứng thật (step_coverage > 0): giữ lại ứng
+    viên tốt nhất, đánh dấu `below_min_coverage=True` để tầng trên biết đây là
+    kết quả suy yếu — thay vì trả `[]` khiến toàn bộ query TRAKE mất trắng chỉ
+    vì thiếu 1 step trong lúc chỉ có đúng một video ứng viên (xem PR-14A: đây
+    là nguyên nhân TRAKE có thể trả rỗng dù rank_videos tìm được bằng chứng).
+    """
 
     config = config or VideoRetrieverConfig()
     if not step_hits:
@@ -73,13 +85,13 @@ def rank_videos(
         (hit.score for hits in step_hits for hit in hits), default=0.0
     ) or 1.0
 
-    candidates: list[VideoCandidate] = []
+    all_candidates: list[VideoCandidate] = []
     for video_id in videos:
         per_step = _best_per_step(step_hits, video_id)
         covered = [item for item in per_step if item is not None]
         step_coverage = len(covered) / step_count
-        if step_coverage < config.min_step_coverage:
-            continue
+        if not covered:
+            continue  # không một step nào có bằng chứng: không đáng làm fallback
 
         # Cặp liên tiếp đúng thứ tự: cả hai step đều có bằng chứng và step sau
         # nằm sau step trước trên trục frame.
@@ -106,7 +118,7 @@ def rank_videos(
             + config.context_weight * context
             - config.duplicate_penalty * duplicate
         )
-        candidates.append(VideoCandidate(
+        all_candidates.append(VideoCandidate(
             video_id=video_id,
             score=score,
             step_coverage=step_coverage,
@@ -115,6 +127,15 @@ def rank_videos(
             duplicate_penalty=duplicate,
             best_per_step=tuple(per_step),
         ))
+
+    passing = [item for item in all_candidates if item.step_coverage >= config.min_step_coverage]
+    if passing:
+        candidates = passing
+    elif all_candidates:
+        best = max(all_candidates, key=lambda item: (item.score, item.video_id))
+        candidates = [replace(best, below_min_coverage=True)]
+    else:
+        candidates = []
 
     candidates.sort(key=lambda item: (-item.score, item.video_id))
     return candidates[: config.top_videos]

@@ -95,8 +95,10 @@ class TrakeProcessor:
         rank: int,
     ) -> TrakeResultItem | None:
         steps: list[TrakeStep] = []
+        missing_steps: list[int] = []
         for index, hit in enumerate(hypothesis.hits):
             if hit is None:
+                missing_steps.append(index + 1)
                 continue
             document = documents.get(hit.scene_id)
             query = step_queries[index] if index < len(step_queries) else ""
@@ -134,6 +136,8 @@ class TrakeProcessor:
             steps=steps,
             step_coverage=video.step_coverage,
             ordering_score=video.ordered_pair_coverage,
+            missing_steps=missing_steps,
+            degraded=video.below_min_coverage,
         )
 
 
