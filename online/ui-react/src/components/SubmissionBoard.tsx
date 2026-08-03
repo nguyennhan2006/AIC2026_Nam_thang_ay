@@ -31,7 +31,9 @@ export function SubmissionBoard({ apiConfig, task, kis, qa, trake, avs }: Submis
         {avs.length > 0 && (
           <p className="muted small">
             {avs.length} segment · phân bố grade:{" "}
-            {[0, 1, 2, 3].map((grade) => `${grade}★=${avs.filter((item) => item.relevance_grade === grade).length}`).join(", ")}
+            {[0, 1, 2, 3]
+              .map((grade) => `grade ${grade}: ${avs.filter((item) => item.relevance_grade === grade).length}`)
+              .join(" · ")}
           </p>
         )}
       </div>

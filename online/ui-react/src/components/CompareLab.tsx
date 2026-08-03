@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { TriangleAlert } from "lucide-react";
 import type { ApiClientConfig } from "../api";
 import { ApiError, getSearchSession, replaySearchSession } from "../api";
 import type { SearchExecutionTrace } from "../types";
@@ -24,7 +25,12 @@ function TraceCard({
         took {trace.took_ms.toFixed(1)}ms · dataset {trace.dataset_version ?? "?"} · replay_count {trace.replay_count}
       </p>
       {degraded.length > 0 && (
-        <p className="warning-text">⚠ {degraded.length} branch degraded lúc chạy: {degraded.map((d) => d.execution_id).join(", ")}</p>
+        <p className="branch-status-warn">
+          <TriangleAlert size={12} />
+          <span>
+            {degraded.length} nhánh degraded lúc chạy: {degraded.map((d) => d.execution_id).join(", ")}
+          </span>
+        </p>
       )}
       {trace.warnings.length > 0 && (
         <ul className="issue-list">

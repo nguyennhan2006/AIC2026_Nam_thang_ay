@@ -1,48 +1,108 @@
-/* Design tokens — AIC Video Search competition studio.
-   Nguồn: docs UI competition studio (ảnh tham chiếu image(991).png). Mọi giá
-   trị màu/spacing/radius mới trong app/ và features/ nên đọc từ đây thay vì
-   hard-code lại. */
+/* Design tokens — AIC 2026 Competition Retrieval Studio.
+
+   Semantic, KHÔNG phải bảng màu thô: component đọc `--surface-panel`,
+   `--text-secondary`… chứ không đọc `--slate-800`. Đổi art direction =
+   sửa đúng file này, không phải đi lùng từng component.
+
+   Thang elevation (tối → sáng dần theo độ "nổi"):
+     app     nền ngoài cùng, không bao giờ đặt nội dung trực tiếp lên
+     nav     chrome cố định (top nav, left rail, footer)
+     panel   bề mặt nội dung chính (Surface mặc định)
+     raised  thẻ/hàng nằm TRONG panel (card kết quả, row đang chọn)
+     control input/button — luôn nổi hơn bề mặt chứa nó
+*/
 
 :root {
-  --bg-app: #07111f;
-  --bg-nav: #0a1525;
-  --bg-panel: #0d1b2d;
-  --bg-panel-elevated: #122239;
-  --bg-control: #14253c;
-  --bg-control-hover: #19304e;
+  /* ---- Elevation surfaces ---- */
+  --surface-app: #070b13;
+  --surface-nav: #0a1019;
+  --surface-panel: #0d141f;
+  --surface-raised: #121b29;
+  --surface-control: #172232;
+  --surface-control-hover: #1e2a3d;
+  --surface-control-active: #243349;
+  --surface-overlay: rgba(7, 11, 19, 0.72);
 
-  --border-subtle: #20344f;
-  --border-strong: #2a4668;
+  /* ---- Borders: mềm, ít tương phản — hierarchy đến từ elevation, không
+         phải từ đường kẻ cứng (yêu cầu "ít border cứng"). ---- */
+  --border-subtle: rgba(148, 176, 214, 0.08);
+  --border-default: rgba(148, 176, 214, 0.13);
+  --border-strong: rgba(148, 176, 214, 0.22);
+  --border-accent: rgba(59, 130, 246, 0.45);
 
-  --text-primary: #f4f8ff;
-  --text-secondary: #9fb0c7;
-  --text-muted: #70839d;
+  /* ---- Text: 4 bậc rõ ràng để typography có phân cấp ---- */
+  --text-primary: #eaf1fb;
+  --text-secondary: #9dadc4;
+  --text-tertiary: #6b7d95;
+  --text-disabled: #465468;
+  --text-on-accent: #ffffff;
 
-  --accent-blue: #2387ff;
-  --accent-cyan: #36c7d9;
-  --accent-green: #56d87a;
-  --accent-yellow: #f0ad3d;
-  --accent-orange: #ff8b24;
-  --accent-pink: #ea4c89;
-  --accent-purple: #a75df4;
-  --danger: #ff5c6c;
+  /* ---- Accent ---- */
+  --accent: #3b82f6;
+  --accent-hover: #4d8ffa;
+  --accent-soft: rgba(59, 130, 246, 0.14);
+  --accent-border: rgba(59, 130, 246, 0.38);
 
-  --score-track: #173554;
-  --focus-ring: rgba(35, 135, 255, 0.4);
+  --accent-cyan: #22b8cf;
+  --accent-green: #37c978;
+  --accent-amber: #e8a33d;
+  --accent-purple: #9061f9;
+  --accent-pink: #e5588f;
+  --danger: #f2596b;
+  --danger-soft: rgba(242, 89, 107, 0.14);
 
+  /* ---- Radius: 4 bậc cố định (panel > nested > control > badge) ---- */
+  --radius-panel: 10px;
+  --radius-nested: 8px;
+  --radius-control: 7px;
+  --radius-badge: 5px;
+  --radius-pill: 999px;
+
+  /* ---- Spacing ---- */
   --space-1: 4px;
-  --space-2: 8px;
-  --space-3: 12px;
-  --space-4: 16px;
-  --space-5: 20px;
-  --space-6: 24px;
+  --space-2: 6px;
+  --space-3: 8px;
+  --space-4: 12px;
+  --space-5: 16px;
+  --space-6: 20px;
+  --space-7: 24px;
 
-  --radius-sm: 6px;
-  --radius-md: 8px;
-  --radius-lg: 10px;
-  --shadow-panel: 0 10px 30px rgba(0, 0, 0, 0.18);
+  /* ---- Typography: thang có phân cấp thật, không phải "toàn text-xs" ---- */
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", ui-monospace, "Cascadia Code", monospace;
 
-  --shell-top-nav-h: 52px;
-  --shell-left-rail-w: 56px;
-  --shell-footer-h: 32px;
+  --text-display: 20px;   /* tiêu đề trang */
+  --text-title: 15px;     /* tiêu đề panel */
+  --text-body: 13px;      /* nội dung chính */
+  --text-label: 12px;     /* nhãn control */
+  --text-caption: 11px;   /* chú thích phụ */
+  --text-micro: 10px;     /* badge, uppercase eyebrow */
+
+  --weight-normal: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  --leading-tight: 1.25;
+  --leading-normal: 1.5;
+
+  /* ---- Elevation shadows: mềm, khuếch tán ---- */
+  --shadow-raised: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-panel: 0 4px 16px rgba(0, 0, 0, 0.28);
+  --shadow-popover: 0 12px 32px rgba(0, 0, 0, 0.45);
+  --focus-ring: 0 0 0 2px rgba(59, 130, 246, 0.45);
+
+  /* ---- Shell metrics: cố định để layout khoá được trong 100vh ---- */
+  --shell-nav-h: 48px;
+  --shell-rail-w: 52px;
+  --shell-footer-h: 30px;
+
+  /* ---- Workbench: 292 / fluid / 372 theo spec ---- */
+  --workbench-left-w: 292px;
+  --workbench-right-w: 372px;
+
+  --scrollbar-w: 5px;
+
+  --transition-fast: 120ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base: 180ms cubic-bezier(0.4, 0, 0.2, 1);
 }

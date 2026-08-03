@@ -1,0 +1,119 @@
+/* Các panel phụ (CompareLab, HealthDrawer, StreamLog, SubmissionBoard) —
+   giữ nguyên class cũ của component, chỉ gắn lại vào design tokens mới. */
+
+.muted, .small { color: var(--text-tertiary); font-size: var(--text-caption); }
+.warning-text { color: var(--accent-amber); font-size: var(--text-caption); }
+
+/* ---- Compare Lab ---- */
+.compare-lab { display: flex; flex-direction: column; gap: var(--space-4); min-width: 0; }
+.compare-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--space-4);
+}
+.compare-grid > div { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; }
+.compare-grid label { display: flex; flex-direction: column; gap: var(--space-2); font-size: var(--text-caption); color: var(--text-secondary); }
+.compare-grid input,
+.health-drawer input,
+.submission-board input,
+.submission-board textarea {
+  height: 28px;
+  padding: 0 var(--space-3);
+  background: var(--surface-control);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-control);
+  color: var(--text-primary);
+  font-size: var(--text-label);
+  min-width: 0;
+}
+.submission-board textarea { height: auto; padding: var(--space-3); font-family: var(--font-mono); }
+.compare-grid input:focus,
+.health-drawer input:focus,
+.submission-board input:focus,
+.submission-board textarea:focus { border-color: var(--accent-border); }
+
+.compare-grid > div > button,
+.health-drawer > button,
+.submission-board button,
+.trace-card button {
+  align-self: flex-start;
+  height: 28px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-control);
+  background: var(--surface-control);
+  border: 1px solid var(--border-default);
+  color: var(--text-primary);
+  font-size: var(--text-label);
+  font-weight: var(--weight-medium);
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+.compare-grid > div > button:hover:not(:disabled),
+.health-drawer > button:hover:not(:disabled),
+.submission-board button:hover:not(:disabled),
+.trace-card button:hover:not(:disabled) { background: var(--surface-control-hover); border-color: var(--border-strong); }
+.compare-grid > div > button:disabled,
+.submission-board button:disabled { opacity: 0.4; }
+
+.trace-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  background: var(--surface-raised);
+  border-radius: var(--radius-nested);
+  font-size: var(--text-caption);
+  color: var(--text-secondary);
+  min-width: 0;
+}
+.trace-card strong { color: var(--text-primary); }
+
+/* ---- Health drawer ---- */
+.health-drawer { display: flex; flex-direction: column; gap: var(--space-4); min-width: 0; }
+.health-list { display: flex; flex-direction: column; gap: var(--space-2); font-size: var(--text-label); color: var(--text-secondary); }
+.health-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface-raised);
+  border-radius: var(--radius-badge);
+  min-width: 0;
+}
+.health-drawer p { font-size: var(--text-caption); color: var(--text-secondary); }
+.health-drawer ul ul { margin-top: var(--space-2); display: flex; flex-direction: column; gap: var(--space-1); }
+
+/* ---- Stream log ---- */
+.stream-log {
+  flex: 0 0 auto;
+  max-height: 116px;
+  overflow-y: auto;
+  padding: var(--space-3);
+  background: var(--surface-panel);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-nested);
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  color: var(--text-tertiary);
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+.stream-log::-webkit-scrollbar { width: var(--scrollbar-w); }
+.stream-log::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: var(--radius-pill); }
+.stream-log li { padding: 1px 0; }
+
+/* ---- Submission board ---- */
+.submission-board { display: flex; flex-direction: column; gap: var(--space-4); min-width: 0; }
+.submission-board label { display: flex; flex-direction: column; gap: var(--space-2); font-size: var(--text-caption); color: var(--text-secondary); }
+.submission-board pre {
+  padding: var(--space-3);
+  background: var(--surface-app);
+  border-radius: var(--radius-nested);
+  overflow-x: auto;
+  font-size: var(--text-caption);
+  color: var(--text-secondary);
+}
+
+.issue-list { display: flex; flex-direction: column; gap: var(--space-2); font-size: var(--text-caption); }
+.issue-list li { padding: var(--space-2) var(--space-3); border-radius: var(--radius-badge); background: var(--surface-raised); }
+.issue-warning { color: var(--accent-amber); background: rgba(232, 163, 61, 0.1) !important; }
+.issue-error { color: var(--danger); background: var(--danger-soft) !important; }

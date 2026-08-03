@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Ảnh chụp của scripts/visual-check.mjs — sinh lại được, không cần theo dõi
+screenshots

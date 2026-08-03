@@ -1,46 +1,77 @@
-/* Weight Panel (features/weights/WeightPanel.tsx) — docs UI competition
-   studio §9. */
+/* Weight panel — phần lớn hình thức đã nằm ở primitives.css (WeightRow,
+   Section, Slider). Ở đây chỉ còn cái riêng của panel này. */
 
-.weight-panel { display: flex; flex-direction: column; gap: var(--space-4); }
-.weight-panel-head { display: flex; align-items: center; gap: var(--space-2); }
-.weight-panel-head h3 { margin: 0; font-size: 0.95rem; }
-.unsaved-badge { font-size: 0.68rem; padding: 2px 8px; border-radius: 999px; background: var(--accent-yellow); color: #2a1c00; font-weight: 700; }
+.field-pair { display: inline-flex; align-items: center; gap: var(--space-2); flex: 0 0 auto; }
 
-.weight-group { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); background: var(--bg-panel); }
-.weight-group h4 { margin: 0 0 var(--space-1); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-secondary); }
+/* ---- Disclosure "option chưa chạy thật" ---- */
+.disclosure { font-size: var(--text-caption); }
+.disclosure > summary {
+  cursor: pointer;
+  color: var(--text-tertiary);
+  padding: var(--space-2) 0;
+  list-style: none;
+  transition: color var(--transition-fast);
+}
+.disclosure > summary:hover { color: var(--text-secondary); }
+.disclosure > summary::-webkit-details-marker { display: none; }
+.disclosure > summary::before { content: "▸ "; color: var(--text-disabled); }
+.disclosure[open] > summary::before { content: "▾ "; }
+.disclosure-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  background: var(--surface-app);
+  border-radius: var(--radius-nested);
+  color: var(--text-disabled);
+}
+.disclosure-list li { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.disclosure-list code { color: var(--text-tertiary); word-break: break-all; }
 
-.weight-slider-row { display: grid; grid-template-columns: minmax(0, 1fr) 90px 56px 28px; align-items: center; gap: var(--space-2); }
-.weight-row-label { display: flex; align-items: center; gap: var(--space-1); font-size: 0.8rem; color: var(--text-primary); min-width: 0; }
-.weight-slider-row input[type="range"] { width: 90px; accent-color: var(--accent-blue); }
-.weight-slider-row input[type="number"].narrow { width: 56px; }
-.lock-btn { width: 26px; height: 26px; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); background: var(--bg-control); cursor: pointer; }
-.lock-btn.locked { border-color: var(--accent-yellow); }
+/* ---- Per-step table ---- */
+.per-step { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; }
+.per-step-scroll { max-width: 100%; padding-bottom: var(--space-2); }
+.per-step-table { border-collapse: collapse; width: 100%; font-size: var(--text-caption); }
+.per-step-table th,
+.per-step-table td { padding: var(--space-1) var(--space-2); text-align: left; }
+.per-step-table thead th {
+  font-size: var(--text-micro);
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+.per-step-table tbody th {
+  font-weight: var(--weight-normal);
+  color: var(--text-secondary);
+  max-width: 84px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.per-step-table td { min-width: 54px; }
+.per-step-table .numeric-input { height: 22px; }
+.per-step-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 
-.weight-actions { display: flex; align-items: center; gap: var(--space-2); }
-
-.weight-field { display: flex; align-items: center; gap: var(--space-2); font-size: 0.8rem; color: var(--text-secondary); }
-.weight-field select, .weight-field input[type="number"] { background: var(--bg-control); border: 1px solid var(--border-subtle); color: var(--text-primary); border-radius: var(--radius-sm); padding: 4px 6px; }
-.weight-field input[type="range"] { flex: 1; accent-color: var(--accent-blue); }
-.weight-field output { font-variant-numeric: tabular-nums; color: var(--text-primary); min-width: 3.5em; text-align: right; }
-.disabled-field { opacity: 0.55; }
-
-.weight-inline-fields { display: flex; gap: var(--space-3); padding-left: var(--space-5); font-size: 0.78rem; color: var(--text-secondary); }
-.weight-inline-fields input { width: 60px; background: var(--bg-control); border: 1px solid var(--border-subtle); color: var(--text-primary); border-radius: var(--radius-sm); padding: 3px 5px; }
-
-.weight-tabs { display: flex; gap: var(--space-1); margin-top: var(--space-2); }
-.weight-tab { background: transparent; border: 1px solid var(--border-subtle); color: var(--text-secondary); padding: 4px 12px; border-radius: var(--radius-sm); font-size: 0.76rem; cursor: pointer; }
-.weight-tab.active { background: var(--bg-control); color: var(--text-primary); border-color: var(--border-strong); }
-.weight-tab:disabled { opacity: 0.4; cursor: not-allowed; }
-
-.per-step-table-wrap { overflow-x: auto; }
-.per-step-table { width: 100%; border-collapse: collapse; font-size: 0.76rem; }
-.per-step-table th, .per-step-table td { padding: 4px 6px; border-bottom: 1px solid var(--border-subtle); text-align: left; white-space: nowrap; }
-.per-step-table input { width: 56px; background: var(--bg-control); border: 1px solid var(--border-subtle); color: var(--text-primary); border-radius: var(--radius-sm); padding: 3px 5px; }
-.per-step-actions { display: flex; flex-wrap: wrap; gap: var(--space-1); margin: var(--space-2) 0; }
-.per-step-actions button { font-size: 0.72rem; padding: 3px 8px; }
-
-.preset-save-row { display: flex; gap: var(--space-2); }
-.preset-save-row input { flex: 1; background: var(--bg-control); border: 1px solid var(--border-subtle); color: var(--text-primary); border-radius: var(--radius-sm); padding: 4px 8px; }
-.preset-user-list { list-style: none; margin: var(--space-2) 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
-.preset-user-list li { display: flex; justify-content: space-between; align-items: center; font-size: 0.78rem; padding: 3px 6px; border-radius: var(--radius-sm); background: var(--bg-control); }
-.preset-user-list button { background: transparent; border: none; color: var(--danger); cursor: pointer; padding: 0 4px; }
+/* ---- Presets ---- */
+.preset-save { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-2); }
+.preset-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--text-caption);
+  color: var(--text-secondary);
+}
+.preset-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  height: 24px;
+  padding: 0 var(--space-1) 0 var(--space-3);
+  border-radius: var(--radius-badge);
+  min-width: 0;
+  transition: background var(--transition-fast);
+}
+.preset-list li:hover { background: var(--surface-raised); }

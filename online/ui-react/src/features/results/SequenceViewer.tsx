@@ -1,12 +1,7 @@
+import { ImageOff } from "lucide-react";
 import type { ApiClientConfig } from "../../api";
 import { mediaUrl } from "../../api";
 import type { TrakeResultItem, TrakeStep } from "../../types";
-
-const STEP_COLORS = ["#2387ff", "#56d87a", "#f0ad3d", "#ea4c89", "#a75df4", "#36c7d9"];
-
-function stepColor(index: number): string {
-  return STEP_COLORS[index % STEP_COLORS.length];
-}
 
 export interface SequenceViewerProps {
   sequence: TrakeResultItem;
@@ -31,84 +26,76 @@ function StepCard({
   active: boolean;
   onSelect: () => void;
 }) {
+  const label = stepText || `Bước ${index + 1}`;
+
   if (step === null) {
     return (
-      <div className="sequence-step-card sequence-step-missing">
-        <span className="sequence-step-badge" style={{ background: stepColor(index) }}>
-          {index + 1}
+      <div className="sequence-step is-missing" title={`${label} — không tìm được candidate`}>
+        <span className="sequence-step-index">{index + 1}</span>
+        <span className="sequence-step-thumb">
+          <ImageOff size={14} />
         </span>
-        <p className="sequence-step-text">{stepText || `Step ${index + 1}`}</p>
-        <p className="muted small">Missing</p>
+        <span className="sequence-step-label truncate">missing</span>
       </div>
     );
   }
-  const timestampSec = step.timestamp_sec;
+
   return (
     <button
       type="button"
-      className={active ? "sequence-step-card active" : "sequence-step-card"}
+      className={active ? "sequence-step is-active" : "sequence-step"}
       onClick={onSelect}
+      aria-pressed={active}
+      title={`${label} · frame ${step.frame_idx} · ${step.refinement}`}
     >
-      <span className="sequence-step-badge" style={{ background: stepColor(index) }}>
-        {index + 1}
-      </span>
-      <p className="sequence-step-text">{stepText || `Step ${index + 1}`}</p>
-      <div className="sequence-step-thumb-wrap">
+      <span className="sequence-step-index">{index + 1}</span>
+      <span className="sequence-step-thumb">
         {step.image_path ? (
-          // eslint-disable-next-line jsx-a11y/alt-text
-          <img className="sequence-step-thumb" loading="lazy" src={mediaUrl(apiConfig, step.image_path)} alt="" />
+          <img loading="lazy" src={mediaUrl(apiConfig, step.image_path)} alt={label} />
         ) : (
-          <div className="sequence-step-thumb sequence-step-thumb-empty">Không có ảnh</div>
+          <ImageOff size={14} />
         )}
-        {timestampSec !== null && <span className="sequence-step-time">{timestampSec.toFixed(2)}s</span>}
-      </div>
-      <p className="muted small">
-        Frame: {step.frame_idx} · Scene: {step.scene_id ?? "—"}
-      </p>
-      <p className="muted small">
-        Score: {step.confidence.toFixed(2)} ·{" "}
-        <span className={step.refinement === "dense_window" ? "refinement-dense" : "refinement-sparse"}>{step.refinement}</span>
-      </p>
+      </span>
+      <span className="sequence-step-label truncate tabular">
+        f{step.frame_idx}
+        {step.timestamp_sec != null && ` · ${step.timestamp_sec.toFixed(1)}s`}
+      </span>
     </button>
   );
 }
 
-/** Best Sequence — mỗi event một card ngang, nối bằng mũi tên; step thiếu
- * bằng chứng (missing_steps) hiện card dashed thay vì làm cả chuỗi biến mất
- * (docs §11.3). */
+/** Best Sequence — mỗi bước một card ngang. Bước thiếu bằng chứng
+ * (missing_steps) vẫn hiện card mờ thay vì biến mất, để không ai tưởng chuỗi
+ * chỉ có ngần ấy bước. */
 export function SequenceViewer({ sequence, stepQueries, apiConfig, activeStepIndex, onSelectStep }: SequenceViewerProps) {
   const missing = new Set(sequence.missing_steps);
+  // `stepQueries` đến từ `query_plan.events`, mà query_plan CHỈ có khi bật
+  // debug — nếu chỉ map theo nó thì tắt debug là toàn bộ Best Sequence biến
+  // mất dù backend vẫn trả đủ steps. Số bước lấy từ chính chuỗi, nhãn mới là
+  // thứ tuỳ chọn.
+  const stepCount = Math.max(stepQueries.length, sequence.steps.length + sequence.missing_steps.length);
   let stepPointer = 0;
-  const cards = stepQueries.map((text, index) => {
-    if (missing.has(index + 1)) {
-      return { step: null, text, index };
-    }
+  const cards = Array.from({ length: stepCount }, (_, index) => {
+    const text = stepQueries[index] ?? "";
+    if (missing.has(index + 1)) return { step: null, text, index };
     const step = sequence.steps[stepPointer];
     stepPointer += 1;
     return { step: step ?? null, text, index };
   });
 
   return (
-    <div className="sequence-viewer">
-      <div className="sequence-viewer-row">
-        {cards.map((card, position) => (
-          <div key={card.index} className="sequence-step-slot">
-            <StepCard
-              step={card.step}
-              index={card.index}
-              stepText={card.text}
-              apiConfig={apiConfig}
-              active={activeStepIndex === card.index}
-              onSelect={() => onSelectStep(card.index)}
-            />
-            {position < cards.length - 1 && (
-              <span className="sequence-arrow" aria-hidden="true">
-                →
-              </span>
-            )}
-          </div>
-        ))}
-      </div>
+    <div className="sequence-steps scroll-x">
+      {cards.map((card) => (
+        <StepCard
+          key={card.index}
+          step={card.step}
+          index={card.index}
+          stepText={card.text}
+          apiConfig={apiConfig}
+          active={activeStepIndex === card.index}
+          onSelect={() => onSelectStep(card.index)}
+        />
+      ))}
     </div>
   );
 }

@@ -1,8 +1,11 @@
-export type AppPage = "search" | "history" | "dataset" | "submission" | "system";
+import { CircleHelp, ScanSearch, Settings } from "lucide-react";
+import { Badge, IconButton } from "../ui";
 
-const TOP_TABS: { id: AppPage; label: string }[] = [
+export type AppPage = "search" | "analytics" | "dataset" | "submission" | "system";
+
+const NAV_TABS: { id: AppPage; label: string }[] = [
   { id: "search", label: "Search" },
-  { id: "history", label: "Analytics" },
+  { id: "analytics", label: "Analytics" },
   { id: "dataset", label: "Dataset" },
   { id: "system", label: "System" },
 ];
@@ -12,46 +15,53 @@ export interface TopNavigationProps {
   onPageChange: (page: AppPage) => void;
   backendStatus: "checking" | "ok" | "error";
   backendLabel: string;
+  /** `?demo=1` — hiện badge để không ai nhầm phiên demo với phiên thi đấu. */
+  demo?: boolean;
 }
 
-/** Top nav cố định — logo/tên, version, 4 tab điều hướng chính (alias của
- * cùng state với LeftRail, không phải hệ thống điều hướng thứ hai), trạng
- * thái backend, help/settings/avatar (thuần trang trí, không claim chức năng
- * nào chưa có). */
-export function TopNavigation({ page, onPageChange, backendStatus, backendLabel }: TopNavigationProps) {
+/** Nav toàn cục: chỉ điều hướng cấp trang + trạng thái backend. Không chứa
+ * control của trang nào (task/top-k/mode nằm ở studio-controls) — tách cấp
+ * để không có ba hàng pill trông giống nhau chồng lên nhau. */
+export function TopNavigation({ page, onPageChange, backendStatus, backendLabel, demo = false }: TopNavigationProps) {
   const statusClass =
     backendStatus === "ok" ? "status-dot status-ok" : backendStatus === "error" ? "status-dot status-error" : "status-dot status-checking";
+  const statusText = backendStatus === "ok" ? backendLabel : backendStatus === "error" ? "mất kết nối" : "đang kiểm tra…";
+
   return (
-    <header className="top-nav-bar">
-      <div className="brand">
-        <span className="brand-logo" aria-hidden="true">
-          🔎
+    <header className="nav-bar">
+      <div className="nav-brand">
+        <span className="nav-brand-mark" aria-hidden="true">
+          <ScanSearch size={15} />
         </span>
-        <strong className="brand-name">AIC Video Search</strong>
-        <span className="brand-version">v1.0.0</span>
+        <span className="nav-brand-name">AIC 2026 Video Search</span>
+        <span className="nav-brand-version">v1.0</span>
+        {demo && <Badge tone="warning">demo</Badge>}
       </div>
-      <nav className="top-tabs" aria-label="Điều hướng chính">
-        {TOP_TABS.map((tab) => (
+
+      {/* scroll-x: ở mobile rail trái bị ẩn nên đây là điều hướng DUY NHẤT —
+          cho cuộn ngang thay vì cắt mất tab, và không được tràn ra body. */}
+      <nav className="nav-tabs scroll-x" aria-label="Điều hướng chính">
+        {NAV_TABS.map((tab) => (
           <button
             key={tab.id}
             type="button"
-            className={tab.id === page ? "top-tab active" : "top-tab"}
+            className={tab.id === page ? "nav-tab is-active" : "nav-tab"}
+            aria-current={tab.id === page ? "page" : undefined}
             onClick={() => onPageChange(tab.id)}
           >
             {tab.label}
           </button>
         ))}
       </nav>
-      <div className="top-nav-right">
-        <span className={statusClass} title={backendLabel} />
-        <span className="muted small">Backend: {backendLabel}</span>
-        <button type="button" className="icon-only-btn" title="Trợ giúp" aria-label="Trợ giúp">
-          ?
-        </button>
-        <button type="button" className="icon-only-btn" title="Cài đặt" aria-label="Cài đặt">
-          ⚙
-        </button>
-        <span className="avatar" aria-hidden="true">
+
+      <div className="nav-right">
+        <span className="nav-status" title={`Backend: ${backendLabel}`}>
+          <span className={statusClass} aria-hidden="true" />
+          <span className="truncate">{statusText}</span>
+        </span>
+        <IconButton icon={<CircleHelp size={15} />} label="Trợ giúp" onClick={() => onPageChange("system")} />
+        <IconButton icon={<Settings size={15} />} label="Cài đặt" onClick={() => onPageChange("system")} />
+        <span className="nav-avatar" aria-hidden="true">
           AD
         </span>
       </div>
