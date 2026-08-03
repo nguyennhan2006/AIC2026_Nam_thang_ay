@@ -11,16 +11,19 @@ from online.adapters.color_search import ColorSearchRetriever
 from online.adapters.dense_retriever import DenseRetriever
 from online.adapters.encoders import HashingTextEncoder, LocalClipTextEncoder, RemoteTextEncoder
 from online.adapters.event_search import EventSearchRetriever, JsonlEventRepository
+from online.adapters.fpt_client import FptClient
 from online.adapters.frame_vector_store import build_frame_vector_rows
 from online.adapters.json_metadata import JsonlSceneRepository
 from online.adapters.ocr_fuzzy import OcrFuzzyRetriever
-from online.adapters.rerank import BgeTextReranker, QwenVlReranker
+from online.adapters.qa_llm import FptQaAnswerer
+from online.adapters.rerank import BgeTextReranker, FptTextReranker, QwenVlReranker
 from online.adapters.session_store import InMemorySessionStore
 from online.adapters.vector_stores import InMemoryVectorStore, QdrantVectorStore
 from online.config import Settings
 from online.services.query_expansion import QueryExpansionRetriever
 from online.services.query_prep import PreparedQueryPlanner
 from online.services.evidence_builder import EvidenceBuilder
+from online.services.qa import QaProcessor
 from online.services.rerank_pipeline import RerankPipeline
 from online.services.rules import RuleConfig
 from online.services.search import SearchService
@@ -169,18 +172,22 @@ async def build_container(settings: Settings) -> AppContainer:
             if value
         },
     )
+    # Ưu tiên FPT khi bật (PR-15) — cùng chiến lược "chỉ đổi tên model qua env"
+    # đã áp dụng cho embedding/enrichment: production tự chuyển về
+    # BgeTextReranker (worker tự host) chỉ bằng cách tắt AIC_FPT_ENABLED.
+    text_reranker = None
+    if settings.fpt_enabled and settings.fpt_rerank_model:
+        text_reranker = FptTextReranker(FptClient.from_settings(settings), model_id=settings.fpt_rerank_model)
+    elif settings.rerank_text_url:
+        text_reranker = BgeTextReranker(
+            settings.rerank_text_url,
+            model_id=settings.rerank_text_model,
+            timeout_sec=settings.request_timeout_sec,
+            api_key=settings.rerank_api_key,
+        )
     rerank_pipeline = RerankPipeline(
         evidence_builder,
-        text_reranker=(
-            BgeTextReranker(
-                settings.rerank_text_url,
-                model_id=settings.rerank_text_model,
-                timeout_sec=settings.request_timeout_sec,
-                api_key=settings.rerank_api_key,
-            )
-            if settings.rerank_text_url
-            else None
-        ),
+        text_reranker=text_reranker,
         vlm_reranker=(
             QwenVlReranker(
                 settings.rerank_vlm_url,
@@ -192,6 +199,14 @@ async def build_container(settings: Settings) -> AppContainer:
             else None
         ),
     )
+    # QA answer generation: FPT LLM ưu tiên khi bật (cùng chiến lược với
+    # rerank ở trên) — rule-based ANSWER_TOOLS vẫn luôn chạy làm baseline vì
+    # score_qa chấm bất kỳ dòng nào trong submission, không chỉ rank 1.
+    qa_llm_answerer = None
+    if settings.fpt_enabled and settings.fpt_llm_model:
+        qa_llm_answerer = FptQaAnswerer(FptClient.from_settings(settings), model_id=settings.fpt_llm_model)
+    qa_processor = QaProcessor(llm_answerer=qa_llm_answerer, llm_top_n=settings.fpt_qa_top_n)
+
     search_service = SearchService(
         repository,
         retrievers,
@@ -201,6 +216,7 @@ async def build_container(settings: Settings) -> AppContainer:
         rule_config=RuleConfig() if settings.enable_rules else None,
         rerank_pipeline=rerank_pipeline,
         evidence_builder=evidence_builder,
+        qa_processor=qa_processor,
         # PR-09: mọi search đi qua SearchService.search() đều được ghi trace —
         # kể cả gọi qua endpoint convenience /search/kis, không chỉ /v1/search.
         session_store=InMemorySessionStore(),

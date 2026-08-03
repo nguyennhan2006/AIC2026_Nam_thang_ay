@@ -19,6 +19,7 @@ from online.services.qa import (
     verify_answer,
 )
 from online.domain.task_results import AnswerCandidate
+from online.errors import DependencyUnavailableError
 
 
 def pack(
@@ -181,6 +182,74 @@ class QaProcessorTests(unittest.TestCase):
 
     def test_empty_pack_list_returns_no_results(self) -> None:
         self.assertEqual(QaProcessor().answer("câu hỏi bất kỳ", []), [])
+
+
+class _FakeLlmAnswerer:
+    def __init__(self, candidate: AnswerCandidate | None = None, error: Exception | None = None) -> None:
+        self.candidate = candidate
+        self.error = error
+        self.calls = 0
+
+    async def answer(self, question: str, pack: EvidencePack) -> AnswerCandidate | None:
+        self.calls += 1
+        if self.error is not None:
+            raise self.error
+        return self.candidate
+
+
+class QaProcessorAsyncLlmTests(unittest.IsolatedAsyncioTestCase):
+    async def test_no_llm_answerer_behaves_like_sync_answer(self) -> None:
+        packs = [pack("p1", ocr="5 xe máy va chạm liên hoàn")]
+        results, warnings = await QaProcessor().answer_async(
+            "Có bao nhiêu xe máy?", packs, frame_scores={"p1": 0.9},
+        )
+        self.assertTrue(results)
+        self.assertEqual(warnings, [])
+
+    async def test_llm_candidate_replaces_the_rule_based_answer(self) -> None:
+        llm = _FakeLlmAnswerer(
+            AnswerCandidate(canonical="5", surface="5 chiếc", confidence=0.9, answer_type="count", source="fpt_llm")
+        )
+        processor = QaProcessor(llm_answerer=llm, llm_top_n=5)
+        packs = [pack("p1", ocr="5 xe máy va chạm liên hoàn")]
+        results, warnings = await processor.answer_async(
+            "Có bao nhiêu xe máy?", packs, frame_scores={"p1": 0.9},
+        )
+        self.assertEqual(warnings, [])
+        self.assertTrue(any(item.answer == "5 chiếc" for item in results))
+
+    async def test_contradicted_llm_answer_keeps_rule_based_answer(self) -> None:
+        llm = _FakeLlmAnswerer(
+            AnswerCandidate(canonical="9", surface="9", confidence=0.9, answer_type="count", source="fpt_llm")
+        )
+        processor = QaProcessor(llm_answerer=llm)
+        packs = [pack("p1", ocr="5 xe máy va chạm liên hoàn")]
+        results, warnings = await processor.answer_async(
+            "Có bao nhiêu xe máy?", packs, frame_scores={"p1": 0.9},
+        )
+        self.assertTrue(all(item.canonical_answer != "9" for item in results))
+
+    async def test_llm_error_falls_back_and_records_a_warning(self) -> None:
+        llm = _FakeLlmAnswerer(error=DependencyUnavailableError("boom"))
+        processor = QaProcessor(llm_answerer=llm)
+        packs = [pack("p1", ocr="5 xe máy va chạm liên hoàn")]
+        results, warnings = await processor.answer_async(
+            "Có bao nhiêu xe máy?", packs, frame_scores={"p1": 0.9},
+        )
+        self.assertTrue(results)
+        self.assertEqual(len(warnings), 1)
+
+    async def test_llm_is_capped_to_llm_top_n_distinct_packs(self) -> None:
+        llm = _FakeLlmAnswerer(
+            AnswerCandidate(canonical="5", surface="5", confidence=0.9, answer_type="count", source="fpt_llm")
+        )
+        processor = QaProcessor(llm_answerer=llm, llm_top_n=1)
+        packs = [
+            pack("p1", ocr="5 xe máy va chạm liên hoàn"),
+            pack("p2", ocr="5 xe máy tông nhau"),
+        ]
+        await processor.answer_async("Có bao nhiêu xe máy?", packs, frame_scores={"p1": 0.9, "p2": 0.8})
+        self.assertEqual(llm.calls, 1)
 
 
 if __name__ == "__main__":

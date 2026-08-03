@@ -77,6 +77,15 @@ class RerankProbeResult:
     detail: str
 
 
+@dataclass(frozen=True, slots=True)
+class FptRerankResult:
+    # scores[i] khớp documents[i] gốc (đã sắp lại theo `index` — FPT trả
+    # `results` sắp theo relevance giảm dần, không theo thứ tự documents gửi
+    # lên; xác nhận thật bằng probe PR-12: index trả về không tăng dần).
+    scores: list[float]
+    usage: FptUsage
+
+
 def _redact(headers: dict[str, str]) -> dict[str, str]:
     return {k: ("***" if k.lower() == "authorization" else v) for k, v in headers.items()}
 
@@ -277,6 +286,45 @@ class FptClient:
         )
         return FptEmbeddingResult(vector=vector, usage=usage)
 
+    def rerank(self, query: str, documents: list[str], *, model: str) -> FptRerankResult:
+        """POST /rerank — schema Cohere/Jina-style thật (xác nhận bằng
+        `scripts/fpt_api_preflight` + probe thủ công PR-15): trả `results:
+        [{index, relevance_score}]` sắp theo relevance giảm dần, KHÔNG theo
+        thứ tự `documents` gửi lên. Sắp lại theo `index` để `scores[i]` khớp
+        đúng `documents[i]` gốc — bắt buộc, không được giả định thứ tự giữ
+        nguyên."""
+
+        if not documents:
+            return FptRerankResult(scores=[], usage=FptUsage(model, 0, 0, 0, 0))
+        body, elapsed_ms, retries = self._call_with_retry(
+            "/rerank", {"model": model, "query": query, "documents": documents}
+        )
+        results = body.get("results")
+        if not isinstance(results, list) or len(results) != len(documents):
+            raise SchemaInvalidError(
+                f"/rerank phải trả 'results' đúng {len(documents)} phần tử, "
+                f"nhận được {type(results).__name__} độ dài "
+                f"{len(results) if isinstance(results, list) else 'n/a'}"
+            )
+        scores = [0.0] * len(documents)
+        seen = set()
+        for item in results:
+            index = item.get("index")
+            score = item.get("relevance_score")
+            if not isinstance(index, int) or index in seen or not (0 <= index < len(documents)):
+                raise SchemaInvalidError(f"/rerank trả index không hợp lệ: {item!r}")
+            seen.add(index)
+            scores[index] = float(score)
+        usage_raw = body.get("usage", {})
+        usage = FptUsage(
+            model_id=body.get("model", model),
+            input_tokens=int(usage_raw.get("prompt_tokens", 0)),
+            output_tokens=0,
+            latency_ms=elapsed_ms,
+            retry_count=retries,
+        )
+        return FptRerankResult(scores=scores, usage=usage)
+
     def probe_rerank(self, query: str, documents: list[str], *, model: str) -> RerankProbeResult:
         """Dò xem FPT có endpoint `/rerank` kiểu Cohere/Jina không.
 
@@ -316,6 +364,7 @@ __all__ = [
     "FptChatResult",
     "FptClient",
     "FptEmbeddingResult",
+    "FptRerankResult",
     "FptUsage",
     "RerankProbeResult",
     "image_to_data_url",

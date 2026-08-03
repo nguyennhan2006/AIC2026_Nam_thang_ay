@@ -53,6 +53,7 @@ class SearchService:
         rule_config: RuleConfig | None = None,
         rerank_pipeline: RerankPipeline | None = None,
         evidence_builder: EvidenceBuilder | None = None,
+        qa_processor: QaProcessor | None = None,
         session_store: SessionStore | None = None,
         dataset_version: str | None = None,
     ) -> None:
@@ -74,7 +75,7 @@ class SearchService:
         # Bốn processor chuyên biệt (PR-07). Chúng chạy SAU lõi retrieval dùng
         # chung, đúng kiến trúc "một lõi + bốn task processor".
         self.kis_processor = KisProcessor()
-        self.qa_processor = QaProcessor()
+        self.qa_processor = qa_processor or QaProcessor()
         self.trake_processor = TrakeProcessor()
         self.avs_processor = AvsProcessor()
         self.planner = planner or RuleBasedQueryPlanner()
@@ -397,9 +398,10 @@ class SearchService:
             + rerank.warnings
             + [warning for hit in results for warning in hit.warnings]
         )
-        task_results = await self._run_task_processor(
+        task_results, task_warnings = await self._run_task_processor(
             task, plan, request, results, candidates, rerank.packs
         )
+        warnings = warnings + task_warnings
         return SearchResponse(
             query_id=query_id,
             task=task,
@@ -522,9 +524,10 @@ class SearchService:
             + rerank.warnings
             + [warning for hit in results for warning in hit.warnings]
         )
-        task_results = await self._run_task_processor(
+        task_results, task_warnings = await self._run_task_processor(
             task, plan, request, results, candidates, rerank.packs
         )
+        warnings = warnings + task_warnings
         response = SearchResponse(
             query_id=query_id, task=task, took_ms=(perf_counter() - started) * 1000,
             status="COMPLETED_WITH_WARNINGS" if warnings else "COMPLETED",
@@ -550,11 +553,17 @@ class SearchService:
         results: list[SearchHit],
         candidates: list[Candidate],
         packs: dict,
-    ) -> dict:
-        """Chạy processor chuyên biệt của task trên kết quả đã rerank."""
+    ) -> tuple[dict, list[str]]:
+        """Chạy processor chuyên biệt của task trên kết quả đã rerank.
+
+        Trả kèm `warnings` riêng của processor (vd FPT QA LLM lỗi/fallback) —
+        tách khỏi warnings cấp branch/rerank vì processor chạy SAU khi
+        `warnings` chính đã được caller tính, xem hai điểm gọi ở `search()`
+        và `search_stream()`.
+        """
 
         if not results:
-            return {}
+            return {}, []
         if task == TaskType.TEXTUAL_KIS:
             documents = await self._documents_for(results)
             return {
@@ -562,7 +571,7 @@ class SearchService:
                     plan.original_query, results, documents,
                     packs=packs, limit=request.top_k,
                 )
-            }
+            }, []
 
         # QA và AVS đều cần evidence pack đầy đủ; dựng lazy cho đúng phần đầu.
         by_id = {item.candidate_id: item for item in candidates}
@@ -581,20 +590,19 @@ class SearchService:
         scores = {hit.candidate_id: hit.score for hit in results}
 
         if task == TaskType.QA:
-            return {
-                "qa": self.qa_processor.answer(
-                    plan.original_query, evidence_packs,
-                    frame_scores=scores, limit=request.top_k,
-                )
-            }
+            qa_results, qa_warnings = await self.qa_processor.answer_async(
+                plan.original_query, evidence_packs,
+                frame_scores=scores, limit=request.top_k,
+            )
+            return {"qa": qa_results}, qa_warnings
         if task == TaskType.AVS:
             return {
                 "avs": self.avs_processor.rank(
                     plan.original_query, evidence_packs,
                     retrieval_scores=scores, limit=request.top_k,
                 )
-            }
-        return {}
+            }, []
+        return {}, []
 
 
 def _annotate_thresholds(

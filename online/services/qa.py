@@ -28,6 +28,7 @@ import unicodedata
 
 from online.domain.evidence import EvidencePack
 from online.domain.task_results import AnswerCandidate, AnswerType, QaResultItem, VerifierStatus
+from online.errors import DependencyUnavailableError
 
 _NUMBER_WORDS_VI = {
     "không": 0, "một": 1, "hai": 2, "ba": 3, "bốn": 4, "năm": 5,
@@ -323,10 +324,85 @@ _VERIFIER_WEIGHT: dict[VerifierStatus, float] = {
 
 
 class QaProcessor:
-    """Sinh và xếp hạng bộ ba (video, frame, answer)."""
+    """Sinh và xếp hạng bộ ba (video, frame, answer).
 
-    def __init__(self, parser: QuestionParser | None = None) -> None:
+    `llm_answerer` (vd `FptQaAnswerer`, PR-15+) là tùy chọn: khi có, `answer_async`
+    gọi thêm LLM trên `llm_top_n` evidence pack đứng đầu (theo joint score
+    rule-based) để thay thế bằng answer ngữ nghĩa hơn — rule-based
+    (`ANSWER_TOOLS`) vẫn luôn chạy trước làm baseline/fallback, vì `score_qa`
+    (luật thi) chấm bất kỳ dòng nào trong submission list đúng cả ba điều
+    kiện, không chỉ rank 1, nên giữ cả hai nguồn candidate tăng cơ hội trúng.
+    """
+
+    def __init__(
+        self,
+        parser: QuestionParser | None = None,
+        *,
+        llm_answerer=None,
+        llm_top_n: int = 5,
+    ) -> None:
         self.parser = parser or QuestionParser()
+        self.llm_answerer = llm_answerer
+        self.llm_top_n = llm_top_n
+
+    async def answer_async(
+        self,
+        question: str,
+        packs: list[EvidencePack],
+        *,
+        frame_scores: dict[str, float] | None = None,
+        event_description: str | None = None,
+        limit: int = 100,
+    ) -> tuple[list[QaResultItem], list[str]]:
+        """Bản async của `answer()` — gọi thêm LLM nếu có cấu hình.
+
+        Trả kèm `warnings`: LLM lỗi/JSON hỏng không làm hỏng kết quả rule-based
+        đã có, chỉ bỏ qua việc nâng cấp dòng đó (đúng nguyên tắc no-silent-
+        degradation đã áp dụng cho rerank_pipeline).
+        """
+
+        base = self.answer(
+            question, packs, frame_scores=frame_scores,
+            event_description=event_description, limit=limit,
+        )
+        if self.llm_answerer is None or not base:
+            return base, []
+
+        by_id = {pack.candidate_id: pack for pack in packs}
+        warnings: list[str] = []
+        seen_packs: set[str] = set()
+        enhanced: list[QaResultItem] = []
+        for item in base:
+            pack = next((by_id[cid] for cid in item.evidence_ids if cid in by_id), None)
+            if pack is None or pack.candidate_id in seen_packs or len(seen_packs) >= self.llm_top_n:
+                enhanced.append(item)
+                continue
+            seen_packs.add(pack.candidate_id)
+            try:
+                llm_candidate = await self.llm_answerer.answer(question, pack)
+            except DependencyUnavailableError as exc:
+                warnings.append(f"FPT QA LLM bỏ qua {pack.candidate_id}: {exc}")
+                enhanced.append(item)
+                continue
+            if llm_candidate is None:
+                enhanced.append(item)
+                continue
+            status = verify_answer(llm_candidate, pack)
+            if status == "CONTRADICTED":
+                # LLM mâu thuẫn với evidence — giữ answer rule-based an toàn hơn.
+                enhanced.append(item)
+                continue
+            enhanced.append(
+                item.model_copy(
+                    update={
+                        "answer": llm_candidate.surface,
+                        "canonical_answer": llm_candidate.canonical,
+                        "answer_type": llm_candidate.answer_type,
+                        "verifier_status": status,
+                    }
+                )
+            )
+        return enhanced, warnings
 
     def answer(
         self,

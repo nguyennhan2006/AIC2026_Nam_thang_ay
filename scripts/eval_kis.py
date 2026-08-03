@@ -73,13 +73,17 @@ from pathlib import Path
 from online.adapters.bm25 import LexicalRetriever
 from online.adapters.dense_retriever import DenseRetriever
 from online.adapters.encoders import HashingTextEncoder, LocalClipTextEncoder, RemoteTextEncoder
+from online.adapters.fpt_client import FptClient
 from online.adapters.frame_vector_store import build_frame_vector_rows
 from online.adapters.json_metadata import JsonlSceneRepository
 from online.adapters.ocr_fuzzy import OcrFuzzyRetriever
+from online.adapters.rerank import BgeTextReranker, FptTextReranker
 from online.adapters.vector_stores import InMemoryVectorStore, QdrantVectorStore
 from online.domain.models import SearchRequest, TaskType
+from online.services.evidence_builder import EvidenceBuilder
 from online.services.query_expansion import QueryExpansionRetriever
 from online.services.query_prep import PreparedQueryPlanner
+from online.services.rerank_pipeline import RerankPipeline
 from online.services.rules import RuleConfig
 from online.services.search import SearchService
 
@@ -191,6 +195,28 @@ async def build_dense(repository: JsonlSceneRepository, backend: str) -> DenseRe
     return DenseRetriever(encoder, InMemoryVectorStore(rows), branch_id="lexical_hash_fallback", backend_kind="lexical_fallback")
 
 
+def _build_rerank_pipeline(repository: JsonlSceneRepository) -> RerankPipeline | None:
+    """Cùng chiến lược ưu tiên FPT như `online/api/container.py` — nếu không
+    có harness này sẽ luôn đo với rerank no-op, không phản ánh được cải
+    thiện thật của FPT text reranker (PR-15)."""
+    from online.config import Settings
+
+    settings = Settings.from_env()
+    text_reranker = None
+    if settings.fpt_enabled and settings.fpt_rerank_model:
+        text_reranker = FptTextReranker(FptClient.from_settings(settings), model_id=settings.fpt_rerank_model)
+    elif settings.rerank_text_url:
+        text_reranker = BgeTextReranker(
+            settings.rerank_text_url,
+            model_id=settings.rerank_text_model,
+            timeout_sec=settings.request_timeout_sec,
+            api_key=settings.rerank_api_key,
+        )
+    if text_reranker is None:
+        return None
+    return RerankPipeline(EvidenceBuilder(repository), text_reranker=text_reranker)
+
+
 async def build_service(
     mode: str,
     repository: JsonlSceneRepository,
@@ -199,6 +225,7 @@ async def build_service(
     use_rules: bool,
     use_expansion: bool,
     use_query_prep: bool,
+    use_rerank: bool = False,
     candidate_limit: int,
 ) -> SearchService:
     retrievers: list = []
@@ -215,12 +242,19 @@ async def build_service(
         retrievers.append(await OcrFuzzyRetriever.build(repository))
 
     planner = PreparedQueryPlanner() if use_query_prep else None
+    rerank_pipeline = _build_rerank_pipeline(repository) if use_rerank else None
+    if use_rerank and rerank_pipeline is None:
+        raise SystemExit(
+            "--use-rerank yêu cầu AIC_FPT_ENABLED=true + AIC_FPT_RERANK_MODEL "
+            "(hoặc AIC_RERANK_TEXT_URL cho worker tự host) trong env"
+        )
     return SearchService(
         repository,
         retrievers,
         planner=planner,
         candidate_limit=candidate_limit,
         rule_config=RuleConfig() if use_rules else None,
+        rerank_pipeline=rerank_pipeline,
     )
 
 
@@ -237,6 +271,7 @@ async def evaluate_mode(
         use_rules=args.use_rules,
         use_expansion=args.use_expansion,
         use_query_prep=args.use_query_prep,
+        use_rerank=args.use_rerank,
         candidate_limit=max(args.top_k, 100),
     )
     ranks: list[int | None] = []          # rank hit-in-interval đầu tiên
@@ -324,6 +359,9 @@ async def main() -> None:
                         help="bật VI→EN expansion cho BM25 (Phương án K)")
     parser.add_argument("--use-query-prep", action="store_true",
                         help="bật tách target/ocr/context (Phương án F)")
+    parser.add_argument("--use-rerank", action="store_true",
+                        help="bật text rerank thật (FPT ưu tiên, fallback worker tự host qua "
+                             "AIC_RERANK_TEXT_URL) — cần env tương ứng, xem online/config.py")
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--json", type=Path, default=None,
                         help="ghi kết quả JSON để lưu vết ablation")
@@ -341,6 +379,7 @@ async def main() -> None:
             ("query_prep", args.use_query_prep),
             ("rules", args.use_rules),
             ("expansion", args.use_expansion),
+            ("rerank", args.use_rerank),
         )
         if enabled
     ]

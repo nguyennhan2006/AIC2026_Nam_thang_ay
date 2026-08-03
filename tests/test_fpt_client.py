@@ -200,6 +200,50 @@ class EmbeddingTests(unittest.TestCase):
                 _client().embedding("x", model="embed-1")
 
 
+class RerankTests(unittest.TestCase):
+    def test_scores_are_reordered_to_match_original_document_order(self) -> None:
+        # Xác nhận thật từ FPT (PR-15 probe thủ công): 'results' sắp theo
+        # relevance GIẢM DẦN, không theo thứ tự documents gửi lên. index=2
+        # đứng đầu dù documents[2] là phần tử thứ ba trong request.
+        body = {
+            "model": "bge-reranker-v2-m3",
+            "results": [
+                {"document": None, "index": 2, "relevance_score": 0.95},
+                {"document": None, "index": 0, "relevance_score": 0.006},
+                {"document": None, "index": 1, "relevance_score": 1.5e-05},
+            ],
+            "usage": {"prompt_tokens": 145},
+        }
+        with patch("online.adapters.fpt_client.urlopen", return_value=FakeResponse(body)):
+            result = _client().rerank("q", ["doc0", "doc1", "doc2"], model="bge-reranker-v2-m3")
+        self.assertEqual(result.scores, [0.006, 1.5e-05, 0.95])
+        self.assertEqual(result.usage.input_tokens, 145)
+
+    def test_empty_documents_returns_empty_without_a_call(self) -> None:
+        with patch("online.adapters.fpt_client.urlopen") as mock_urlopen:
+            result = _client().rerank("q", [], model="m")
+        mock_urlopen.assert_not_called()
+        self.assertEqual(result.scores, [])
+
+    def test_wrong_result_count_raises_schema_invalid(self) -> None:
+        body = {"results": [{"index": 0, "relevance_score": 0.5}]}
+        with patch("online.adapters.fpt_client.urlopen", return_value=FakeResponse(body)):
+            with self.assertRaises(SchemaInvalidError):
+                _client().rerank("q", ["doc0", "doc1"], model="m")
+
+    def test_duplicate_index_raises_schema_invalid(self) -> None:
+        body = {"results": [{"index": 0, "relevance_score": 0.5}, {"index": 0, "relevance_score": 0.2}]}
+        with patch("online.adapters.fpt_client.urlopen", return_value=FakeResponse(body)):
+            with self.assertRaises(SchemaInvalidError):
+                _client().rerank("q", ["doc0", "doc1"], model="m")
+
+    def test_out_of_range_index_raises_schema_invalid(self) -> None:
+        body = {"results": [{"index": 5, "relevance_score": 0.5}, {"index": 0, "relevance_score": 0.2}]}
+        with patch("online.adapters.fpt_client.urlopen", return_value=FakeResponse(body)):
+            with self.assertRaises(SchemaInvalidError):
+                _client().rerank("q", ["doc0", "doc1"], model="m")
+
+
 class RerankProbeTests(unittest.TestCase):
     def test_native_rerank_available_when_endpoint_responds(self) -> None:
         body = {"results": [{"index": 0, "relevance_score": 0.9}]}

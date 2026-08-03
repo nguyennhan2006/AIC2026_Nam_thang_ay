@@ -17,6 +17,8 @@ from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+from online.adapters.fpt_client import FptClient
+from online.adapters.provider_errors import ProviderError
 from online.domain.evidence import EvidencePack
 from online.errors import DependencyUnavailableError
 
@@ -156,4 +158,35 @@ class QwenVlReranker:
         return [by_id[pack.candidate_id] for pack in packs]
 
 
-__all__ = ["BgeTextReranker", "QwenVlReranker"]
+class FptTextReranker:
+    """Text reranker qua FPT AI Marketplace `/rerank` — PR-15.
+
+    KHÁC `BgeTextReranker` (contract tự đặt `{"scores": [...]}`, dành cho
+    worker tự host): FPT dùng schema Cohere/Jina-style thật
+    (`{"results": [{"index", "relevance_score"}]}`, đã xác nhận bằng probe
+    thủ công + `FptClient.rerank()` tự sắp lại theo `index`). Cùng interface
+    `.score(query, packs) -> list[float]` với `BgeTextReranker` nên là
+    drop-in cho `RerankPipeline`, không cần sửa gì ở đó.
+    """
+
+    stage = "text"
+
+    def __init__(self, client: FptClient, *, model_id: str) -> None:
+        self.client = client
+        self.model_id = model_id
+
+    async def score(self, query: str, packs: list[EvidencePack]) -> list[float]:
+        if not packs:
+            return []
+        documents = [pack.rerank_text() for pack in packs]
+
+        def call() -> list[float]:
+            return self.client.rerank(query, documents, model=self.model_id).scores
+
+        try:
+            return await asyncio.to_thread(call)
+        except ProviderError as exc:
+            raise DependencyUnavailableError(f"FPT rerank unavailable: {exc}") from exc
+
+
+__all__ = ["BgeTextReranker", "FptTextReranker", "QwenVlReranker"]

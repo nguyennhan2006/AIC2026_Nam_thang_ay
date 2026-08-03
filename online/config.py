@@ -45,6 +45,7 @@ def _fpt_settings_kwargs() -> dict[str, object]:
         "fpt_llm_model": os.getenv("AIC_FPT_LLM_MODEL") or None,
         "fpt_vlm_model": os.getenv("AIC_FPT_VLM_MODEL") or None,
         "fpt_rerank_model": os.getenv("AIC_FPT_RERANK_MODEL") or None,
+        "fpt_qa_top_n": _env_int("AIC_FPT_QA_TOP_N", 5),
         "fpt_timeout_sec": _env_float("AIC_FPT_TIMEOUT_SEC", 90.0),
         "fpt_connect_timeout_sec": _env_float("AIC_FPT_CONNECT_TIMEOUT_SEC", 10.0),
         "fpt_max_retries": _env_int("AIC_FPT_MAX_RETRIES", 3),
@@ -114,6 +115,7 @@ class Settings:
     fpt_llm_model: str | None = None
     fpt_vlm_model: str | None = None
     fpt_rerank_model: str | None = None
+    fpt_qa_top_n: int = 5
     fpt_timeout_sec: float = 90.0
     fpt_connect_timeout_sec: float = 10.0
     fpt_max_retries: int = 3
