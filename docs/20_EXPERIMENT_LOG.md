@@ -244,82 +244,85 @@ của segmenter để không ai giả định nhầm là nó đang chạy).
 
 ## TRAKE T1–T4 — Chẩn đoán oracle theo tầng
 
-**Kết luận: chết ở T2. Không phải lỗi ranking. Ngừng tune, sửa offline.**
+**Kết luận: T1 đạt, T2 đạt, chết ở T3 — chọn sai vùng trong video, lệch trung
+bình 254 giây. KHÔNG phải do lấy mẫu thưa.**
 
-`mean_r_score = 0.000` và `complete_chain_rate = 0.000` ở **mọi** cấu hình đã
-thử suốt đợt này (mọi cap, mọi routing, mọi coverage config). Chẩn đoán theo
-bốn cổng oracle thay vì tune tiếp.
+> ⚠️ **Bản chẩn đoán đầu tiên (commit `894d5dc`) SAI và đã bị rút lại**, đánh
+> dấu `SUPERSEDED_BY_TRAKE_TOLERANCE_CLARIFICATION`. Nó kết luận "TRAKE chết ở
+> T2 vì keyframe thưa hơn cửa sổ gold 13 lần" dựa trên cửa sổ ±4 frame trong
+> file gold. Luật chấm thật rộng **3–6 giây tuỳ độ dài scene** (maintainer xác
+> nhận), tức ±45 đến ±90 frame ở 30 fps. Phương pháp oracle T1–T4 vẫn dùng
+> được; chỉ kết luận nguyên nhân phải rút lại.
+
+### Bài học quy trình
+
+Cửa sổ trong file gold là **mốc ngữ nghĩa**, không phải **dung sai chấm**. Lấy
+nhầm cái này làm cái kia sinh ra một chẩn đoán sai hoàn chỉnh, tự nhất quán, và
+suýt dẫn tới việc trích lại toàn bộ video dày gấp 14 lần — một khoản đầu tư
+lớn cho vấn đề không tồn tại. Evaluator giờ nhận `--trake-tolerance-sec` và
+quy đổi bằng FPS thật đọc từ `videos.jsonl` (không giả định 30 fps).
 
 ### T1 — Video oracle: ĐẠT
+`correct_video_rate = 1.000` ở mọi cấu hình.
 
-`correct_video_rate = 1.000` ở mọi cấu hình. Stage A luôn tìm đúng video.
-Không có gì phải sửa ở tầng này.
+### T2 — Event candidate oracle: ĐẠT ở dung sai thật
 
-### T2 — Event candidate oracle: TRƯỢT, và trượt về mặt cấu trúc
+| dung sai | event có keyframe trong cửa sổ | query phủ đủ chuỗi |
+|---|---|---|
+| ±1.0s | 18/35 | 0/8 |
+| ±1.5s | 25/35 | 3/8 |
+| ±2.0s | 28/35 | 4/8 |
+| ±2.5s | 33/35 | 6/8 |
+| **±3.0s** | **34/35** | **7/8** |
 
-```
-độ rộng cửa sổ GT:  min=9  max=9  trung bình=9 frame   (mọi event, ±4)
-keyframe đã trích:  307 frame / 37849 frame  ->  cách nhau ~123 frame
+Keyframe cách nhau trung bình 123 frame = **4.11s**, đủ cho cửa sổ 6s. Lưới
+lấy mẫu hiện tại về cơ bản là đủ.
 
-EVENT CÓ KEYFRAME NẰM TRONG CỬA SỔ GT:  4/35
-```
+### T3 — Sequence oracle: TRƯỢT, và đây mới là chỗ hỏng
 
-Nới dung sai để thấy khoảng cách:
-
-```
-±0 frame   ->  4/35 event
-±30 frame  -> 19/35
-±60 frame  -> 30/35
-±123 frame -> 35/35
-```
-
-**31/35 event không tồn tại một ứng viên nào để chọn.** Hệ thống chỉ nộp được
-frame mà nó đã trích; cửa sổ gold rộng 9 frame còn lưới lấy mẫu thưa gấp 13
-lần. Không thuật toán xếp hạng nào chọn được một frame chưa từng được trích.
-
-### T3, T4 — chưa xét
-
-Vô nghĩa khi T2 trượt. Sửa beam search hay hệ toạ độ scorer đều không tạo ra
-được ứng viên còn thiếu. Chỉ chạy lại T3/T4 sau khi T2 đạt.
-
-### Điều đáng nói: code đã tự cảnh báo từ trước
-
-`online/services/trake/frame_refinement.py` mở đầu bằng đúng chẩn đoán này:
-
-> "Cửa sổ GT của một semantic keyframe chỉ rộng **9 frame (±4)**, trong khi
-> keyframe được trích thưa (thường 1 frame/scene). Nộp thẳng keyframe gần như
-> chắc chắn trượt cửa sổ, dù đã tìm đúng video và đúng scene."
-
-Và nó đánh dấu `refinement="keyframe_only"` đúng như thiết kế để không ai
-nhầm là đã tinh chỉnh dày đặc. Cảnh báo đó đã ở đó, chỉ là chưa ai nối nó với
-con số `r_score = 0`.
-
-Module cũng cố tình KHÔNG decode video trong request path (đường ngắn nhất
-tới timeout) — quyết định đúng, và nó xác định luôn chỗ phải sửa: **offline**.
-
-### Việc phải làm (offline, không phải online)
-
-Để bảo đảm mọi cửa sổ 9 frame chứa ít nhất một ứng viên thì stride phải ≤ 9,
-tức ~4200 frame cho video này thay vì 307 (gấp ~14 lần).
-
-Không cần trích dày toàn bộ. Đường rẻ hơn, hai giai đoạn:
+`mean_r_score` theo dung sai:
 
 ```
-retrieval thô trên keyframe hiện có
-  -> chọn top-N scene ứng viên cho mỗi event
-  -> trích dày (stride <= 8) CHỈ quanh vùng đó
-  -> index frame (aic_frames_v2) để refine_step chuyển sang dense_window
+±0.13s (≈ cửa sổ gold cũ)  ->  0.000
+±1.5s                      ->  0.075
+±2.0s                      ->  0.075
+±3.0s                      ->  0.075     <- CHỮNG LẠI
 ```
 
-Trước khi làm, nên xác nhận lại một điều rẻ tiền: luật chấm thật có dung sai
-±4 frame quanh mốc gold hay không. Nếu luật rộng hơn thì yêu cầu stride giãn
-ra tương ứng và chi phí trích giảm mạnh.
+Nới gấp đôi cửa sổ không cải thiện gì ⇒ frame dự đoán **lệch xa**, không phải
+suýt trúng. Đo trực tiếp khoảng lệch:
 
-### Vì sao ghi vào đây thay vì sửa luôn
+```
+lệch trung bình của dự đoán       :  7620 frame = 254.0 s
+lệch trung bình TỐT NHẤT có thể   :    34 frame =   1.1 s
+bước dự đoán nằm trong ±3s        :   3/35
+bước TỐT NHẤT có thể trong ±3s    :  34/35
+```
 
-Đây là thay đổi pipeline offline (trích + index lại), không phải một biến
-trong một thí nghiệm ranking. Nó nằm ngoài phạm vi "một biến thay đổi duy
-nhất" của đợt này, và phải có run manifest + index fingerprint riêng.
+Ứng viên đúng nằm cách gold trung bình **1.1 giây** và có sẵn cho 34/35 bước.
+TRAKE vẫn chọn frame cách **254 giây**. Ví dụ `TRAKE_E01`: dự đoán bám quanh
+frame ~20400 trong khi gold nằm ở ~29200–30500.
+
+Đáng chú ý: chuỗi dự đoán **tự nhất quán** (các bước tăng dần, khoảng cách hợp
+lý) nhưng neo vào **vùng sai hoàn toàn**. Đó là dấu hiệu ràng buộc thứ tự/khoảng
+cách đang lấn át độ liên quan của từng bước — beam tìm được một chuỗi "đẹp về
+hình thức" ở sai chỗ.
+
+### T4 — chưa xét
+Chỉ có nghĩa sau khi T3 chọn đúng vùng.
+
+### Việc phải làm (online, không phải offline)
+
+Ngược hẳn kết luận cũ: **không cần trích dày lại**. Nghi phạm theo thứ tự:
+
+1. Điểm liên quan của từng event quá yếu (text mỗi bước ngắn) nên bị
+   `ordering_weight` / `gap_penalty_per_sec` lấn át — kiểm tra bằng cách đặt
+   hai hệ số đó về 0 và xem chuỗi có nhảy về đúng vùng không.
+2. Stage B lấy candidate mỗi event từ một pool quá hẹp hoặc đã bị dedup cắt
+   trước khi beam nhìn thấy.
+3. Beam pruning bỏ nhánh đúng sớm.
+
+Đây đều là thay đổi ở tầng online, đo được ngay bằng harness sẵn có.
 
 ---
 
@@ -331,9 +334,11 @@ Query `"cột nước phun lên từ lòng đất"` phải bị tách thành 3 n
 bắt buộc (nước / phun lên / từ mặt đất); candidate chỉ khớp `đất` phải bị phạt
 coverage.
 
-**TRAKE — đã chẩn đoán xong, xem mục T1–T4 ở trên.** Chết ở T2 vì lưới lấy
-mẫu keyframe thưa hơn cửa sổ gold 13 lần. Việc tiếp theo là trích dày hai
-giai đoạn ở offline, không phải tune ranking.
+**TRAKE — đã chẩn đoán xong, xem mục T1–T4 ở trên.** Chết ở T3: ứng viên
+đúng có sẵn cách gold 1.1s cho 34/35 bước, nhưng chuỗi được chọn lệch trung
+bình 254s. Việc tiếp theo là tắt thử `ordering_weight`/`gap_penalty_per_sec`
+để xem ràng buộc hình thức có đang lấn át độ liên quan không — thay đổi ở
+tầng online, KHÔNG phải trích lại dữ liệu.
 
 **Ba thí nghiệm ranking đã chạy đều DROP.** Điểm chung: mỗi lần số liệu tổng
 lại chỉ về một chỗ khác với chỗ giả thuyết chỉ. Đó là lý do quy trình bắt

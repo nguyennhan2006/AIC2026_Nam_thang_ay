@@ -53,8 +53,20 @@ class Interval:
     relevance_grade: int = 3
     event_id: str | None = None
 
-    def contains(self, frame_idx: int) -> bool:
-        return self.start_frame <= frame_idx <= self.end_frame
+    def contains(self, frame_idx: int, tolerance_frames: float = 0.0) -> bool:
+        """`tolerance_frames` nới cửa sổ ra hai phía.
+
+        TRAKE cần nó: cửa sổ trong file gold chỉ rộng 9 frame (±4) quanh mốc
+        ngữ nghĩa, còn luật chấm thật chấp nhận lệch 3–6 GIÂY tuỳ độ dài
+        scene. Chấm bằng ±4 frame làm r_score thấp giả tạo — keyframe được
+        trích cách nhau ~123 frame nên gần như không bao giờ rơi trúng.
+        """
+
+        return (
+            self.start_frame - tolerance_frames
+            <= frame_idx
+            <= self.end_frame + tolerance_frames
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -182,6 +194,24 @@ def ndcg_at_k(grades: list[int], ideal: list[int], k: int) -> float:
     return dcg(grades) / best if best else 0.0
 
 
+def load_fps(metadata: Path, default: float = 30.0) -> float:
+    """FPS thật của video, đọc từ `videos.jsonl` cạnh file scene.
+
+    KHÔNG giả định 30 fps: dung sai của TRAKE tính bằng giây nên quy đổi sai
+    fps là sai thẳng vào điểm.
+    """
+
+    path = metadata.with_name("videos.jsonl")
+    if not path.exists():
+        return default
+    rates = [
+        float(json.loads(line)["fps"])
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.strip() and "fps" in json.loads(line)
+    ]
+    return rates[0] if rates else default
+
+
 def _search_options(args: argparse.Namespace) -> SearchOptions | None:
     """Chỉ đặt option khi người dùng thật sự yêu cầu — để mặc định của harness
     trùng khít mặc định production, không âm thầm đo một cấu hình khác."""
@@ -290,10 +320,11 @@ async def evaluate(
             else:
                 trake_video_correct += 1
                 frame_ids = best.frame_ids
+                tolerance_frames = args.trake_tolerance_sec * load_fps(args.metadata)
                 hits = sum(
                     1
                     for step, step_gt in zip(frame_ids, item.steps, strict=False)
-                    if step_gt.contains(step)
+                    if step_gt.contains(step, tolerance_frames)
                 )
                 # Sai video = 0; đúng video = tỷ lệ step rơi đúng cửa sổ GT.
                 r_score = hits / len(item.steps) if item.steps else 0.0
@@ -401,6 +432,10 @@ async def _main() -> None:
     parser.add_argument("--use-rules", action="store_true")
     parser.add_argument("--use-expansion", action="store_true")
     parser.add_argument("--use-query-prep", action="store_true")
+    parser.add_argument("--trake-tolerance-sec", type=float, default=3.0,
+                         help="nửa cửa sổ chấp nhận cho mỗi step TRAKE, tính bằng GIÂY "
+                              "(mặc định 3.0 = cửa sổ 6s). File gold chỉ ghi ±4 frame "
+                              "quanh mốc ngữ nghĩa, không phải dung sai chấm thật")
     parser.add_argument("--max-per-video", type=int, default=None,
                          help="ghi đè fusion.max_results_per_video; 0 = BỎ HẲN giới hạn. "
                               "Lưu ý: KHÔNG truyền cờ này không có nghĩa là không giới hạn — "
