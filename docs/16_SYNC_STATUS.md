@@ -1,12 +1,12 @@
 # 16. Trạng thái đồng bộ hệ thống — chốt sau PR-01..10 (2026-08-02)
 
 Tài liệu này là ảnh chụp **sự thật hiện tại** của việc đồng bộ hóa hệ thống theo
-kế hoạch `01082026_new_docs.md`. Không thay thế tài liệu đó — chỉ đối chiếu
+kế hoạch `docs/18_MASTER_SYNC_GUIDE.md`. Không thay thế tài liệu đó — chỉ đối chiếu
 từng mục Definition of Done (§22) với code thật đang có trên branch
 `server_implementation`, và nêu rõ phần nào còn thiếu để không ai tưởng nhầm
 là đã xong 100%.
 
-Nguyên tắc nguồn sự thật (giữ đúng thứ tự đã chốt ở `01082026_new_docs.md` §1):
+Nguyên tắc nguồn sự thật (giữ đúng thứ tự đã chốt ở `docs/18_MASTER_SYNC_GUIDE.md` §1):
 luật/format BTC > gold benchmark đã version hóa > code/test hiện tại > notebook
 đã chạy có manifest > tài liệu nghiên cứu > tài liệu suy luận cũ.
 
@@ -31,7 +31,7 @@ bỏ qua vì thiếu `cv2` cục bộ, không liên quan tới đợt này) + 2 
 `online/ui-react`. Load smoke thật (không phải TestClient) trên server sống:
 60/60 request OK, p50 ≈ 26ms, p95 ≈ 367ms trên dataset demo 3 scene.
 
-## 2. Đối chiếu Definition of Done (theo `01082026_new_docs.md` §22)
+## 2. Đối chiếu Definition of Done (theo `docs/18_MASTER_SYNC_GUIDE.md` §22)
 
 ### Contracts
 

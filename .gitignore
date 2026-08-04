@@ -68,3 +68,10 @@ storage/processed/keyframes/L21_V001/
 storage/processed/embeddings/
 storage/processed/clip_embeddings/
 storage/raw/videos/L21_V001.mp4
+
+# ---- Dữ liệu đầu vào thô (giải nén được lại từ archive gốc, 200MB+) ----
+# input/L21_V001.mp4 trùng khít storage/raw/videos/L21_V001.mp4; các file gold
+# trong input/ trùng khít examples/ — giữ ở đây chỉ để tiện thao tác thủ công.
+input/
+input*.zip
+notebooks/__pycache__/

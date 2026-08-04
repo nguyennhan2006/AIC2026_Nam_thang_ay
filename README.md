@@ -8,7 +8,7 @@ Ba phần dùng chung một contract, nhưng có thể scale độc lập:
 - `online/`: hybrid retrieval, temporal linking, API FastAPI, media serving và UI
   chạy local gọi backend Vast.ai — 2 bản song song cùng tính năng: `online/ui/`
   (vanilla JS, backend tự phục vụ tại `/ui/`) và `online/ui-react/` (React/Vite,
-  cần `npm install`), xem `docs/12_USER_GUIDE.md` mục 5.
+  cần `npm install`), xem `docs/12_USER_GUIDE.md` §4–§5.
 
 ## Chạy smoke test trong 2 phút
 
@@ -54,7 +54,7 @@ máy local không đủ VRAM/RAM cho model 7B.
 Không có GPU rời/máy thuê thì dùng **FPT AI Marketplace** thay tạm (rerank thật,
 QA answer generation qua LLM, enrichment caption/OCR qua
 `scripts/enrich_keyframes_fpt.py`) — set `AIC_FPT_ENABLED=true` +
-`AIC_FPT_API_KEY`, xem `docs/12_USER_GUIDE.md` mục 3b cho đầy đủ biến cần set và
+`AIC_FPT_API_KEY`, xem `docs/12_USER_GUIDE.md` §7 cho đầy đủ biến cần set và
 cách xác nhận đã bật đúng.
 
 ## Triển khai Vast.ai
@@ -69,7 +69,7 @@ python -m scripts.preflight --check-gpu-warmup   # gọi thử caption/ocr/objec
 
 Chỉ public cổng backend. Qdrant và worker ở internal network. UI local nhập URL
 backend Vast.ai và token Online nếu bật — chi tiết đầy đủ (CORS, chọn UI, chạy
-`npm run dev`/build) xem `docs/12_USER_GUIDE.md` mục 5 và checklist thuê máy ở
+`npm run dev`/build) xem `docs/12_USER_GUIDE.md` §4 và checklist thuê máy ở
 `docs/05_VAST_DEPLOYMENT.md`.
 
 ## Tài liệu
@@ -94,6 +94,10 @@ backend Vast.ai và token Online nếu bật — chi tiết đầy đủ (CORS, 
 14. `docs/14_TECHNICAL_PREPARATION.md` — ticket kỹ thuật theo phase, có mục "Đã làm"
     theo dõi việc nào đã wire xong
 15. `docs/15_RESEARCH_AGENDA.md` — câu hỏi nghiên cứu mở, đo bằng `scripts/eval_kis.py`
+16. `docs/16_SYNC_STATUS.md` — đối chiếu code hiện tại với kế hoạch tổng
+17. `docs/17_MANUAL_TEST_GUIDE_L21_V001.md` — dựng lại dataset L21 thật từ đầu
+18. `docs/18_MASTER_SYNC_GUIDE.md` — kế hoạch kiến trúc đích (tài liệu tham chiếu)
+19. `docs/19_COMPETITION_SYSTEM_NOTES.md` — ghi chú hệ thống thi đấu (thao tác, UI, độ tin cậy)
 
 Model thật trên Kaggle: `docs/KAGGLE_OFFLINE_GUIDE.md`. `scripts/caption_qwen3vl.py`
 là đường khác để nâng chất lượng caption (Qwen3-VL-32B qua OpenRouter, không cần
@@ -106,7 +110,7 @@ thi đấu — không phải kế hoạch đã chốt thực thi, xem README ri�
 ## Lệnh kiểm tra
 
 ```bash
-python -m unittest discover -s tests -v
+python -m pytest tests/ -q                    # 465 pass
 python -m datasection.cli storage/exports
 python -m scripts.preflight
 python -m compileall -q datasection offline online scripts tests
@@ -117,6 +121,9 @@ UI React (`online/ui-react/`, riêng ecosystem Node.js):
 ```bash
 cd online/ui-react
 npm install
-npm run build     # tsc -b + vite build
-npx vitest run    # unit test cho exportCsv.ts (format CSV nộp bài)
+npm run build            # tsc -b + vite build
+npx vitest run           # unit test (exportCsv, weightMath)
+npx oxlint               # lint
+node scripts/visual-check.mjs   # chụp 5 viewport + tự fail nếu layout vỡ
+                                # (cần backend :8000 và dev server :5173 đang chạy)
 ```

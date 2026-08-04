@@ -29,6 +29,7 @@ import sys
 
 from online.adapters.json_metadata import JsonlSceneRepository
 from online.domain.models import SearchRequest
+from online.domain.search_config import FusionOptions, SearchOptions
 from online.domain.tasks import TaskType, normalize_task
 from online.services.qa import answer_matches, normalize_answer  # noqa: F401 - re-export cho test cũ
 from scripts.eval_kis import build_service
@@ -177,6 +178,15 @@ def ndcg_at_k(grades: list[int], ideal: list[int], k: int) -> float:
     return dcg(grades) / best if best else 0.0
 
 
+def _search_options(args: argparse.Namespace) -> SearchOptions | None:
+    """Chỉ đặt option khi người dùng thật sự yêu cầu — để mặc định của harness
+    trùng khít mặc định production, không âm thầm đo một cấu hình khác."""
+
+    if args.max_per_video is None:
+        return None
+    return SearchOptions(fusion=FusionOptions(max_results_per_video=args.max_per_video))
+
+
 async def evaluate(
     gold: list[GoldQuery], repository: JsonlSceneRepository, args: argparse.Namespace
 ) -> dict:
@@ -205,7 +215,10 @@ async def evaluate(
 
     for item in gold:
         response = await service.search(
-            SearchRequest(query=item.query, task=item.task, top_k=args.top_k)
+            SearchRequest(
+                query=item.query, task=item.task, top_k=args.top_k,
+                search_options=_search_options(args),
+            )
         )
         record: dict = {"query_id": item.query_id, "task": item.task.value}
 
@@ -384,6 +397,10 @@ async def _main() -> None:
     parser.add_argument("--use-rules", action="store_true")
     parser.add_argument("--use-expansion", action="store_true")
     parser.add_argument("--use-query-prep", action="store_true")
+    parser.add_argument("--max-per-video", type=int, default=None,
+                         help="ghi đè fusion.max_results_per_video. BẮT BUỘC khi dataset chỉ có "
+                              "1 video: dedup KIS mặc định giữ 5 kết quả/video nên R@20/50/100 "
+                              "sẽ bằng hệt R@5 và mọi số trên K=5 là vô nghĩa")
     parser.add_argument("--use-rerank", action="store_true",
                          help="bật text rerank + QA answer generation qua FPT thật (xem "
                               "scripts/eval_kis.py::build_service) — không có cờ này, answer_accuracy "

@@ -81,6 +81,7 @@ from online.adapters.qa_llm import FptQaAnswerer
 from online.adapters.rerank import BgeTextReranker, FptTextReranker
 from online.adapters.vector_stores import InMemoryVectorStore, QdrantVectorStore
 from online.domain.models import SearchRequest, TaskType
+from online.domain.search_config import FusionOptions, SearchOptions
 from online.services.evidence_builder import EvidenceBuilder
 from online.services.qa import QaProcessor
 from online.services.query_expansion import QueryExpansionRetriever
@@ -299,7 +300,14 @@ async def evaluate_mode(
     per_query: list[dict] = []
     for gt in groundtruth:
         response = await service.search(
-            SearchRequest(query=gt.query, task=TaskType.TEXTUAL_KIS, top_k=args.top_k)
+            SearchRequest(
+                query=gt.query, task=TaskType.TEXTUAL_KIS, top_k=args.top_k,
+                search_options=(
+                    SearchOptions(fusion=FusionOptions(max_results_per_video=args.max_per_video))
+                    if args.max_per_video is not None
+                    else None
+                ),
+            )
         )
         rank = next(
             (
@@ -379,6 +387,10 @@ async def main() -> None:
                         help="bật VI→EN expansion cho BM25 (Phương án K)")
     parser.add_argument("--use-query-prep", action="store_true",
                         help="bật tách target/ocr/context (Phương án F)")
+    parser.add_argument("--max-per-video", type=int, default=None,
+                        help="ghi đè fusion.max_results_per_video. BẮT BUỘC khi dataset chỉ có "
+                             "1 video: dedup KIS mặc định giữ 5 kết quả/video nên R@20/50/100 "
+                             "sẽ bằng hệt R@5 và mọi số trên K=5 là vô nghĩa")
     parser.add_argument("--use-rerank", action="store_true",
                         help="bật text rerank + QA answer generation qua FPT (fallback worker tự "
                              "host qua AIC_RERANK_TEXT_URL cho rerank, không có fallback cho QA) "
