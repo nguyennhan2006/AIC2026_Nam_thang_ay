@@ -12,7 +12,7 @@ from online.domain.models import (
     SearchRequest,
     TaskType,
 )
-from online.domain.search_config import SearchOptions
+from online.domain.search_config import BranchRuntimeOptions, SearchOptions
 from online.errors import InvalidQueryError
 
 
@@ -28,18 +28,19 @@ TEMPORAL_RE = re.compile(
 # mọi query TRAKE thật rơi về đúng 1 event, khiến `len(plan.events) >= 2` ở
 # search.py luôn False và TrakeProcessor không bao giờ chạy.
 NUMBERED_STEP_RE = re.compile(r"\(\d+\)\s*")
+# ROUTE-01: cue quyết định một modality có ĐƯỢC CHẠY hay không, nên phải phủ
+# đủ cách hỏi thường gặp. Thiếu cue => branch không chạy (không phải chạy rồi
+# nhân 0), nên bỏ sót cue ở đây là mất recall thật.
 SPEECH_HINTS = {
-    "nói",
-    "phát biểu",
-    "trình bày",
-    "nghe thấy",
-    "lời thoại",
-    "says",
-    "speaks",
-    "speech",
-    "heard",
+    "nói", "phát biểu", "trình bày", "nghe thấy", "lời thoại", "giọng",
+    "hội thoại", "trả lời", "phỏng vấn", "âm thanh", "tiếng",
+    "says", "speaks", "speech", "heard", "said", "interview", "audio", "voice",
 }
-TEXT_HINTS = {"chữ", "dòng chữ", "biển", "bảng", "khẩu hiệu", "text", "sign"}
+TEXT_HINTS = {
+    "chữ", "dòng chữ", "biển", "bảng", "khẩu hiệu", "biển hiệu", "biển báo",
+    "nhãn", "logo", "tiêu đề", "phụ đề", "màn hình", "ghi", "viết", "đọc được",
+    "text", "sign", "caption", "subtitle", "label", "banner", "written", "screen",
+}
 
 
 def normalize_query(text: str) -> str:
@@ -50,17 +51,40 @@ def normalize_query(text: str) -> str:
     return normalized
 
 
-def compute_modality_weights(text: str, exact_phrases: list[str]) -> dict[Modality, float]:
+def has_text_cue(text: str, exact_phrases: list[str]) -> bool:
+    """Query có yêu cầu đọc chữ trong hình không (OCR)."""
+
+    return bool(exact_phrases) or any(hint in text.casefold() for hint in TEXT_HINTS)
+
+
+def has_speech_cue(text: str) -> bool:
+    """Query có yêu cầu nội dung lời nói không (ASR)."""
+
+    return any(hint in text.casefold() for hint in SPEECH_HINTS)
+
+
+def compute_modality_weights(
+    text: str, exact_phrases: list[str], *, allow_zero: bool = True
+) -> dict[Modality, float]:
     """Suy modality weight từ MỘT đoạn text — dùng cho cả full query lẫn
     từng event riêng của TRAKE (PR-14A: trước đây mọi step TRAKE dùng chung
-    weight của cả câu, nên step không có OCR/ASR vẫn bị đẩy nhánh sai)."""
+    weight của cả câu, nên step không có OCR/ASR vẫn bị đẩy nhánh sai).
+
+    `allow_zero=True` (mặc định, ROUTE-01): query không có cue chữ/lời nói thì
+    OCR/ASR nhận đúng 0 và branch KHÔNG chạy — `effective_weight() <= 0` đã
+    được adapter kiểm ngay đầu `search()`. Trước đây hai modality này có sàn
+    0.35/0.25 nên luôn góp candidate, tạo false positive kiểu query "cột nước
+    phun lên từ lòng đất" khớp một bản tin cháy rừng qua OCR "Sông Hồng ... lũ
+    lớn". `allow_zero=False` giữ nguyên sàn cũ, chỉ để chạy nhánh A của
+    ablation ROUTE-01.
+    """
 
     lowered = text.casefold()
     weights = {
         Modality.VISUAL: 1.0,
         Modality.CAPTION: 1.0,
-        Modality.OCR: 0.35,
-        Modality.ASR: 0.25,
+        Modality.OCR: 0.0 if allow_zero else 0.35,
+        Modality.ASR: 0.0 if allow_zero else 0.25,
         Modality.KEYWORD: 0.65,
         # Buckets mới (W3) chỉ có hiệu lực khi container thực sự đăng ký
         # retriever tương ứng (mặc định tắt, xem AIC_ENABLE_* ở online/config.py)
@@ -70,15 +94,49 @@ def compute_modality_weights(text: str, exact_phrases: list[str]) -> dict[Modali
         Modality.COLOR: 0.4,
         Modality.EVENT: 0.3,
     }
-    if exact_phrases or any(hint in lowered for hint in TEXT_HINTS):
+    if has_text_cue(lowered, exact_phrases):
         weights[Modality.OCR] = 2.0
-    if any(hint in lowered for hint in SPEECH_HINTS):
+    if has_speech_cue(lowered):
         weights[Modality.ASR] = 1.7
     return weights
 
 
 class RuleBasedQueryPlanner:
     """Safe V1 planner; an LLM planner can replace it through the same output model."""
+
+    def __init__(self, *, allow_zero_modality: bool = True) -> None:
+        # False = giữ sàn OCR/ASR cũ (nhánh A của ablation ROUTE-01).
+        self.allow_zero_modality = allow_zero_modality
+
+    # Nhánh khớp GẦN-NGUYÊN-CHUỖI: kết quả của chúng chỉ xuất hiện khi có một
+    # chuỗi trùng khớp thật, nên chúng KHÔNG thể tạo ra false positive kiểu
+    # "trùng vài token phổ biến" mà ROUTE-01 nhắm tới. Tắt chúng theo modality
+    # OCR chỉ làm mất recall của truy vấn gõ thẳng chữ nhìn thấy trên màn hình
+    # (vd "hen ngay gap lai") — loại truy vấn không hề chứa cue "chữ"/"biển".
+    EXACT_MATCH_BRANCHES = {"ocr_fuzzy": 0.6}
+
+    def _exempt_exact_match_branches(
+        self, options: "SearchOptions", weights: dict[Modality, float]
+    ) -> "SearchOptions":
+        """Giữ nhánh khớp nguyên chuỗi sống khi modality của nó bị route về 0.
+
+        KHÔNG ghi đè cấu hình người dùng đã đặt tay: chỉ thêm override khi
+        branch đó chưa có mục nào trong `search_options.branches`.
+        """
+
+        if weights.get(Modality.OCR, 0.0) > 0.0:
+            return options
+        missing = {
+            branch: weight
+            for branch, weight in self.EXACT_MATCH_BRANCHES.items()
+            if branch not in options.branches
+        }
+        if not missing:
+            return options
+        branches = dict(options.branches)
+        for branch, weight in missing.items():
+            branches[branch] = BranchRuntimeOptions(enabled=True, weight=weight)
+        return options.model_copy(update={"branches": branches})
 
     async def plan(self, request: SearchRequest) -> QueryPlan:
         task = request.task or TaskType.TEXTUAL_KIS
@@ -107,7 +165,11 @@ class RuleBasedQueryPlanner:
             )
             for index, text in enumerate(parts)
         ]
-        weights = compute_modality_weights(normalized, exact_phrases)
+        weights = compute_modality_weights(
+            normalized, exact_phrases, allow_zero=self.allow_zero_modality
+        )
+        search_options = request.search_options or SearchOptions()
+        search_options = self._exempt_exact_match_branches(search_options, weights)
         return QueryPlan(
             task=task,
             original_query=request.query,
@@ -115,6 +177,6 @@ class RuleBasedQueryPlanner:
             events=events,
             modality_weights=weights,
             filters=request.filters,
-            search_options=request.search_options or SearchOptions(),
+            search_options=search_options,
         )
 

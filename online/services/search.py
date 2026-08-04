@@ -318,7 +318,10 @@ class SearchService:
                 # PR-14A: trọng số modality riêng cho TỪNG step — trước đây mọi
                 # step dùng chung weight suy từ cả câu multi-event, nên step
                 # không có OCR/ASR vẫn bị đẩy nhánh sai theo step khác.
-                weights = compute_modality_weights(event.text, event.exact_phrases)
+                weights = compute_modality_weights(
+                    event.text, event.exact_phrases,
+                    allow_zero=getattr(self.planner, "allow_zero_modality", True),
+                )
                 if index < len(step_overrides):
                     weights.update(step_overrides[index])
                 event_plan = plan.model_copy(

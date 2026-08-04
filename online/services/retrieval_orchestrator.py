@@ -90,9 +90,24 @@ class RetrievalOrchestrator:
                 plan.search_options.branches.get(branch_id)
             )
             disabled = override is not None and not override.enabled
+            # ROUTE-01: weight 0 nghĩa là router đã tắt modality này, adapter
+            # trả rỗng NGAY đầu search() chứ không phải chạy xong rồi rỗng.
+            # Phải báo "disabled" kèm lý do, nếu không log sẽ đọc thành
+            # "branch có chạy nhưng không khớp gì" — hai chuyện khác hẳn.
+            modality = getattr(retriever, "modality", None)
+            routed_off = (
+                not disabled
+                and modality is not None
+                and plan.modality_weights.get(modality, 0.0) <= 0.0
+            )
             return [], BranchStatus(
                 execution_id=execution_id, branch_id=branch_id,
-                state="disabled" if disabled else "empty", latency_ms=elapsed(),
+                state="disabled" if (disabled or routed_off) else "empty",
+                latency_ms=elapsed(),
+                warning=(
+                    f"modality {getattr(modality, 'value', modality)} có trọng số 0 "
+                    "cho truy vấn này — branch không chạy"
+                ) if routed_off else None,
             )
         return candidates, BranchStatus(
             execution_id=execution_id, branch_id=branch_id, state="success",
