@@ -242,6 +242,87 @@ của segmenter để không ai giả định nhầm là nó đang chạy).
 
 ---
 
+## TRAKE T1–T4 — Chẩn đoán oracle theo tầng
+
+**Kết luận: chết ở T2. Không phải lỗi ranking. Ngừng tune, sửa offline.**
+
+`mean_r_score = 0.000` và `complete_chain_rate = 0.000` ở **mọi** cấu hình đã
+thử suốt đợt này (mọi cap, mọi routing, mọi coverage config). Chẩn đoán theo
+bốn cổng oracle thay vì tune tiếp.
+
+### T1 — Video oracle: ĐẠT
+
+`correct_video_rate = 1.000` ở mọi cấu hình. Stage A luôn tìm đúng video.
+Không có gì phải sửa ở tầng này.
+
+### T2 — Event candidate oracle: TRƯỢT, và trượt về mặt cấu trúc
+
+```
+độ rộng cửa sổ GT:  min=9  max=9  trung bình=9 frame   (mọi event, ±4)
+keyframe đã trích:  307 frame / 37849 frame  ->  cách nhau ~123 frame
+
+EVENT CÓ KEYFRAME NẰM TRONG CỬA SỔ GT:  4/35
+```
+
+Nới dung sai để thấy khoảng cách:
+
+```
+±0 frame   ->  4/35 event
+±30 frame  -> 19/35
+±60 frame  -> 30/35
+±123 frame -> 35/35
+```
+
+**31/35 event không tồn tại một ứng viên nào để chọn.** Hệ thống chỉ nộp được
+frame mà nó đã trích; cửa sổ gold rộng 9 frame còn lưới lấy mẫu thưa gấp 13
+lần. Không thuật toán xếp hạng nào chọn được một frame chưa từng được trích.
+
+### T3, T4 — chưa xét
+
+Vô nghĩa khi T2 trượt. Sửa beam search hay hệ toạ độ scorer đều không tạo ra
+được ứng viên còn thiếu. Chỉ chạy lại T3/T4 sau khi T2 đạt.
+
+### Điều đáng nói: code đã tự cảnh báo từ trước
+
+`online/services/trake/frame_refinement.py` mở đầu bằng đúng chẩn đoán này:
+
+> "Cửa sổ GT của một semantic keyframe chỉ rộng **9 frame (±4)**, trong khi
+> keyframe được trích thưa (thường 1 frame/scene). Nộp thẳng keyframe gần như
+> chắc chắn trượt cửa sổ, dù đã tìm đúng video và đúng scene."
+
+Và nó đánh dấu `refinement="keyframe_only"` đúng như thiết kế để không ai
+nhầm là đã tinh chỉnh dày đặc. Cảnh báo đó đã ở đó, chỉ là chưa ai nối nó với
+con số `r_score = 0`.
+
+Module cũng cố tình KHÔNG decode video trong request path (đường ngắn nhất
+tới timeout) — quyết định đúng, và nó xác định luôn chỗ phải sửa: **offline**.
+
+### Việc phải làm (offline, không phải online)
+
+Để bảo đảm mọi cửa sổ 9 frame chứa ít nhất một ứng viên thì stride phải ≤ 9,
+tức ~4200 frame cho video này thay vì 307 (gấp ~14 lần).
+
+Không cần trích dày toàn bộ. Đường rẻ hơn, hai giai đoạn:
+
+```
+retrieval thô trên keyframe hiện có
+  -> chọn top-N scene ứng viên cho mỗi event
+  -> trích dày (stride <= 8) CHỈ quanh vùng đó
+  -> index frame (aic_frames_v2) để refine_step chuyển sang dense_window
+```
+
+Trước khi làm, nên xác nhận lại một điều rẻ tiền: luật chấm thật có dung sai
+±4 frame quanh mốc gold hay không. Nếu luật rộng hơn thì yêu cầu stride giãn
+ra tương ứng và chi phí trích giảm mạnh.
+
+### Vì sao ghi vào đây thay vì sửa luôn
+
+Đây là thay đổi pipeline offline (trích + index lại), không phải một biến
+trong một thí nghiệm ranking. Nó nằm ngoài phạm vi "một biến thay đổi duy
+nhất" của đợt này, và phải có run manifest + index fingerprint riêng.
+
+---
+
 ## Việc tiếp theo
 
 **BM25-01 — concept coverage.** Đây là kết luận chung của cả hai thí nghiệm
@@ -250,7 +331,10 @@ Query `"cột nước phun lên từ lòng đất"` phải bị tách thành 3 n
 bắt buộc (nước / phun lên / từ mặt đất); candidate chỉ khớp `đất` phải bị phạt
 coverage.
 
-**TRAKE — chưa đủ điều kiện tune.** `mean_r_score = 0.000` và
-`complete_chain_rate = 0.000` ở **mọi** cấu hình đã thử. Phải đo oracle theo
-từng tầng (Stage A có gold video? mỗi event có candidate trong cửa sổ? sequence
-search nhận đủ event? frame output đúng hệ toạ độ?) trước khi tune ranking.
+**TRAKE — đã chẩn đoán xong, xem mục T1–T4 ở trên.** Chết ở T2 vì lưới lấy
+mẫu keyframe thưa hơn cửa sổ gold 13 lần. Việc tiếp theo là trích dày hai
+giai đoạn ở offline, không phải tune ranking.
+
+**Ba thí nghiệm ranking đã chạy đều DROP.** Điểm chung: mỗi lần số liệu tổng
+lại chỉ về một chỗ khác với chỗ giả thuyết chỉ. Đó là lý do quy trình bắt
+buộc error analysis trước khi quyết giữ/bỏ.
