@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import threading
 import hashlib
 import json
 import math
@@ -43,6 +44,24 @@ class LocalClipTextEncoder:
     `torch`/`transformers` chỉ import lúc gọi `encode()` lần đầu (không phải
     ở module import) — nhiều test dựng container mà không bao giờ gọi tới
     nhánh này, import sớm sẽ làm chậm toàn bộ test suite vô ích.
+
+    NHƯNG nạp lười trong request path gây hai lỗi đã đo được::
+
+        run0: dense_visual timeout 3004ms > deadline 3000ms  -> 0 candidate
+        run1: dense_visual failed "Cannot copy out of meta tensor"
+        run2: dense_visual success 142ms, 100 candidate  -> top khác HẲN
+
+    Lần `encode()` đầu tiên phải nạp model (~3s) nên nó vượt deadline nhánh và
+    bị `asyncio.wait_for` huỷ. Huỷ giữa `from_pretrained` để lại model kẹt trên
+    `meta` device, nên lần gọi sau hỏng hẳn. Kết quả: 1–2 truy vấn ĐẦU TIÊN của
+    mỗi tiến trình chạy KHÔNG có nhánh dense, im lặng, và cho ranking khác hẳn.
+
+    Hai biện pháp ở đây:
+      1. `warmup()` để caller nạp TRƯỚC khi nhận traffic (ngoài mọi deadline).
+      2. `_load()` nguyên tử: chỉ gán vào `self` khi đã dựng xong hoàn toàn, và
+         có khoá để hai request song song không cùng nạp một lúc. Bị huỷ giữa
+         chừng thì `self._model` vẫn là None -> lần sau nạp lại sạch, không
+         bao giờ để lại meta tensor.
     """
 
     def __init__(self, model_path: str, *, revision: str | None = None) -> None:
@@ -50,14 +69,30 @@ class LocalClipTextEncoder:
         self.revision = revision
         self._model = None
         self._processor = None
+        self._lock = threading.Lock()
 
     def _load(self):
-        if self._model is None:
+        if self._model is not None:
+            return self._model, self._processor
+        with self._lock:
+            if self._model is not None:
+                return self._model, self._processor
             from transformers import CLIPModel, CLIPProcessor
 
-            self._model = CLIPModel.from_pretrained(self.model_path, revision=self.revision).to("cpu").eval()
-            self._processor = CLIPProcessor.from_pretrained(self.model_path, revision=self.revision)
+            # Dựng vào biến cục bộ trước: nếu bị huỷ/lỗi giữa chừng thì
+            # `self._model` vẫn None và lần sau nạp lại từ đầu.
+            model = CLIPModel.from_pretrained(self.model_path, revision=self.revision).to("cpu").eval()
+            processor = CLIPProcessor.from_pretrained(self.model_path, revision=self.revision)
+            self._model, self._processor = model, processor
         return self._model, self._processor
+
+    def warmup(self) -> None:
+        """Nạp model NGAY, ngoài request path.
+
+        Gọi ở lúc dựng container/service. Không gọi thì truy vấn đầu tiên sẽ
+        nuốt trọn thời gian nạp và nhánh dense bị timeout bỏ qua."""
+
+        self._encode_sync("warmup")
 
     async def encode(self, text: str) -> list[float]:
         return await asyncio.to_thread(self._encode_sync, text)

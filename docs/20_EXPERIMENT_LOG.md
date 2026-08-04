@@ -829,6 +829,84 @@ dense toàn video.
 
 ---
 
+## FIX-DETERMINISM-01 — Nguồn nhiễu KHÔNG phải hash order
+
+**Trạng thái: ĐÃ SỬA. Chẩn đoán ban đầu ("PYTHONHASHSEED rò vào ranking") SAI.**
+
+### Cách truy
+
+`scripts/dump_search_trace.py` đổ dấu vết theo TỪNG TẦNG (branch → fused →
+dedup → hits → per-event → task output) rồi so xuyên seed, thay vì chỉ so
+metric cuối. Kết quả: mọi tầng dùng chung GIỐNG HỆT nhau; chỉ `trake_events`
+(đường retrieval per-event) khác.
+
+Thu nhỏ tiếp: gọi `_retrieve` ba lần với CÙNG plan, trong CÙNG tiến trình:
+
+```
+run0: dense_visual timeout 3004ms > deadline 3000ms   -> 0 candidate
+run1: dense_visual failed "Cannot copy out of meta tensor"
+run2: dense_visual success 142ms, 100 candidate       -> top khác HẲN
+```
+
+**Không liên quan gì tới hash seed.** Cùng một tiến trình, cùng một plan, ba
+kết quả khác nhau.
+
+### Nguyên nhân gốc — hai lỗi chồng nhau
+
+1. **Nạp model lười trong request path.** `LocalClipTextEncoder` nạp CLIP ở
+   lần `encode()` đầu tiên (~3s), vượt deadline 3000ms của nhánh, nên
+   `dense_visual` bị `asyncio.wait_for` huỷ và bỏ qua trong im lặng.
+2. **`_load()` không nguyên tử.** Bị huỷ giữa `from_pretrained` để lại model
+   kẹt trên `meta` device, nên lần gọi TIẾP THEO hỏng hẳn.
+
+Hệ quả: **1–2 truy vấn đầu tiên của MỌI tiến trình chạy không có nhánh dense**,
+cho ranking khác hẳn các truy vấn sau. Trong `eval_tasks` 40 query, thứ tự
+query quyết định ai chịu phạt — nên chạy `--tasks TRAKE` (8 query) và chạy đầy
+đủ (40 query) cho số khác nhau, và hai lần chạy liên tiếp cũng khác nhau.
+
+Cố định `PYTHONHASHSEED` làm số ổn định chỉ vì nó đổi thời điểm/thứ tự, KHÔNG
+phải vì hash order — một tương quan giả mà tôi đã nhận nhầm thành nhân quả.
+
+### Sửa
+
+- `_load()` dựng vào biến cục bộ rồi mới gán vào `self`, có `threading.Lock`.
+  Huỷ giữa chừng thì `self._model` vẫn None ⇒ lần sau nạp lại sạch.
+- Thêm `warmup()`, gọi ở `build_container()` và `build_service()` — nạp NGOÀI
+  mọi deadline. Lỗi warmup chỉ in cảnh báo, không chặn khởi động.
+
+### Xác minh
+
+```
+Ba lần _retrieve liên tiếp: dense success 244/250/245ms, top GIỐNG HỆT
+Toàn benchmark, PYTHONHASHSEED = 0 / 1 / 42:
+  KIS R@1 0.250  MRR 0.442
+  QA  R@1 0.083  MRR 0.175  answer_accuracy 0.333
+  TRAKE mean_r_score 0.075
+  AVS nDCG@100 0.238
+                                        <- ba seed ra số Y HỆT
+```
+
+### Ảnh hưởng ngược lại các kết luận cũ
+
+Mọi so sánh chênh 1–2 query trong tài liệu này đều có thể đã bị nhiễu bởi lỗi
+cold-start, không phải bởi biến đang thí nghiệm. Cụ thể đáng ngờ nhất:
+
+- EVAL-01 "KIS R@1 0.333 → 0.417" (đúng 1 query)
+- ROUTE-01 A/B/C (chênh 1 query giữa các nhánh)
+- BM25-01 A–E (KIS chênh 1 query)
+
+Các phát hiện CẤU TRÚC không bị ảnh hưởng vì chúng là phép đếm, không phụ
+thuộc thứ hạng: coverage 78.6%→100%, scene retrieval 35/35, oracle coverage
+23/35, `frame_selection_accuracy_given_oracle` 19/23.
+
+**Cần chạy lại toàn bộ benchmark với bản vá này trước khi dùng bất kỳ so sánh
+chi tiết nào để ra quyết định.**
+
+Test: `tests/test_encoder_warmup.py` (nạp nguyên tử, khoá đồng thời, và khoá
+sự tồn tại của `warmup` vì caller dò bằng `hasattr`).
+
+---
+
 ## Việc tiếp theo
 
 **BM25-01 — concept coverage.** Đây là kết luận chung của cả hai thí nghiệm

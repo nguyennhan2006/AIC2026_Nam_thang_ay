@@ -177,6 +177,14 @@ async def build_dense(repository: JsonlSceneRepository, backend: str) -> DenseRe
         encoder = LocalClipTextEncoder(
             settings.visual_embedding_model, revision=settings.visual_embedding_model_revision
         )
+        # Xem online/api/container.py: warmup phải xảy ra NGOÀI request path,
+        # nếu không truy vấn đầu tiên mất nhánh dense và mọi so sánh metric
+        # đều nhiễu ở một hai query đầu.
+        if hasattr(encoder, "warmup"):
+            try:
+                encoder.warmup()
+            except Exception as exc:  # noqa: BLE001
+                print(f"cảnh báo: không warmup được encoder ({exc})", file=sys.stderr)
         return DenseRetriever(encoder, InMemoryVectorStore(frame_rows), branch_id="dense_visual", backend_kind="vector")
 
     encoder = HashingTextEncoder()

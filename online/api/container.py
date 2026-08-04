@@ -140,6 +140,17 @@ async def build_container(settings: Settings) -> AppContainer:
             branch_id="lexical_hash_fallback",
             backend_kind="lexical_fallback",
         )
+    # Nạp model NGAY, ngoài request path. Không làm thì truy vấn đầu tiên
+    # nuốt trọn ~3s thời gian nạp, vượt deadline nhánh và dense_visual bị bỏ
+    # qua trong im lặng — đo được: 1-2 truy vấn đầu mỗi tiến trình cho ranking
+    # khác hẳn các truy vấn sau.
+    if hasattr(encoder, "warmup"):
+        try:
+            encoder.warmup()
+        except Exception as exc:  # noqa: BLE001 - thiếu model không được chặn khởi động
+            print(f"cảnh báo: không warmup được text encoder ({exc}) — "
+                  "truy vấn đầu tiên có thể mất nhánh dense", flush=True)
+
     retrievers = [dense, *lexical]
     if settings.enable_ocr_fuzzy:
         retrievers.append(await OcrFuzzyRetriever.build(repository))
