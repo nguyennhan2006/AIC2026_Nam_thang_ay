@@ -556,6 +556,57 @@ hơn hay reranker đều không thể tìm ra. Đây là trần cứng.
 
 Bước 2 tốn tiền API nên cần quyết định trước khi chạy.
 
+### ĐÃ SỬA — gộp gap vào láng giềng có keyframe
+
+Không trích lại keyframe, không caption lại: **keyframe BTC đã chứa câu trả
+lời**, vấn đề chỉ là scene chứa mốc gold bị xoá. `scripts/repair_scene_coverage.py`
+gộp mỗi gap vào láng giềng có keyframe GẦN TÂM GAP NHẤT (hoà thì ưu tiên
+scene trước — tất định, không phụ thuộc thứ tự duyệt).
+
+```
+84 gap, 8083 frame  ->  coverage 0.786 -> 1.0, gap = 0
+```
+
+Tác dụng phụ có lợi và đúng luật: cửa sổ chấm suy từ độ dài scene
+(`clamp(duration*0.5, 2, 7)`). Frame trong gap trước đây không có scene nên
+rơi về fallback tối thiểu **±1.0s** — chính những mốc cần cửa sổ rộng nhất lại
+bị chấm ngặt nhất. Sau khi gộp chúng thuộc scene dài hơn nên nhận cửa sổ đúng.
+
+### Kết quả trên Stage B
+
+| | R@20 | R@50 | R@100 | median | đủ mọi event |
+|---|---|---|---|---|---|
+| baseline, export gốc | 15/35 | 18/35 | 21/35 | 12 | 1/8 |
+| baseline, export đã sửa | 16/35 | 19/35 | 22/35 | 13.5 | 1/8 |
+| dense only, export gốc | 17/35 | 18/35 | 19/35 | 3 | 0/8 |
+| **dense only, export đã sửa** | **21/35** | **23/35** | **24/35** | **2.5** | 0/8 |
+| fused, export đã sửa | 18/35 | 21/35 | 24/35 | 6.0 | 1/8 |
+
+**Repair giúp dense nhiều hơn hẳn baseline** (R@20 17→21 so với 15→16). Lý do
+cơ chế: scene gộp dài hơn ⇒ cửa sổ rộng hơn ⇒ keyframe mà dense tìm ra rơi vào
+dung sai thường xuyên hơn. Hai sửa đổi cộng hưởng chứ không cộng tuyến tính.
+
+Tổng tiến bộ so với điểm xuất phát: **R@100 21→24, R@20 15→21 (+40%),
+rank trung vị 12→2.5**.
+
+### Một quan sát ngược trực giác
+
+`B dense only` **thắng** `C baseline+dense` ở R@20 (21 so với 18). Thêm bốn
+nhánh BM25 vào làm TỆ ĐI ở độ sâu nông — chúng đẩy kết quả tốt của dense
+xuống. Với truy vấn ngữ nghĩa ngắn của TRAKE, lexical đang là nhiễu nhiều hơn
+tín hiệu. Chưa đủ dữ liệu để chốt bỏ hẳn lexical cho TRAKE, nhưng đáng thành
+một thí nghiệm riêng.
+
+### Còn thiếu gì để đạt ngưỡng
+
+```
+R@100          24/35, ngưỡng > 25/35   -> còn thiếu 1-2 bước
+đủ mọi event   0-1/8, ngưỡng >= 4/8    -> CHƯA nhúc nhích
+```
+
+Phần còn lại chính là 9/35 bước có scene + caption nhưng caption bỏ sót chủ
+thể sự kiện — CAPTION-ENRICH-01. Đó mới là thứ chặn `đủ mọi event`.
+
 ### Kỳ vọng sau khi sửa
 
 ```
