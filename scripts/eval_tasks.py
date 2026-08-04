@@ -489,7 +489,32 @@ def print_summary(summary: dict) -> None:
             print(f"  {key:22s} {value:.3f}" if isinstance(value, float) else f"  {key:22s} {value}")
 
 
+def _warn_if_nondeterministic() -> None:
+    """Cảnh báo khi `PYTHONHASHSEED` chưa cố định.
+
+    Đã đo được: chạy CÙNG lệnh, CÙNG dữ liệu, hai lần liên tiếp cho
+    `mean_r_score` 0.212 rồi 0.075. Đặt `PYTHONHASHSEED=0` thì ba lần chạy ra
+    số y hệt. Thứ tự lặp `set` chuỗi thay đổi theo tiến trình và rò vào
+    tie-break của xếp hạng.
+
+    Hệ quả: mọi so sánh chênh 1 query (8.3 điểm phần trăm trên 12 query) là
+    KHÔNG kết luận được nếu chưa cố định seed.
+    """
+
+    import os
+
+    if os.environ.get("PYTHONHASHSEED") in (None, "random"):
+        print(
+            "CẢNH BÁO: PYTHONHASHSEED chưa cố định — kết quả KHÔNG tái lập được.
+"
+            "          Chạy lại với:  PYTHONHASHSEED=0 python -m scripts.eval_tasks ...
+",
+            file=sys.stderr,
+        )
+
+
 async def _main() -> None:
+    _warn_if_nondeterministic()
     parser = argparse.ArgumentParser(description="Chấm 4 task AIC 2026 ở mức frame")
     parser.add_argument(
         "--gold", type=Path, default=Path("examples/AIC2026_L21_V001_queries_4tasks.jsonl")
