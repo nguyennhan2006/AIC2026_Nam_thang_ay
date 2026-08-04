@@ -749,6 +749,86 @@ thuẫn "đầu vào tốt lên, đầu ra đứng yên". Mâu thuẫn đó mớ
 
 ---
 
+## FRAME-REFINE-01 — Chọn frame trong Stage C
+
+**Trạng thái: DROP mọi thay đổi. Ba chiến lược chọn frame khác nhau đều cho
+CÙNG một kết quả — chọn frame không phải đòn bẩy.**
+
+### Đã khoá metric trước khi sửa
+
+`scripts/diagnose_trake_stage_c.py` tách hẳn ba tầng, đúng bài học của
+CAPTION-ENRICH-01 (một metric trộn tầng đã khiến ba thí nghiệm tối ưu nhầm chỗ):
+
+```
+scene_recall                          : 30/35
+frame_oracle_coverage                 : 23/35   scene đúng VÀ có keyframe hợp lệ
+frame_selection_accuracy_given_oracle : 19/23   <- chỉ số DUY NHẤT được phép cải thiện
+frame_hit tổng                        : 19/35
+
+không có keyframe hợp lệ (trần cứng)  :  7/35
+```
+
+### Chẩn đoán ban đầu — chính xác nhưng chỉ đúng một nửa
+
+Cả 4 bước hỏng đều trả về **đúng bằng anchor**:
+
+```
+S0046  có=[5760,5889,6099]        hợp lệ=[6099]  anchor=5760  -> CHỌN 5760
+S0294  có=[34032,34092]           hợp lệ=[34092] anchor=34032 -> CHỌN 34032
+S0265  có=[30722,30932,31124,31290] hợp lệ=[31124] anchor=31290 -> CHỌN 31290
+S0168  có=[20612,20702]           hợp lệ=[20702] anchor=20612 -> CHỌN 20612
+```
+
+Khoảng cách tới keyframe hợp lệ: 339, 60, 166, 90 frame — đều **vượt
+`window_frames = 45`**. Cửa sổ ±1.5s hẹp hơn dung sai chấm (2–7s) nên nó loại
+đúng cái frame lẽ ra tính là trúng, TRƯỚC khi `score_frames` kịp nhìn thấy.
+
+### Nhưng nới cửa sổ ra thì NET ZERO
+
+| | frame_selection_accuracy_given_oracle |
+|---|---|
+| A — cửa sổ ±45 hiện tại | 19/23 |
+| B — bỏ lọc cửa sổ khi pool nhỏ | **19/23** |
+| C — chọn bằng CLIP text↔image (embedding đã cache) | **19/23** |
+
+Nới cửa sổ sửa được S0294 + S0168 nhưng làm hỏng S0046 + S0035 — hai ca trước
+đó đúng **do may**, vì anchor tình cờ là frame hợp lệ. CLIP cũng đúng 19/23,
+sai ở bốn ca khác.
+
+Ba cách tiếp cận độc lập cùng chạm một trần ⇒ 4 lỗi còn lại không phải lỗi
+thuật toán chọn. Xem kỹ: scene có 2–4 keyframe **trông rất giống nhau** (cùng
+cảnh cột nước, cùng góc phố), chỉ một cái rơi vào cửa sổ gold. Phân biệt
+"người đàn ông tiến sát cột nước" với "cột nước quay từ xa" đòi hỏi chi tiết
+mà cả token overlap lẫn CLIP toàn ảnh đều không giữ được.
+
+### Quyết định
+
+- **Revert** thay đổi cửa sổ: đo được là trung tính, mà đổi hành vi không có
+  lợi ích đo được thì chỉ thêm rủi ro. Cùng nguyên tắc đã áp cho ROUTE-01 và
+  BM25-01.
+- **Giữ** `scripts/diagnose_trake_stage_c.py` — đây mới là sản phẩm thật của
+  vòng này: từ nay không ai còn nhầm ba tầng với nhau nữa.
+
+### Đòn bẩy thật nằm ở đâu
+
+```
+selection accuracy   19/23 = 83%   <- gần trần, ba cách đều thế
+oracle coverage      23/35 = 66%   <- 12 bước không có gì để chọn
+   trong đó  7/35 scene đúng nhưng KHÔNG keyframe nào hợp lệ
+             5/35 scene không được retrieve (cấu hình baseline)
+```
+
+Cải thiện selection tối đa còn 4 bước. Cải thiện oracle coverage còn 12.
+**DENSE-FRAME-01 có headroom gấp ba lần** — và nó là thứ duy nhất chạm được
+vào 7 bước đang bị trần cứng.
+
+Phạm vi hẹp cho DENSE-FRAME-01: chỉ trích thêm frame ở scene có
+`oracle_keyframe_exists = false`, stride 0.5–1.0s (hoặc 5 mốc
+start/25%/center/75%/end). Scene ngắn 2.9–5.4s nên chi phí rất nhỏ; KHÔNG
+dense toàn video.
+
+---
+
 ## Việc tiếp theo
 
 **BM25-01 — concept coverage.** Đây là kết luận chung của cả hai thí nghiệm
