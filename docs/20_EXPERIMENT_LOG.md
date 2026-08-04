@@ -626,6 +626,91 @@ scene ngắn hơn stride).
 
 ---
 
+## CAPTION-ENRICH-01 — và phát hiện quan trọng nhất của cả đợt
+
+**Trạng thái: caption tốt lên thật, nhưng metric không đổi — vì đo nhầm tầng.
+Retrieval scene ĐÃ ĐẠT 35/35. Nút thắt thật là CHỌN FRAME.**
+
+### Đã làm
+11 scene mục tiêu (chỉ những scene có keyframe + có caption nhưng retrieval
+vẫn trượt), 19 keyframe. Prompt `caption_event_factual_v1` bắt liệt kê riêng
+phương tiện/động vật/đồng phục/vật thể nhỏ. Gate: JSON hợp lệ, không lẫn CJK,
+phải có ít nhất một vật thể/hành động cụ thể. Trượt gate thì giữ caption cũ.
+
+10/11 caption được nhận. Caption mới phủ THÊM từ khoá event ở **6/10** scene.
+
+### Hai lỗi provider/code phát hiện khi chạy
+1. **FPT VLM chỉ nhận 1 ảnh mỗi prompt** (HTTP 400 `At most 1 image(s) may be
+   provided in one prompt`). Variant "multi-frame" vẫn làm được nhưng phải gọi
+   từng ảnh rồi hợp nhất — và đó chính là điều cần thiết, vì chủ thể nhỏ
+   (con chó, xe cứu thương) chỉ xuất hiện ở đúng một keyframe. 5/11 ca trượt
+   ban đầu là do ràng buộc này, không phải chất lượng caption.
+2. Model trả phần tử danh sách dạng object (`{"name": ..., "description": ...}`)
+   dù prompt xin chuỗi. `str()` thẳng nhét nguyên dict repr vào caption —
+   rác cho cả BM25 lẫn embedding. Phải rút lấy phần chữ, không siết prompt
+   (siết prompt không bảo đảm được).
+
+### Kết quả Stage B — KHÔNG ĐỔI
+
+| | R@20 | R@50 | R@100 | median | đủ mọi event |
+|---|---|---|---|---|---|
+| dense only, trước enrich | 21/35 | 23/35 | 24/35 | 2.5 | 0/8 |
+| dense only, sau enrich | 21/35 | 23/35 | 24/35 | 2.5 | 0/8 |
+
+Caption tốt lên mà số không nhúc nhích — mâu thuẫn này buộc phải tách metric.
+
+### Tách tầng: retrieval scene vs chọn frame
+
+```
+SCENE đúng được retrieve : 35/35     <- HOÀN HẢO
+FRAME nằm trong dung sai : 24/35
+```
+
+**Retrieval không còn là nút thắt.** Nó tìm đúng scene cho cả 35/35 bước, phần
+lớn ở rank 1–6. Toàn bộ khoảng cách còn lại nằm ở việc chọn frame nào trong
+scene đã tìm đúng.
+
+`gold_region_recall` từ trước tới nay **trộn hai tầng làm một** vì nó kiểm
+`step.contains(hit.best_frame_idx, tol)` — tức đo frame, nhưng bị đọc như đo
+retrieval. Đây là lý do CAPTION-ENRICH-01 cải thiện caption mà chỉ số không
+đổi: caption chỉ ảnh hưởng tầng đã đạt 100%.
+
+### 11 bước hỏng chia làm hai loại
+
+**Loại 1 — keyframe trong dung sai CÓ tồn tại nhưng hệ thống nộp frame khác
+(4/11), sửa được bằng code:**
+
+```
+người hướng dẫn đi cùng hai con chó   rank  1, kf lệch 0.4s, dung sai 1.0s
+cận cảnh biển số của các xe            rank  6, kf lệch 0.1s, dung sai 1.8s
+cá mú lớn bơi giữa đàn cá              rank 15, kf lệch 1.5s, dung sai 3.5s
+một người đàn ông tiến sát cột nước    rank  4, kf lệch 2.3s, dung sai 3.5s
+```
+
+Đây là lỗi Stage C (`frame_refinement`): scene có nhiều keyframe nhưng nó
+không chọn cái gần mốc sự kiện nhất.
+
+**Loại 2 — không keyframe nào trong dung sai (7/11):** scene ngắn 2.9–5.4s chỉ
+có 1 keyframe, lệch 1.6–3.1s trong khi dung sai chỉ ±1.0–1.3s. Loại này cần
+trích dày hơn, không sửa bằng code được.
+
+### Quyết định
+
+- **Không promote** caption enrichment: đo được cải thiện caption (6/10) nhưng
+  không cải thiện chỉ số nào ở tầng đang bị chặn. Giữ export
+  `storage/exports_l21_enriched/` để dùng lại khi tầng frame được sửa.
+- **Việc tiếp theo là Stage C frame selection**, không phải retrieval, không
+  phải fusion, không phải encoder. 4/11 sửa được ngay bằng code.
+
+### Bài học đắt nhất của đợt
+
+Ba thí nghiệm liên tiếp (DENSE-TEXT-01, SCENE-COVERAGE-01, CAPTION-ENRICH-01)
+đều tối ưu tầng retrieval, trong khi tầng đó đã đạt 35/35 từ sớm. Nguyên nhân:
+một metric duy nhất trộn hai tầng, và không ai tách nó ra cho tới khi gặp mâu
+thuẫn "đầu vào tốt lên, đầu ra đứng yên". Mâu thuẫn đó mới là thứ ép phải tách.
+
+---
+
 ## Việc tiếp theo
 
 **BM25-01 — concept coverage.** Đây là kết luận chung của cả hai thí nghiệm
