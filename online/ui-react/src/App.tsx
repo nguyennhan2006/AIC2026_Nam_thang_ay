@@ -326,6 +326,7 @@ function App() {
                       qa={result?.qa ?? []}
                       trake={result?.trake ?? []}
                       avs={result?.avs ?? []}
+                      results={result?.results ?? []}
                     />
                   </PanelBody>
                 )}
@@ -394,6 +395,7 @@ function App() {
                   qa={result?.qa ?? []}
                   trake={result?.trake ?? []}
                   avs={result?.avs ?? []}
+                  results={result?.results ?? []}
                 />
               </PanelBody>
             </Surface>

@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import re
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, Response, StreamingResponse
 from pathlib import Path
 
 from online.api.container import AppContainer
@@ -458,18 +459,80 @@ async def evaluate_local(request: EvaluateLocalRequest) -> EvaluateLocalResponse
     )
 
 
+_RANGE_RE = re.compile(r"bytes=(\d*)-(\d*)")
+_RANGE_CHUNK = 1 << 20
+
+
+def _range_response(target: Path, range_header: str, media_type: str) -> Response:
+    """Trả 206 Partial Content cho một dải byte.
+
+    VÌ SAO PHẢI TỰ CÀI: `FileResponse` của Starlette 0.38 KHÔNG xử lý header
+    `Range` — nó trả 200 kèm toàn bộ file. Với video 130MB, trình duyệt không
+    tua được: đặt `currentTime` bị bỏ qua và player đứng ở 0:00. Đó chính là
+    lỗi làm chức năng "bấm vào dòng submission để xem đúng đoạn" vô dụng.
+    """
+
+    size = target.stat().st_size
+    match = _RANGE_RE.fullmatch(range_header.strip())
+    if not match or (not match.group(1) and not match.group(2)):
+        raise HTTPException(416, "invalid range", headers={"content-range": f"bytes */{size}"})
+
+    if match.group(1):
+        start = int(match.group(1))
+        end = int(match.group(2)) if match.group(2) else size - 1
+    else:
+        # `bytes=-N` = N byte CUỐI file.
+        start = max(size - int(match.group(2)), 0)
+        end = size - 1
+    end = min(end, size - 1)
+    if start > end or start >= size:
+        raise HTTPException(416, "range not satisfiable", headers={"content-range": f"bytes */{size}"})
+
+    def stream():
+        remaining = end - start + 1
+        with target.open("rb") as handle:
+            handle.seek(start)
+            while remaining > 0:
+                chunk = handle.read(min(_RANGE_CHUNK, remaining))
+                if not chunk:
+                    break
+                remaining -= len(chunk)
+                yield chunk
+
+    return StreamingResponse(
+        stream(),
+        status_code=206,
+        media_type=media_type,
+        headers={
+            "content-range": f"bytes {start}-{end}/{size}",
+            "content-length": str(end - start + 1),
+            "accept-ranges": "bytes",
+        },
+    )
+
+
 @router.get("/media/{artifact_path:path}")
-async def media(artifact_path: str, container: Container) -> FileResponse:
+async def media(artifact_path: str, request: Request, container: Container) -> Response:
     root = container.settings.data_root.resolve()
     target = (root / artifact_path).resolve()
     if root != target and root not in target.parents:
         raise HTTPException(400, "invalid media path")
     allowed = {".jpg", ".jpeg", ".png", ".webp", ".svg", ".mp4", ".webm", ".mkv"}
-    if target.suffix.casefold() not in allowed:
+    suffix = target.suffix.casefold()
+    if suffix not in allowed:
         raise HTTPException(403, "artifact type is not public media")
     relative = target.relative_to(root)
     if not (relative.parts[:1] == ("processed",) or relative.parts[:2] == ("raw", "videos")):
         raise HTTPException(403, "artifact is outside public media roots")
     if not target.is_file():
         raise HTTPException(404, "media not found")
-    return FileResponse(target)
+
+    media_type = {
+        ".mp4": "video/mp4", ".webm": "video/webm", ".mkv": "video/x-matroska",
+    }.get(suffix, "application/octet-stream")
+    range_header = request.headers.get("range")
+    if range_header and suffix in (".mp4", ".webm", ".mkv"):
+        return _range_response(target, range_header, media_type)
+    # Không có Range: vẫn phải quảng cáo `accept-ranges` để trình duyệt biết
+    # nó ĐƯỢC PHÉP tua, nếu không nó sẽ không gửi Range ở lần sau.
+    return FileResponse(target, headers={"accept-ranges": "bytes"})
