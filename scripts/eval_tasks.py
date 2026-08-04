@@ -505,10 +505,8 @@ def _warn_if_nondeterministic() -> None:
 
     if os.environ.get("PYTHONHASHSEED") in (None, "random"):
         print(
-            "CẢNH BÁO: PYTHONHASHSEED chưa cố định — kết quả KHÔNG tái lập được.
-"
-            "          Chạy lại với:  PYTHONHASHSEED=0 python -m scripts.eval_tasks ...
-",
+            "CẢNH BÁO: PYTHONHASHSEED chưa cố định — kết quả KHÔNG tái lập được.\n"
+            "          Chạy lại với:  PYTHONHASHSEED=0 python -m scripts.eval_tasks ...\n",
             file=sys.stderr,
         )
 
