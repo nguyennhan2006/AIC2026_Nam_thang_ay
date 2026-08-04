@@ -98,6 +98,7 @@ backend Vast.ai và token Online nếu bật — chi tiết đầy đủ (CORS, 
 17. `docs/17_MANUAL_TEST_GUIDE_L21_V001.md` — dựng lại dataset L21 thật từ đầu
 18. `docs/18_MASTER_SYNC_GUIDE.md` — kế hoạch kiến trúc đích (tài liệu tham chiếu)
 19. `docs/19_COMPETITION_SYSTEM_NOTES.md` — ghi chú hệ thống thi đấu (thao tác, UI, độ tin cậy)
+20. `docs/20_EXPERIMENT_LOG.md` — nhật ký thí nghiệm search: giả thuyết, số đo, quyết định giữ/bỏ
 
 Model thật trên Kaggle: `docs/KAGGLE_OFFLINE_GUIDE.md`. `scripts/caption_qwen3vl.py`
 là đường khác để nâng chất lượng caption (Qwen3-VL-32B qua OpenRouter, không cần

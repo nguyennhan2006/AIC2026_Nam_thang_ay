@@ -23,6 +23,9 @@ from online.services.query_planner import (
 
 
 def _plan(query: str, *, allow_zero: bool = True):
+    """Mặc định planner nay TẮT zero-gating (xem ROUTE-01 keep/drop), nên test
+    của cơ chế này phải bật cờ tường minh."""
+
     import asyncio
 
     planner = RuleBasedQueryPlanner(allow_zero_modality=allow_zero)
@@ -46,6 +49,25 @@ class CueDetectionTests(unittest.TestCase):
         for query in ["người dẫn nói gì", "nghe thấy tiếng còi", "buổi phỏng vấn",
                       "giọng của phóng viên"]:
             self.assertTrue(has_speech_cue(query), query)
+
+
+class DefaultIsFloorsTests(unittest.TestCase):
+    """ROUTE-01 đã đo và bị DROP làm mặc định — khoá lại quyết định đó."""
+
+    def test_planner_keeps_the_floors_by_default(self) -> None:
+        plan = _plan("cột nước phun lên từ lòng đất", allow_zero=False)
+        self.assertAlmostEqual(plan.modality_weights[Modality.OCR], 0.35)
+        self.assertAlmostEqual(plan.modality_weights[Modality.ASR], 0.25)
+
+    def test_default_constructor_does_not_zero_gate(self) -> None:
+        import asyncio
+
+        plan = asyncio.run(
+            RuleBasedQueryPlanner().plan(
+                SearchRequest(query="cột nước phun lên từ lòng đất", task=TaskType.TEXTUAL_KIS)
+            )
+        )
+        self.assertGreater(plan.modality_weights[Modality.OCR], 0.0)
 
 
 class ZeroGatingTests(unittest.TestCase):
@@ -97,7 +119,7 @@ class ExactMatchExemptionTests(unittest.TestCase):
         from online.domain.search_config import BranchRuntimeOptions, SearchOptions
 
         options = SearchOptions(branches={"ocr_fuzzy": BranchRuntimeOptions(enabled=False)})
-        planner = RuleBasedQueryPlanner()
+        planner = RuleBasedQueryPlanner(allow_zero_modality=True)
         plan = asyncio.run(
             planner.plan(
                 SearchRequest(query="cột nước phun lên", task=TaskType.TEXTUAL_KIS,

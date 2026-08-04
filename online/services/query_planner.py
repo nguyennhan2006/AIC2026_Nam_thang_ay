@@ -104,8 +104,20 @@ def compute_modality_weights(
 class RuleBasedQueryPlanner:
     """Safe V1 planner; an LLM planner can replace it through the same output model."""
 
-    def __init__(self, *, allow_zero_modality: bool = True) -> None:
-        # False = giữ sàn OCR/ASR cũ (nhánh A của ablation ROUTE-01).
+    def __init__(self, *, allow_zero_modality: bool = False) -> None:
+        """`allow_zero_modality=True` bật zero-gating của ROUTE-01.
+
+        MẶC ĐỊNH TẮT vì đã đo và thua trên corpus hiện tại (xem
+        docs/20_EXPERIMENT_LOG.md § ROUTE-01). Lý do: OCR ở bộ dữ liệu này là
+        lower-third bản tin MÔ TẢ CHÍNH CẢNH ĐÓ — 11/12 gold KIS có OCR trùng
+        từ khoá query — nên nó là tín hiệu ngữ nghĩa, không phải chữ ngẫu
+        nhiên. Tắt nó đi mất nhiều hơn được.
+
+        Cơ chế vẫn giữ nguyên vì tiền đề "query không nhắc chữ ⇒ OCR không
+        liên quan" đúng với nhiều corpus khác (phim, video đời thường); bật
+        cờ này là đủ, không phải viết lại.
+        """
+
         self.allow_zero_modality = allow_zero_modality
 
     # Nhánh khớp GẦN-NGUYÊN-CHUỖI: kết quả của chúng chỉ xuất hiện khi có một
