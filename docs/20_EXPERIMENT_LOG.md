@@ -694,6 +694,44 @@ không chọn cái gần mốc sự kiện nhất.
 có 1 keyframe, lệch 1.6–3.1s trong khi dung sai chỉ ±1.0–1.3s. Loại này cần
 trích dày hơn, không sửa bằng code được.
 
+### Bổ sung: có dùng OCR/ASR làm ngữ cảnh cho VLM chưa?
+
+**Chưa.** Kiểm tra lại prompt: nó chỉ gửi `caption cũ` + `event text`.
+`ocr_old` được thu thập trong danh sách mục tiêu nhưng **không bao giờ dùng**
+(field chết); ASR thì không thu thập.
+
+Đây là thiếu sót đáng kể vì dữ liệu tồn tại và rất giàu:
+
+```
+7/11 scene có OCR,  11/11 scene có ASR
+
+S0224 "xe cứu hỏa"      ASR: "Hơn 1.000 lính chữa cháy và 20 máy bay được huy động…"
+S0265 "cá mú lớn"       ASR: "Cá múa nâu biểu tượng của địa trung hải…"
+S0014 "bờ sông sụt lún" ASR: "phòng chống sụp lúng đất, sạt lở bờ sông"
+S0168 "biển số các xe"  ASR: "lao vào lề đường, va chạm vào 3 xe máy khác…"
+```
+
+Đã nối OCR + ASR vào prompt và đo ba biến thể (cùng 10 scene, cùng gate):
+
+| | phủ thêm từ khoá event |
+|---|---|
+| v1 — không OCR/ASR | **6/10** |
+| v2 — có OCR/ASR + cảnh báo chống bịa NẶNG | 4/10 |
+| v3 — có OCR/ASR + cảnh báo NHẸ | 5/10 |
+
+**Thêm ngữ cảnh làm TỆ ĐI**, ngược hẳn kỳ vọng. Cơ chế đã xác nhận được một
+phần: cảnh báo nặng ("TUYỆT ĐỐI KHÔNG thêm… lời dẫn thường lệch thời điểm")
+khiến model *né* dùng ngữ cảnh và trả caption ngắn/mơ hồ hơn. Nới cảnh báo kéo
+lại được 4→5 (S0294 từ 0 lên 2, có hẳn "một người hướng dẫn đi cùng"), nhưng
+vẫn không vượt được bản không có ngữ cảnh.
+
+Cảnh báo về cách đọc: chỉ số này là đếm trùng token giữa event text và caption
+— thô. Caption có thể tốt hơn về ngữ cảnh mà không tăng trùng token. Nhưng đây
+là thước đo đang có, và nó KHÔNG ủng hộ việc thêm OCR/ASR.
+
+Giữ lại code nối OCR/ASR (`used_ocr`/`used_asr` ghi vào từng record) vì nó
+đúng và có thể có giá trị với prompt khác — nhưng KHÔNG bật mặc định.
+
 ### Quyết định
 
 - **Không promote** caption enrichment: đo được cải thiện caption (6/10) nhưng

@@ -1,0 +1,597 @@
+[
+ {
+  "used_ocr": true,
+  "used_asr": true,
+  "scene_id": "L21_V001_S0046",
+  "query_id": "TRAKE_E01",
+  "event_text": "một người đàn ông tiến sát cột nước",
+  "caption_old": "Một cột nước cao vút phun lên từ giếng, bao quanh là cây cỏ và hàng rào, trên cùng có biểu tượng HTV9 HD và thời gian 06:33:29. Một cột nước cao đang phun lên từ mặt đất, bối cảnh là một khu vực xanh với cây cỏ. Một dòng nước phun cao từ một nguồn nước, bao quanh là khung cảnh thiên nhiên với cây cối và một bức tường gỗ. Một cột nước cao vút phun lên từ giếng, bao quanh là cây cỏ và hàng rào, trên",
+  "prompt_version": "caption_event_factual_v1",
+  "image_count": 3,
+  "frames_used": 3,
+  "structured": {
+   "people": [],
+   "roles_or_uniforms": [],
+   "vehicles": [],
+   "animals": [],
+   "important_objects": [
+    "cột nước",
+    "giếng",
+    "cây cỏ",
+    "hàng rào"
+   ],
+   "actions": [
+    "cột nước phun lên"
+   ],
+   "interactions": [],
+   "scene_context": [
+    "biểu tượng HTV9 HD",
+    "thời gian 06:33:29",
+    "giếng nước",
+    "cây cỏ",
+    "hàng rào"
+   ],
+   "text_on_screen": [
+    "CHUYỆN LẠ: GIẾNG NƯỚC CAN KHÔ BỒNG PHUN CAO HÀNG CHỤC MÉT 60 giây",
+    "Dự báo điểm chuẩn phương thức xét kết quả thi tốt nghiệp Trung học",
+    "HTV9 HD",
+    "06:33:29",
+    "Ngày 3/8 sẽ công",
+    "Ngày 3/8 sẽ công bố hồ sơ trùng tu di tích Chùa Cầu, Hội An",
+    "Cần cương quyết"
+   ],
+   "uncertain_items": [
+    "chủ đề của đoạn video"
+   ],
+   "languages_detected": [
+    "Tiếng Việt"
+   ],
+   "global_scene": "Một cột nước cao vút phun lên từ giếng, bao quanh là cây cỏ và hàng rào, trên cùng có biểu tượng HTV9 HD và thời gian 06:33:29."
+  },
+  "caption_new": "Một cột nước cao vút phun lên từ giếng, bao quanh là cây cỏ và hàng rào, trên cùng có biểu tượng HTV9 HD và thời gian 06:33:29. | cột nước, giếng, cây cỏ, hàng rào | cột nước phun lên | biểu tượng HTV9 HD, thời gian 06:33:29, giếng nước, cây cỏ, hàng rào",
+  "accepted": true,
+  "rejected_reasons": [],
+  "usage": {
+   "input": 5904,
+   "output": 729
+  }
+ },
+ {
+  "used_ocr": true,
+  "used_asr": true,
+  "scene_id": "L21_V001_S0052",
+  "query_id": "TRAKE_E01",
+  "event_text": "nhiều người cùng chỉ về phía cột nước",
+  "caption_old": "Những người đang đứng nhìn một cột nước phun lên từ một nguồn nước, dưới bầu trời đầy mây. Một người đàn ông đứng trước một hàng rào bằng tre, đang phun nước từ một nguồn nước gần đó. Bối cảnh là một cánh đồng với cây cỏ và bầu trời đầy mây. Những người đang đứng nhìn một cột nước phun lên từ một nguồn nước, dưới bầu trời đầy mây. Một người đàn ông đứng trước một hàng rào bằng tre, đang phun nước ",
+  "prompt_version": "caption_event_factual_v1",
+  "image_count": 2,
+  "frames_used": 2,
+  "structured": {
+   "people": [
+    "Người đàn ông Đứng trước hàng rào bằng tre, đang phun nước từ một nguồn nước gần đó.",
+    "Những người đang đứng nhìn Đang nhìn một cột nước phun lên từ một nguồn nước, nhiều người cùng chỉ về phía cột nước.",
+    "Người đàn ông Đang phun nước từ một nguồn nước gần hàng rào bằng tre."
+   ],
+   "roles_or_uniforms": [],
+   "vehicles": [],
+   "animals": [],
+   "important_objects": [
+    "Cột nước Phun lên từ một nguồn nước",
+    "Hàng rào bằng tre Được người đàn ông đứng trước phun nước từ một nguồn nước gần đó.",
+    "Cột nước Phun lên từ một nguồn nước gần hàng rào bằng tre.",
+    "Hàng rào bằng tre Người đàn ông đang đứng trước hàng rào này."
+   ],
+   "actions": [
+    "Phun nước Người đàn ông đứng trước hàng rào bằng tre đang phun nước từ một nguồn nước gần đó.",
+    "Đứng nhìn Những người đang đứng nhìn một cột nước phun lên từ một nguồn nước."
+   ],
+   "interactions": [
+    "Cột nước"
+   ],
+   "scene_context": [
+    "Cánh đồng Bối cảnh là một cánh đồng với cây cỏ và bầu trời đầy mây.",
+    "Cánh đồng với cây cỏ và bầu trời đầy mây."
+   ],
+   "text_on_screen": [
+    "HTV9 HD 06:34:13 Lắk: Giảm 4 đơn vị hành chính cấp xã sau khi sáp nhập Hơn 2.800 người tham gia sàn giao",
+    "Đắk Lắk: Giảm 4 đơn vị hành chính cấp xã sau khi sáp nhậ",
+    "Cút dự án BOT vì không thể thu phí",
+    "Lắk: Giảm 4 đơn vị hành chính cấp xã sau khi sáp nhập Hơn 2.800 người tham gia sàn giao"
+   ],
+   "uncertain_items": [],
+   "languages_detected": [
+    "Tiếng Việt"
+   ],
+   "global_scene": "Những người đang đứng nhìn một cột nước phun lên từ một nguồn nước, dưới bầu trời đầy mây. Một người đàn ông đứng trước một hàng rào bằng tre, đang phun nước từ một nguồn nước gần đó. Bối cảnh là một cánh đồng với cây cỏ và bầu trời đầy mây. Một người đàn ông đang đứng trước hàng rào bằng tre, phun nước từ một nguồn nước gần đó. Cột nước phun lên cao, thu hút sự chú ý của nhiều người xung quanh."
+  },
+  "caption_new": "Những người đang đứng nhìn một cột nước phun lên từ một nguồn nước, dưới bầu trời đầy mây. Một người đàn ông đứng trước một hàng rào bằng tre, đang phun nước từ một nguồn nước gần đó. Bối cảnh là một cánh đồng với cây cỏ và bầu trời đầy mây. Một người đàn ông đang đứng trước hàng rào bằng tre, phun nước từ một nguồn nước gần đó. Cột nước phun lên cao, thu hút sự chú ý của nhiều người xung quanh. | Người đàn ông Đứng trước hàng rào bằng tre, đang phun nước từ một nguồn nước gần đó., Những người đang đứng nhìn Đang nhìn một cột nước phun lên từ một nguồn nước, nhiều người cùng chỉ về phía cột nước., Người đàn ông Đang phun nước từ một nguồn nước gần hàng rào bằng tre. | Cột nước Phun lên từ một nguồn nước, Hàng rào bằng tre Được người đàn ông đứng trước phun nước từ một nguồn nước gần đó., Cột nước Phun lên từ một nguồn nước gần hàng rào bằng tre., Hàng rào bằng tre Người đàn ông đang đứng trước hàng rào này. | Phun nước Người đàn ông đứng trước hàng rào bằng tre đang phun nước từ một nguồn nước gần đó., Đứng nhìn Những người đang đứng nhìn một cột nước phun lên từ một nguồn nước. | Cột nước | Cánh đồng Bối cảnh là một cánh đồng với cây cỏ và bầu trời đầy mây., Cánh đồng với cây cỏ và bầu trời đầy mây.",
+  "accepted": true,
+  "rejected_reasons": [],
+  "usage": {
+   "input": 3778,
+   "output": 910
+  }
+ },
+ {
+  "used_ocr": true,
+  "used_asr": true,
+  "scene_id": "L21_V001_S0061",
+  "query_id": "TRAKE_E02",
+  "event_text": "xe cứu thương di chuyển trên đường ướt",
+  "caption_old": "Một cảnh trong xe hơi, người lái xe đang vẫy tay chào một xe cứu thương đang tới gần trong một hành lang bệnh viện. Một cảnh trong xe hơi, người lái xe đang vẫy tay chào một xe cứu thương đang tới gần trong một hành lang bệnh viện.",
+  "prompt_version": "caption_event_factual_v1",
+  "image_count": 1,
+  "frames_used": 1,
+  "structured": {
+   "people": [
+    "người lái xe Đang vẫy tay chào",
+    "người trong xe cứu thương Đang đến gần"
+   ],
+   "roles_or_uniforms": [],
+   "vehicles": [
+    "xe cứu thương Đang tới gần",
+    "xe hơi Đang di chuyển"
+   ],
+   "animals": [],
+   "important_objects": [],
+   "actions": [
+    "vẫy tay chào Người lái xe đang vẫy tay chào"
+   ],
+   "interactions": [],
+   "scene_context": [
+    "Hành lang bệnh viện",
+    "Đường ướt"
+   ],
+   "text_on_screen": [
+    "CHƯƠNG TRÌNH 60 GIÂY 18:30 TRÊN HTV7 HTV9",
+    "Lai Châu: Bắt tạm giam một công chứng viên"
+   ],
+   "uncertain_items": [],
+   "languages_detected": [
+    "Tiếng Việt"
+   ],
+   "global_scene": "Một người lái xe đang vẫy tay chào một xe cứu thương đang tới gần trong một hành lang bệnh viện."
+  },
+  "caption_new": "Một người lái xe đang vẫy tay chào một xe cứu thương đang tới gần trong một hành lang bệnh viện. | người lái xe Đang vẫy tay chào, người trong xe cứu thương Đang đến gần | xe cứu thương Đang tới gần, xe hơi Đang di chuyển | vẫy tay chào Người lái xe đang vẫy tay chào | Hành lang bệnh viện, Đường ướt",
+  "accepted": true,
+  "rejected_reasons": [],
+  "usage": {
+   "input": 1842,
+   "output": 314
+  }
+ },
+ {
+  "used_ocr": false,
+  "used_asr": true,
+  "scene_id": "L21_V001_S0014",
+  "query_id": "TRAKE_M01",
+  "event_text": "toàn cảnh bờ sông sụt lún cạnh nhà dân",
+  "caption_old": "Hình ảnh chụp từ trên cao, cho thấy một ngôi nhà với mái tôn và biển hiệu màu vàng, bên cạnh là một con đường và một hồ nước nhỏ. Xung quanh có nhiều cây xanh và một số ngôi nhà khác. Hình ảnh chụp từ trên cao, cho thấy một ngôi nhà với mái tôn và biển hiệu màu vàng, bên cạnh là một con đường và một hồ nước nhỏ. Xung quanh có nhiều cây xanh và một số ngôi nhà khác.",
+  "prompt_version": "caption_event_factual_v1",
+  "image_count": 1,
+  "frames_used": 1,
+  "structured": {
+   "people": [],
+   "roles_or_uniforms": [],
+   "vehicles": [],
+   "animals": [],
+   "important_objects": [
+    "biển hiệu màu vàng"
+   ],
+   "actions": [],
+   "interactions": [],
+   "scene_context": [
+    "hình ảnh chụp từ trên cao",
+    "cây xanh",
+    "nhà dân"
+   ],
+   "text_on_screen": [
+    "HTV9 HD",
+    "06:31:20"
+   ],
+   "uncertain_items": [
+    "vùng cần chú ý"
+   ],
+   "languages_detected": [
+    "Tiếng Việt"
+   ],
+   "global_scene": "Hình ảnh chụp từ trên cao, cho thấy một ngôi nhà với mái tôn và biển hiệu màu vàng, bên cạnh là một con đường và một hồ nước nhỏ. Xung quanh có nhiều cây xanh và một số ngôi nhà khác."
+  },
+  "caption_new": "Hình ảnh chụp từ trên cao, cho thấy một ngôi nhà với mái tôn và biển hiệu màu vàng, bên cạnh là một con đường và một hồ nước nhỏ. Xung quanh có nhiều cây xanh và một số ngôi nhà khác. | biển hiệu màu vàng | hình ảnh chụp từ trên cao, cây xanh, nhà dân",
+  "accepted": true,
+  "rejected_reasons": [],
+  "usage": {
+   "input": 1832,
+   "output": 178
+  }
+ },
+ {
+  "used_ocr": true,
+  "used_asr": true,
+  "scene_id": "L21_V001_S0219",
+  "query_id": "TRAKE_M02",
+  "event_text": "sườn đồi bốc cháy dữ dội trong đêm",
+  "caption_old": "Một biển báo đường phố với hướng dẫn đến Dubrovnik, Metković, Centar và Marina, cùng với hình ảnh một đám cháy lớn ở xa vào ban đêm. Một biển báo đường phố với hướng dẫn đến Dubrovnik, Metković, Centar và Marina, cùng với hình ảnh một đám cháy lớn ở xa vào ban đêm.",
+  "prompt_version": "caption_event_factual_v1",
+  "image_count": 1,
+  "frames_used": 1,
+  "structured": {
+   "people": [],
+   "roles_or_uniforms": [],
+   "vehicles": [],
+   "animals": [],
+   "important_objects": [
+    "biển báo đường phố"
+   ],
+   "actions": [],
+   "interactions": [],
+   "scene_context": [
+    "đêm"
+   ],
+   "text_on_screen": [
+    "Dubrovnik",
+    "Metković",
+    "Centar",
+    "Marina"
+   ],
+   "uncertain_items": [
+    "nhiệt độ cao",
+    "gió lớn",
+    "khô hàng kéo dài",
+    "vụ cháy rừng"
+   ],
+   "languages_detected": [
+    "Tiếng Việt"
+   ],
+   "global_scene": "Biển báo đường phố chỉ dẫn đến các địa điểm như Dubrovnik, Metković, Centar và Marina, với khung cảnh đêm tối và một đám cháy lớn ở xa."
+  },
+  "caption_new": "Biển báo đường phố chỉ dẫn đến các địa điểm như Dubrovnik, Metković, Centar và Marina, với khung cảnh đêm tối và một đám cháy lớn ở xa. | biển báo đường phố | đêm",
+  "accepted": true,
+  "rejected_reasons": [],
+  "usage": {
+   "input": 1817,
+   "output": 172
+  }
+ },
+ {
+  "used_ocr": true,
+  "used_asr": true,
+  "scene_id": "L21_V001_S0224",
+  "query_id": "TRAKE_M02",
+  "event_text": "xe cứu hỏa bật đèn xanh",
+  "caption_old": "Một đám cháy rừng dữ dội với ánh sáng đỏ rực và khói bốc lên cao, tạo nên một khung cảnh nguy hiểm. Một đám cháy rừng dữ dội với ánh sáng đỏ rực và khói bốc lên cao, tạo nên một khung cảnh nguy hiểm.",
+  "prompt_version": "caption_event_factual_v1",
+  "image_count": 1,
+  "frames_used": 1,
+  "structured": {
+   "people": [],
+   "roles_or_uniforms": [],
+   "vehicles": [],
+   "animals": [],
+   "important_objects": [],
+   "actions": [],
+   "interactions": [],
+   "scene_context": [],
+   "text_on_screen": [
+    "HTV9HD 06:49:14",
+    "Cường chế, thu hồi hàng chục ngàn m² đất mặt tiền Bãi Sau"
+   ],
+   "uncertain_items": [
+    "xe cứu hỏa bật đèn xanh"
+   ],
+   "languages_detected": [
+    "Tiếng Việt"
+   ],
+   "global_scene": "Một đám cháy rừng dữ dội với ánh sáng đỏ rực và khói bốc lên cao, tạo nên một khung cảnh nguy hiểm."
+  },
+  "caption_new": "Một đám cháy rừng dữ dội với ánh sáng đỏ rực và khói bốc lên cao, tạo nên một khung cảnh nguy hiểm.",
+  "accepted": false,
+  "rejected_reasons": [
+   "không liệt kê được vật thể/hành động cụ thể nào"
+  ],
+  "usage": {
+   "input": 1872,
+   "output": 157
+  }
+ },
+ {
+  "used_ocr": false,
+  "used_asr": true,
+  "scene_id": "L21_V001_S0294",
+  "query_id": "TRAKE_M03",
+  "event_text": "người hướng dẫn đi cùng hai con chó",
+  "caption_old": "Hai con chó đang đứng trên tàu, một con màu trắng và một con màu nâu, với một người mặc quần short và áo trắng đứng phía sau. Hai người đang đứng trên tàu với hai con chó, một người mặc áo trắng và quần short, người kia mặc áo màu nâu và quần short, cả hai đều cầm dây đeo cho chó. Hai con chó đang đứng trên tàu, một con màu trắng và một con màu nâu, với một người mặc quần short và áo trắng đứng ph",
+  "prompt_version": "caption_event_factual_v1",
+  "image_count": 2,
+  "frames_used": 2,
+  "structured": {
+   "people": [
+    "người hướng dẫn mặc quần short và áo trắng",
+    "người khác mặc áo màu nâu và quần short",
+    "Người mặc áo trắng và quần short Đang đứng trên tàu, cầm dây đeo cho một con chó màu trắng.",
+    "Người mặc áo màu nâu và quần short Đang đứng trên tàu, cầm dây đeo cho một con chó màu nâu."
+   ],
+   "roles_or_uniforms": [
+    "người hướng dẫn mặc quần short và áo trắng",
+    "người khác mặc áo màu nâu và quần short"
+   ],
+   "vehicles": [
+    "tàu đang có hai con chó và hai người",
+    "tàu Đang có hai con chó và hai người trên tàu."
+   ],
+   "animals": [
+    "con chó màu trắng màu trắng, đang đứng trên tàu",
+    "con chó màu nâu màu nâu, đang đứng trên tàu",
+    "con chó màu trắng Đang đứng trên tàu, được một người mặc áo trắng và quần short cầm dây đeo.",
+    "con chó màu nâu Đang đứng trên tàu, được một người mặc áo màu nâu và quần short cầm dây đeo."
+   ],
+   "important_objects": [
+    "dây đeo đang được hai người cầm"
+   ],
+   "actions": [
+    "người hướng dẫn đứng trên tàu với hai con chó",
+    "người khác đứng trên tàu với hai con chó",
+    "cầm dây đeo Hai người đang cầm dây đeo cho hai con chó."
+   ],
+   "interactions": [
+    "người hướng dẫn đứng trên tàu với hai con chó",
+    "người khác đứng trên tàu với hai con chó"
+   ],
+   "scene_context": [],
+   "text_on_screen": [
+    "HTV9 HD",
+    "06:52:51",
+    "Bắt cựu Phó Chủ tịch UBND tỉnh Phú Thọ Hồ Đại Dũng",
+    "TP.HCM",
+    "06:52:53",
+    "TP.HCM: Cưỡng chế kê biên"
+   ],
+   "uncertain_items": [],
+   "languages_detected": [
+    "Tiếng Việt"
+   ],
+   "global_scene": "Hai con chó đang đứng trên tàu với một người hướng dẫn đi cùng Hai con chó đang đứng trên tàu với hai người, một người mặc áo trắng và quần short, người kia mặc áo màu nâu và quần short, cả hai đều cầm dây đeo cho chó."
+  },
+  "caption_new": "Hai con chó đang đứng trên tàu với một người hướng dẫn đi cùng Hai con chó đang đứng trên tàu với hai người, một người mặc áo trắng và quần short, người kia mặc áo màu nâu và quần short, cả hai đều cầm dây đeo cho chó. | người hướng dẫn mặc quần short và áo trắng, người khác mặc áo màu nâu và quần short, Người mặc áo trắng và quần short Đang đứng trên tàu, cầm dây đeo cho một con chó màu trắng., Người mặc áo màu nâu và quần short Đang đứng trên tàu, cầm dây đeo cho một con chó màu nâu. | người hướng dẫn mặc quần short và áo trắng, người khác mặc áo màu nâu và quần short | tàu đang có hai con chó và hai người, tàu Đang có hai con chó và hai người trên tàu. | con chó màu trắng màu trắng, đang đứng trên tàu, con chó màu nâu màu nâu, đang đứng trên tàu, con chó màu trắng Đang đứng trên tàu, được một người mặc áo trắng và quần short cầm dây đeo., con chó màu nâu Đang đứng trên tàu, được một người mặc áo màu nâu và quần short cầm dây đeo. | dây đeo đang được hai người cầm | người hướng dẫn đứng trên tàu với hai con chó, người khác đứng trên tàu với hai con chó, cầm dây đeo Hai người đang cầm dây đeo cho hai con chó. | người hướng dẫn đứng trên tàu với hai con chó, người khác đứng trên tàu với hai con chó",
+  "accepted": true,
+  "rejected_reasons": [],
+  "usage": {
+   "input": 3622,
+   "output": 897
+  }
+ },
+ {
+  "used_ocr": true,
+  "used_asr": true,
+  "scene_id": "L21_V001_S0246",
+  "query_id": "TRAKE_H01",
+  "event_text": "người đội mũ bảo hiểm di chuyển bằng xe đạp",
+  "caption_old": "Một người đang chuẩn bị trượt tuyết trên một dốc, với giày trượt tuyết và tay cầm trên nền cỏ nhân tạo. Một người đang chuẩn bị trượt tuyết trên một dốc, với giày trượt tuyết và tay cầm trên nền cỏ nhân tạo.",
+  "prompt_version": "caption_event_factual_v1",
+  "image_count": 1,
+  "frames_used": 1,
+  "structured": {
+   "people": [
+    "người chuẩn bị trượt tuyết"
+   ],
+   "roles_or_uniforms": [],
+   "vehicles": [],
+   "animals": [],
+   "important_objects": [
+    "giày trượt tuyết",
+    "tay cầm",
+    "nền cỏ nhân tạo"
+   ],
+   "actions": [
+    "chân đứng trên giày trượt tuyết",
+    "tay cầm trên tay"
+   ],
+   "interactions": [],
+   "scene_context": [
+    "dốc",
+    "cỏ nhân tạo"
+   ],
+   "text_on_screen": [
+    "can earn you a trip down Copenhagen’s famous ski slope.",
+    "Cứu nam thanh niên đi xe máy rơi đèo Prenn ở Đà Lạt trong đêm"
+   ],
+   "uncertain_items": [
+    "du khách tham gia các hoạt động trồng cây, tưới nước hay nhổ cỏ dại"
+   ],
+   "languages_detected": [
+    "tiếng Việt"
+   ],
+   "global_scene": "Một người đang chuẩn bị trượt tuyết trên một dốc, với giày trượt tuyết và tay cầm trên nền cỏ nhân tạo."
+  },
+  "caption_new": "Một người đang chuẩn bị trượt tuyết trên một dốc, với giày trượt tuyết và tay cầm trên nền cỏ nhân tạo. | người chuẩn bị trượt tuyết | giày trượt tuyết, tay cầm, nền cỏ nhân tạo | chân đứng trên giày trượt tuyết, tay cầm trên tay | dốc, cỏ nhân tạo",
+  "accepted": true,
+  "rejected_reasons": [],
+  "usage": {
+   "input": 1800,
+   "output": 228
+  }
+ },
+ {
+  "used_ocr": false,
+  "used_asr": true,
+  "scene_id": "L21_V001_S0263",
+  "query_id": "TRAKE_H01",
+  "event_text": "khách tham quan không gian bên trong bảo tàng",
+  "caption_old": "Nhìn từ trên cao vào một không gian trưng bày nghệ thuật với nhiều tác phẩm điêu khắc và một bức tranh lớn treo trên tường. Người ta đang đi lại và ngắm nhìn các tác phẩm. Nhìn từ trên cao vào một không gian trưng bày nghệ thuật với nhiều tác phẩm điêu khắc và một bức tranh lớn treo trên tường. Người ta đang đi lại và ngắm nhìn các tác phẩm.",
+  "prompt_version": "caption_event_factual_v1",
+  "image_count": 1,
+  "frames_used": 1,
+  "structured": {
+   "people": [
+    "Người đi bộ Những người đang đi qua không gian trưng bày",
+    "Người ngắm nhìn Những người đang đứng và ngắm nhìn các tác phẩm điêu khắc"
+   ],
+   "roles_or_uniforms": [],
+   "vehicles": [],
+   "animals": [],
+   "important_objects": [
+    "Tác phẩm điêu khắc Những tác phẩm điêu khắc trưng bày trong không gian",
+    "Bức tranh lớn Bức tranh lớn treo trên tường",
+    "Biển quảng cáo Biển quảng cáo treo trên tường"
+   ],
+   "actions": [
+    "Đi bộ Những người đang đi qua không gian trưng bày",
+    "Ngắm nhìn Những người đang đứng và ngắm nhìn các tác phẩm điêu khắc"
+   ],
+   "interactions": [],
+   "scene_context": [],
+   "text_on_screen": [
+    "HTV9 HD",
+    "06:50:57",
+    "Ngày 3/8 sẽ công bố hồ sơ trùng tu di tích Chùa Cầu, Hội An",
+    "Cần cương quyết xử"
+   ],
+   "uncertain_items": [],
+   "languages_detected": [
+    "Tiếng Việt"
+   ],
+   "global_scene": "Một không gian trưng bày nghệ thuật rộng lớn với nhiều tác phẩm điêu khắc và một bức tranh lớn treo trên tường. Người ta đang đi lại và ngắm nhìn các tác phẩm."
+  },
+  "caption_new": "Một không gian trưng bày nghệ thuật rộng lớn với nhiều tác phẩm điêu khắc và một bức tranh lớn treo trên tường. Người ta đang đi lại và ngắm nhìn các tác phẩm. | Người đi bộ Những người đang đi qua không gian trưng bày, Người ngắm nhìn Những người đang đứng và ngắm nhìn các tác phẩm điêu khắc | Tác phẩm điêu khắc Những tác phẩm điêu khắc trưng bày trong không gian, Bức tranh lớn Bức tranh lớn treo trên tường, Biển quảng cáo Biển quảng cáo treo trên tường | Đi bộ Những người đang đi qua không gian trưng bày, Ngắm nhìn Những người đang đứng và ngắm nhìn các tác phẩm điêu khắc",
+  "accepted": true,
+  "rejected_reasons": [],
+  "usage": {
+   "input": 1832,
+   "output": 365
+  }
+ },
+ {
+  "used_ocr": true,
+  "used_asr": true,
+  "scene_id": "L21_V001_S0265",
+  "query_id": "TRAKE_H02",
+  "event_text": "cá mú lớn bơi giữa đàn cá",
+  "caption_old": "Một người phụ nữ mặc áo kẻ đứng trước một màn hình hiển thị logo và thời gian, với nền cảnh quan thành phố và bầu trời màu sắc phía sau. Một người phụ nữ đang nói chuyện trong một studio truyền hình, phía sau là hình ảnh một con cá bơi dưới nước. Một người phụ nữ đang nói chuyện trong một studio truyền hình, phía sau là một màn hình hiển thị cảnh biển với nhiều loài cá và san hô. Một đàn cá bơi lư",
+  "prompt_version": "caption_event_factual_v1",
+  "image_count": 4,
+  "frames_used": 4,
+  "structured": {
+   "people": [
+    "Người phụ nữ mặc áo kẻ Đang nói chuyện trong một studio truyền hình.",
+    "Người phụ nữ Đang nói chuyện trong một studio truyền hình, mặc áo kẻ, cầm một cuốn sổ hoặc bảng viết.",
+    "Người phụ nữ Đang nói chuyện trong một studio truyền hình, mặc áo kẻ, cầm một cuốn sổ hoặc tài liệu."
+   ],
+   "roles_or_uniforms": [
+    "Người phụ nữ mặc áo kẻ Đang nói chuyện trong một studio truyền hình.",
+    "Người phụ nữ Đang mặc một bộ trang phục truyền thống, có thể là một loại đồng phục báo chí hoặc truyền hình.",
+    "Người phụ nữ Đang mặc một bộ trang phục phù hợp với vai trò của một người dẫn chương trình hoặc phóng viên truyền hình."
+   ],
+   "vehicles": [],
+   "animals": [
+    "Con cá Bơi giữa đàn cá trong một môi trường nước trong xanh.",
+    "Con cá Bơi giữa đàn cá trong một môi trường nước biển với rạn san hô.",
+    "cá mú",
+    "đàn cá"
+   ],
+   "important_objects": [
+    "Màn hình Hiển thị logo và thời gian.",
+    "Màn hình Hiển thị hình ảnh con cá bơi dưới nước.",
+    "Cuốn sổ hoặc bảng viết Đang được người phụ nữ cầm trong tay.",
+    "Cuốn sổ hoặc tài liệu Đang được người phụ nữ cầm trong tay.",
+    "san hô",
+    "sinh vật biển"
+   ],
+   "actions": [
+    "Người phụ nữ mặc áo kẻ Đang nói chuyện trong một studio truyền hình.",
+    "Người phụ nữ Đang nói chuyện trong một studio truyền hình.",
+    "Con cá Bơi giữa đàn cá trong một môi trường nước trong xanh.",
+    "cá mú bơi",
+    "đàn cá bơi"
+   ],
+   "interactions": [],
+   "scene_context": [
+    "Studio truyền hình Có màn hình hiển thị logo và thời gian, nền cảnh quan thành phố và bầu trời màu sắc.",
+    "Studio truyền hình Một không gian truyền hình với người phụ nữ đang nói chuyện và màn hình hiển thị hình ảnh con cá.",
+    "Studio truyền hình Một không gian truyền hình với màn hình lớn hiển thị hình ảnh con cá bơi dưới nước.",
+    "biển",
+    "nền san hô"
+   ],
+   "text_on_screen": [
+    "HTV9HD 06:51:00 Thời gian hiện trên màn hình.",
+    "giây HTV9HD 06:51:00 HTV9 HD 06:51:14 Thời gian hiện trên màn hình.",
+    "Cần cương quyết xử lý vi phạm về đất đai, xây dựng Tiêu đề tin tức hiển thị trên thanh dưới cùng của màn hình.",
+    "hồ sơ trùng tu di tích Chùa Cầu, Hội An Tiêu đề tin tức hiển thị trên thanh dưới cùng của màn hình.",
+    "HTV9HD 06:51:07 Thời gian hiện tại trên màn hình.",
+    "giây HTV9HD 06:51:00 HTV9 HD 06:51:14 Thời gian hiện tại trên màn hình.",
+    "Luật Đất đai có hiệu lực từ 1/8: Tạo động lực ph Tiêu đề hoặc thông tin liên quan đến nội dung đang được phát sóng.",
+    "vi phạm về đất đai, xây dựng tại Măng Đen Tiêu đề hoặc thông tin liên quan đến nội dung đang được phát sóng.",
+    "HTV9HD 06:51:14 Thời gian và kênh truyền hình.",
+    "Phú Yên: Kiê Tên địa điểm hoặc tiêu đề của chương trình.",
+    "Tạo động lực phát triển kinh tế - xã hội trong giai đoạn mới Tiêu đề hoặc thông tin liên quan đến nội dung chương trình.",
+    "HTV9 HD 06:51:19",
+    "trong giai đoạn mới",
+    "Phú Yên: Kiến nghị chấm dứt dự án BOT vì không thể thu phí"
+   ],
+   "uncertain_items": [],
+   "languages_detected": [
+    "Tiếng Việt"
+   ],
+   "global_scene": "Một người phụ nữ mặc áo kẻ đứng trước một màn hình hiển thị logo và thời gian, với nền cảnh quan thành phố và bầu trời màu sắc phía sau. Một người phụ nữ đang nói chuyện trong một studio truyền hình, phía sau là hình ảnh một con cá bơi dưới nước. Một cảnh biển với một con cá mú lớn bơi giữa đàn cá nhỏ, nền là các loài san hô và sinh vật biển khác."
+  },
+  "caption_new": "Một người phụ nữ mặc áo kẻ đứng trước một màn hình hiển thị logo và thời gian, với nền cảnh quan thành phố và bầu trời màu sắc phía sau. Một người phụ nữ đang nói chuyện trong một studio truyền hình, phía sau là hình ảnh một con cá bơi dưới nước. Một cảnh biển với một con cá mú lớn bơi giữa đàn cá nhỏ, nền là các loài san hô và sinh vật biển khác. | Người phụ nữ mặc áo kẻ Đang nói chuyện trong một studio truyền hình., Người phụ nữ Đang nói chuyện trong một studio truyền hình, mặc áo kẻ, cầm một cuốn sổ hoặc bảng viết., Người phụ nữ Đang nói chuyện trong một studio truyền hình, mặc áo kẻ, cầm một cuốn sổ hoặc tài liệu. | Người phụ nữ mặc áo kẻ Đang nói chuyện trong một studio truyền hình., Người phụ nữ Đang mặc một bộ trang phục truyền thống, có thể là một loại đồng phục báo chí hoặc truyền hình., Người phụ nữ Đang mặc một bộ trang phục phù hợp với vai trò của một người dẫn chương trình hoặc phóng viên truyền hình. | Con cá Bơi giữa đàn cá trong một môi trường nước trong xanh., Con cá Bơi giữa đàn cá trong một môi trường nước biển với rạn san hô., cá mú, đàn cá | Màn hình Hiển thị logo và thời gian., Màn hình Hiển thị hình ảnh con cá bơi dưới nước., Cuốn sổ hoặc bảng viết Đang được người phụ nữ cầm trong tay., Cuốn sổ hoặc tài liệu Đang được người phụ nữ cầm trong tay., san hô, sinh vật biển | Người phụ nữ mặc áo kẻ Đang nói chuyện trong một studio truyền hình., Người phụ nữ Đang nói chuyện trong một studio truyền hình., Con cá Bơi giữa đàn cá trong một môi trường nước trong x",
+  "accepted": true,
+  "rejected_reasons": [],
+  "usage": {
+   "input": 7612,
+   "output": 1749
+  }
+ },
+ {
+  "used_ocr": false,
+  "used_asr": true,
+  "scene_id": "L21_V001_S0168",
+  "query_id": "TRAKE_H03",
+  "event_text": "cận cảnh biển số của các xe tại hiện trường",
+  "caption_old": "Hai chiếc xe máy bị hư hỏng nặng, một người mặc áo xanh đang đứng bên cạnh. Hình ảnh chụp một góc phố với hai chiếc xe máy màu xanh dương và đen, một người mặc áo xanh dương đứng giữa chúng. Phía trên bên phải có logo HTV9HD và thời gian 06:43:23. Hai chiếc xe máy bị hư hỏng nặng, một người mặc áo xanh đang đứng bên cạnh. Hình ảnh chụp một góc phố với hai chiếc xe máy màu xanh dương và đen, một ng",
+  "prompt_version": "caption_event_factual_v1",
+  "image_count": 2,
+  "frames_used": 2,
+  "structured": {
+   "people": [
+    "người mặc áo xanh dương đang đứng bên cạnh hai chiếc xe máy hư hỏng",
+    "Người mặc áo xanh dương Đang đứng giữa hai chiếc xe máy bị hư hỏng"
+   ],
+   "roles_or_uniforms": [
+    "Người mặc áo xanh dương Đang mặc áo xanh dương"
+   ],
+   "vehicles": [
+    "xe máy Sirius màu xanh dương, bị hư hỏng nặng",
+    "xe máy khác màu đen, bị hư hỏng nặng",
+    "Xe máy màu xanh dương Bị hư hỏng nặng, nằm ngang trên mặt đất",
+    "Xe máy màu đen Bị hư hỏng nặng, nằm ngang trên mặt đất"
+   ],
+   "animals": [],
+   "important_objects": [],
+   "actions": [],
+   "interactions": [],
+   "scene_context": [
+    "Hình ảnh chụp một góc phố",
+    "Logo HTV9HD và thời gian 06:43:23",
+    "Hình ảnh chụp một góc phố với hai chiếc xe máy màu xanh dương và đen"
+   ],
+   "text_on_screen": [
+    "Sơn La: Phá hai vụ án ma túy có số lượng lớn",
+    "n hai người đàn ông tử vong dưới kênh thủy lợi",
+    "Sơn La: Phá hai vụ án ma túy có số lượng lớn, thu giữ 1 khẩu súng",
+    "kênh thủy lợi"
+   ],
+   "uncertain_items": [],
+   "languages_detected": [
+    "Tiếng Việt"
+   ],
+   "global_scene": "Hai chiếc xe máy bị hư hỏng nặng được trưng bày trên một góc phố, một người mặc áo xanh dương đứng bên cạnh."
+  },
+  "caption_new": "Hai chiếc xe máy bị hư hỏng nặng được trưng bày trên một góc phố, một người mặc áo xanh dương đứng bên cạnh. | người mặc áo xanh dương đang đứng bên cạnh hai chiếc xe máy hư hỏng, Người mặc áo xanh dương Đang đứng giữa hai chiếc xe máy bị hư hỏng | Người mặc áo xanh dương Đang mặc áo xanh dương | xe máy Sirius màu xanh dương, bị hư hỏng nặng, xe máy khác màu đen, bị hư hỏng nặng, Xe máy màu xanh dương Bị hư hỏng nặng, nằm ngang trên mặt đất, Xe máy màu đen Bị hư hỏng nặng, nằm ngang trên mặt đất | Hình ảnh chụp một góc phố, Logo HTV9HD và thời gian 06:43:23, Hình ảnh chụp một góc phố với hai chiếc xe máy màu xanh dương và đen",
+  "accepted": true,
+  "rejected_reasons": [],
+  "usage": {
+   "input": 3644,
+   "output": 600
+  }
+ }
+]

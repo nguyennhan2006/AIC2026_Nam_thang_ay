@@ -72,21 +72,35 @@ BẮT BUỘC:
 CJK = re.compile(r"[一-鿿぀-ヿ가-힯]")
 
 
-def build_messages(images: list[Path], old_caption: str, focus: str) -> list[dict]:
+def build_messages(
+    images: list[Path], old_caption: str, focus: str,
+    ocr: str = "", asr: str = "",
+) -> list[dict]:
     """FPT VLM chỉ nhận ĐÚNG MỘT ảnh mỗi prompt (HTTP 400: "At most 1 image(s)
     may be provided in one prompt"), nên caller phải gọi từng ảnh rồi hợp nhất
     — xem `merge_payloads`. Giữ chữ ký nhận list để chỗ gọi không phải đổi khi
     provider nới ràng buộc."""
 
-    content: list[dict] = [{
-        "type": "text",
-        "text": (
-            f"Caption hiện tại (có thể thiếu sót): {old_caption[:300]}\n"
-            f"Vùng cần chú ý: {focus}\n"
-            "Nếu KHÔNG nhìn thấy nội dung đó thì đừng nhắc tới nó — chỉ mô tả "
-            "những gì thực sự có trong hình."
-        ),
-    }]
+    lines = [f"Caption hiện tại (có thể thiếu sót): {old_caption[:300]}"]
+    if ocr.strip():
+        lines.append(f"CHỮ TRÊN MÀN HÌNH (OCR): {ocr[:400]}")
+    if asr.strip():
+        lines.append(f"LỜI DẪN TRONG ĐOẠN (ASR): {asr[:600]}")
+    lines.append(f"Vùng cần chú ý: {focus}")
+    if ocr.strip() or asr.strip():
+        lines.append(
+            "OCR và lời dẫn cho biết đoạn này nói về chủ đề gì. Hãy dùng chúng "
+            "để GỌI ĐÚNG TÊN và MÔ TẢ CHI TIẾT HƠN thứ bạn nhìn thấy — ví dụ "
+            "biết đây là phóng sự về rùa biển thì gọi 'rùa biển' thay vì 'con "
+            "vật', biết đang nói về chữa cháy thì gọi đúng 'xe cứu hoả', "
+            "'lính cứu hoả'. Vẫn phải nhìn thấy mới được liệt kê; thứ chỉ nghe "
+            "được mà không thấy thì đưa vào uncertain_items."
+        )
+    lines.append(
+        "Nếu KHÔNG nhìn thấy nội dung ở 'vùng cần chú ý' thì đừng nhắc tới nó — "
+        "chỉ mô tả những gì thực sự có trong hình."
+    )
+    content: list[dict] = [{"type": "text", "text": "\n".join(lines)}]
     for path in images:
         content.append({"type": "image_url", "image_url": {"url": image_to_data_url(path)}})
     return [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": content}]
@@ -230,6 +244,8 @@ def main() -> None:
         images = [args.data_root / path for path in target["keyframe_paths"]][: args.max_images]
         images = [path for path in images if path.exists()]
         record = {
+            "used_ocr": bool(target.get("ocr_old", "").strip()),
+            "used_asr": bool(target.get("asr_old", "").strip()),
             "scene_id": target["scene_id"], "query_id": target["query_id"],
             "event_text": target["event_text"], "caption_old": target["caption_old"],
             "prompt_version": PROMPT_VERSION, "image_count": len(images),
@@ -247,7 +263,10 @@ def main() -> None:
         for image in images:
             try:
                 response = client.chat_completion(
-                    build_messages([image], target["caption_old"], target["event_text"]),
+                    build_messages(
+                        [image], target["caption_old"], target["event_text"],
+                        ocr=target.get("ocr_old", ""), asr=target.get("asr_old", ""),
+                    ),
                     model=settings.fpt_vlm_model, temperature=0.0, max_tokens=900,
                 )
             except ProviderError as exc:

@@ -57,7 +57,11 @@ async def main_async(args):
                 "keyframes": [f.frame_idx for f in owner.keyframes],
                 "keyframe_paths": [f.image_path for f in owner.keyframes],
                 "caption_old": " ".join(owner.captions)[:400],
-                "ocr_old": " ".join(owner.ocr_texts)[:200],
+                "ocr_old": " ".join(owner.ocr_texts)[:400],
+                # Lời dẫn của scene. ROUTE-01 đã đo được OCR/ASR trong corpus
+                # này là bản tin MÔ TẢ CHÍNH CẢNH ĐÓ (OCR 1.6x, ASR 1.3x trên
+                # nền ngẫu nhiên), nên đây là ngữ cảnh thật chứ không phải nhiễu.
+                "asr_old": " ".join(owner.asr_texts)[:600],
             })
     print(json.dumps(stats, ensure_ascii=False))
     print(f"\n=== {len(targets)} scene can sinh lai caption ===")
