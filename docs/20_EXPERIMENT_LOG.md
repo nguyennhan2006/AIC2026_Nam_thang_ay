@@ -339,6 +339,36 @@ Lưu ý cách đọc: text mỗi bước đến từ việc tách `(1)...(2)...`
 KHÔNG phải từ gold — gold event chỉ có cửa sổ frame, không có trường mô tả
 (`event_description_*` rỗng ở cả 35 event).
 
+### Baseline chính thức — đo TRONG Stage B thật
+
+Con số `13/35` ở trên là **proxy sai**, đo bằng cách gọi
+`search(task=TEXTUAL_KIS)` cho từng event. Hai đường khác nhau về vật chất:
+
+```
+Stage B thật   : _retrieve(event_plan, candidate_limit) -> _hydrate
+                 KHÔNG dedup, KHÔNG KisProcessor.rank, KHÔNG cắt top_k
+proxy           : _retrieve -> dedup -> rerank -> _hydrate
+                          -> _format_results(top_k) -> KisProcessor.rank
+```
+
+Dedup và KisProcessor đẩy vùng gold xuống nên proxy bi quan hơn thật. Baseline
+đúng, đo bằng `scripts/diagnose_trake_stage_b.py` (deterministic — hai lần
+chạy ra số y hệt):
+
+```
+pool mỗi bước               : 100 candidate
+gold_region_recall@20       : 15/35
+gold_region_recall@50       : 18/35
+gold_region_recall@100      : 21/35
+khi tìm được                : rank trung vị 12, top-1 = 1, top-5 = 8, top-20 = 15
+
+query có ĐỦ mọi event retrieve được : 1/8      <- RÀNG BUỘC QUYẾT ĐỊNH
+```
+
+**`1/8` mới là con số chặn `complete_chain_rate`.** 7/8 query có ít nhất một
+bước mà vùng gold không bao giờ vào pool — chuỗi đầy đủ là bất khả thi bất kể
+beam tốt tới đâu. Đây là điều kiện CẦN, phải sửa trước khi nói tới alignment.
+
 ### Việc phải làm
 
 Vấn đề là **chất lượng khớp ngữ nghĩa của một câu mô tả ngắn** ("cột nước
@@ -346,9 +376,20 @@ Vấn đề là **chất lượng khớp ngữ nghĩa của một câu mô tả 
 từ đầu đợt: hệ thống có 4 nhánh BM25 lexical + 1 nhánh CLIP ảnh, **không có
 nhánh dense text nào trên caption**. Câu ngắn + BM25 token = giòn.
 
-⇒ Thí nghiệm tiếp theo cho TRAKE chính là **DENSE-TEXT-01**, không phải tinh
-chỉnh beam. Đo lại `13/35` này sau khi có caption dense branch là phép thử
-trực tiếp nhất.
+Dấu hiệu ủng hộ: **khi** retrieval tìm được vùng gold thì nó xếp khá tốt
+(top-5 cho 8/21). Vấn đề thuần tuý là **độ phủ**, không phải thứ tự — đúng
+chữ ký của lệch từ vựng mà dense text xử lý.
+
+⇒ Thí nghiệm tiếp theo cho TRAKE là **DENSE-TEXT-01**, không phải tinh chỉnh
+beam. Hai metric để chấm:
+
+```
+gold_region_recall@100          21/35  ->  mục tiêu > 25/35
+query có đủ mọi event retrieve   1/8   ->  mục tiêu >= 4/8
+```
+
+⚠️ Ngưỡng "13/35 -> 20/35" đặt trước đó tính trên baseline sai; baseline thật
+đã là 21/35. Ngưỡng phải đặt lại như trên.
 
 ### T4 — chưa xét
 Chỉ có nghĩa sau khi tỉ lệ 13/35 ở trên được cải thiện.
