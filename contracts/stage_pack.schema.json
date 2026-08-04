@@ -1,0 +1,240 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aic2026.local/contracts/stage_pack.schema.json",
+  "title": "AIC 2026 stage pack",
+  "description": "Contract cho output của một notebook trích xuất độc lập. Mỗi stage ghi một pack tự chứa; offline/assemble.py hợp nhất các pack thành canonical dataset. Khóa join: stage mức video dùng video_id, stage mức scene dùng (video_id, scene_index), stage mức keyframe dùng (video_id, frame_idx). Stage mức keyframe KHÔNG tự đặt keyframe_id — id canonical nhúng scene_idx mà notebook không biết trước.",
+  "type": "object",
+  "required": ["success", "model_info", "manifests"],
+  "properties": {
+    "success": {
+      "$comment": "Nội dung _SUCCESS.json. Thiếu file này hoặc status != success thì assemble từ chối pack.",
+      "type": "object",
+      "required": ["status", "stage"],
+      "properties": {
+        "status": { "const": "success" },
+        "stage": { "type": "string", "minLength": 1 },
+        "video_count": { "type": "integer", "minimum": 0 },
+        "runtime_sec": { "type": "number", "minimum": 0 },
+        "created_at_utc": { "type": "string" }
+      }
+    },
+    "model_info": {
+      "$comment": "Nội dung model_info.json. Dùng để dựng ModelProvenance cho mọi record của stage — không có nó thì dataset không truy vết được model nào sinh ra dữ liệu.",
+      "type": "object",
+      "required": ["component", "model"],
+      "properties": {
+        "component": { "type": "string", "minLength": 1 },
+        "model": { "type": "string", "minLength": 1 },
+        "pack_version": { "type": "string" },
+        "device": { "type": "string" },
+        "weights_sha256": { "type": "string" }
+      }
+    },
+    "manifests": {
+      "type": "object",
+      "description": "Nội dung manifests/*.jsonl, một dòng một record.",
+      "properties": {
+        "video_manifest.jsonl": { "$ref": "#/$defs/videoRow" },
+        "scene_manifest.jsonl": { "$ref": "#/$defs/sceneRow" },
+        "keyframe_manifest.jsonl": { "$ref": "#/$defs/keyframeRow" },
+        "asr_segments.jsonl": { "$ref": "#/$defs/asrRow" },
+        "embedding_manifest.jsonl": { "$ref": "#/$defs/embeddingRow" },
+        "color_manifest.jsonl": { "$ref": "#/$defs/colorRow" },
+        "ocr_manifest.jsonl": { "$ref": "#/$defs/ocrRow" },
+        "object_manifest.jsonl": { "$ref": "#/$defs/objectRow" },
+        "caption_manifest.jsonl": { "$ref": "#/$defs/captionRow" }
+      }
+    }
+  },
+  "$defs": {
+    "videoId": { "type": "string", "pattern": "^L[0-9]{2}_V[0-9]{3}$" },
+    "videoRow": {
+      "type": "object",
+      "required": ["video_id", "source_path", "fps", "frame_count", "width", "height"],
+      "properties": {
+        "video_id": { "$ref": "#/$defs/videoId" },
+        "source_path": { "type": "string", "minLength": 1 },
+        "source_checksum": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "fps": { "type": "number", "exclusiveMinimum": 0 },
+        "frame_count": { "type": "integer", "exclusiveMinimum": 0 },
+        "duration_sec": { "type": "number", "minimum": 0 },
+        "width": { "type": "integer", "exclusiveMinimum": 0 },
+        "height": { "type": "integer", "exclusiveMinimum": 0 },
+        "codec": { "type": "string" },
+        "audio_present": { "type": "boolean" }
+      }
+    },
+    "sceneRow": {
+      "type": "object",
+      "required": ["video_id", "scene_index", "start_frame", "end_frame"],
+      "properties": {
+        "video_id": { "$ref": "#/$defs/videoId" },
+        "scene_id": {
+          "type": "string",
+          "description": "Chỉ để tra ngược về notebook. Assemble đánh số lại theo canonical {video}_S{idx:04d}, nên định dạng ở đây (vd _S00000) không cần khớp canonical."
+        },
+        "scene_index": { "type": "integer", "minimum": 0 },
+        "start_frame": { "type": "integer", "minimum": 0 },
+        "end_frame": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "INCLUSIVE. Canonical dùng end_frame_exclusive; assemble cộng 1."
+        },
+        "detector": { "type": "string" },
+        "confidence": { "type": "number" }
+      }
+    },
+    "keyframeRow": {
+      "type": "object",
+      "required": ["video_id", "frame_idx", "image_path", "width", "height"],
+      "properties": {
+        "video_id": { "$ref": "#/$defs/videoId" },
+        "frame_idx": { "type": "integer", "minimum": 0 },
+        "timestamp_sec": { "type": "number", "minimum": 0 },
+        "image_path": { "type": "string", "minLength": 1 },
+        "width": { "type": "integer", "exclusiveMinimum": 0 },
+        "height": { "type": "integer", "exclusiveMinimum": 0 },
+        "roles": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "selection_score": { "type": "number", "minimum": 0, "maximum": 1 },
+        "source_checksum": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "quality": {
+          "type": "object",
+          "properties": {
+            "sharpness": { "type": "number", "minimum": 0 },
+            "brightness": { "type": "number", "minimum": 0, "maximum": 1 },
+            "contrast": { "type": "number", "minimum": 0, "maximum": 1 },
+            "black_frame_ratio": { "type": "number", "minimum": 0, "maximum": 1 },
+            "duplicate_score": { "type": "number", "minimum": 0, "maximum": 1 }
+          }
+        }
+      }
+    },
+    "asrRow": {
+      "type": "object",
+      "required": ["video_id", "start_sec", "end_sec", "text"],
+      "properties": {
+        "video_id": { "$ref": "#/$defs/videoId" },
+        "asr_segment_id": { "type": "string" },
+        "start_sec": { "type": "number", "minimum": 0 },
+        "end_sec": { "type": "number", "minimum": 0 },
+        "text": { "type": "string" },
+        "language": { "type": "string" },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
+    "embeddingRow": {
+      "type": "object",
+      "required": ["video_id", "frame_idx"],
+      "anyOf": [
+        { "required": ["vector"] },
+        { "required": ["vector_path"] },
+        { "required": ["embedding_refs"] }
+      ],
+      "properties": {
+        "video_id": { "$ref": "#/$defs/videoId" },
+        "frame_idx": { "type": "integer", "minimum": 0 },
+        "vector": { "type": "array", "items": { "type": "number" }, "minItems": 1 },
+        "vector_path": { "type": "string", "description": "Tương đối so với gốc pack; .json hoặc .npy." },
+        "embedding_refs": { "type": "array", "items": { "type": "object" } }
+      }
+    },
+    "colorRow": {
+      "type": "object",
+      "required": ["video_id", "frame_idx"],
+      "properties": {
+        "video_id": { "$ref": "#/$defs/videoId" },
+        "frame_idx": { "type": "integer", "minimum": 0 },
+        "dominant_hex": { "type": "array", "items": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" } },
+        "dominant_colors": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "ratio"],
+            "properties": {
+              "name": { "type": "string" },
+              "ratio": { "type": "number", "minimum": 0, "maximum": 1 }
+            }
+          }
+        },
+        "mean_hsv": { "type": "array", "items": { "type": "number" }, "minItems": 3, "maxItems": 3 },
+        "hsv_histogram": { "type": "array", "items": { "type": "number", "minimum": 0 } },
+        "regions": { "type": "object" }
+      }
+    },
+    "ocrRow": {
+      "type": "object",
+      "required": ["video_id", "frame_idx", "instances"],
+      "properties": {
+        "video_id": { "$ref": "#/$defs/videoId" },
+        "frame_idx": { "type": "integer", "minimum": 0 },
+        "instances": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["text", "bbox"],
+            "properties": {
+              "text": { "type": "string", "minLength": 1 },
+              "normalized_text": { "type": "string" },
+              "language": { "type": "string" },
+              "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+              "bbox": { "$ref": "#/$defs/bbox" }
+            }
+          }
+        }
+      }
+    },
+    "objectRow": {
+      "type": "object",
+      "required": ["video_id", "frame_idx", "objects"],
+      "properties": {
+        "video_id": { "$ref": "#/$defs/videoId" },
+        "frame_idx": { "type": "integer", "minimum": 0 },
+        "objects": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["label", "bbox"],
+            "properties": {
+              "label": { "type": "string", "minLength": 1 },
+              "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+              "bbox": { "$ref": "#/$defs/bbox" },
+              "attributes": { "type": "object" }
+            }
+          }
+        }
+      }
+    },
+    "captionRow": {
+      "type": "object",
+      "required": ["video_id", "frame_idx", "captions"],
+      "properties": {
+        "video_id": { "$ref": "#/$defs/videoId" },
+        "frame_idx": { "type": "integer", "minimum": 0 },
+        "captions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["text"],
+            "properties": {
+              "text": { "type": "string", "minLength": 1 },
+              "language": { "type": "string" },
+              "caption_type": { "enum": ["short", "detailed", "tags", "crop"] },
+              "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+            }
+          }
+        }
+      }
+    },
+    "bbox": {
+      "type": "object",
+      "required": ["x1", "y1", "x2", "y2"],
+      "description": "Toạ độ chuẩn hoá [0,1] theo canonical datasection.schemas.common.BoundingBox.",
+      "properties": {
+        "x1": { "type": "number", "minimum": 0, "maximum": 1 },
+        "y1": { "type": "number", "minimum": 0, "maximum": 1 },
+        "x2": { "type": "number", "minimum": 0, "maximum": 1 },
+        "y2": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    }
+  }
+}

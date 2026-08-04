@@ -1,0 +1,32 @@
+{
+  "package": "AIC2026_Competition_Completion_Guide",
+  "document_count": 17,
+  "template_count": 7,
+  "files": [
+    "README.md",
+    "docs/01_SYSTEM_SCOPE_AND_SUCCESS.md",
+    "docs/02_TARGET_ARCHITECTURE.md",
+    "docs/03_COMPLETE_FUNCTION_CATALOG.md",
+    "docs/04_ONLINE_WORKFLOW_AND_UI.md",
+    "docs/05_QUERY_RETRIEVAL_RERANKING.md",
+    "docs/06_API_AND_DATA_CONTRACTS.md",
+    "docs/07_SUBMISSION_AND_COMPETITION_OPERATIONS.md",
+    "docs/08_RELIABILITY_SECURITY_OBSERVABILITY.md",
+    "docs/09_EVALUATION_GROUNDTRUTH_ABLATION.md",
+    "docs/10_IMPLEMENTATION_ROADMAP.md",
+    "docs/11_UI_ACCEPTANCE_AND_E2E.md",
+    "docs/12_TEAM_RUNBOOK.md",
+    "docs/13_PRODUCTION_READINESS_INFO.md",
+    "docs/14_TECHNICAL_PREPARATION.md",
+    "docs/15_RESEARCH_AGENDA.md",
+    "docs/16_MASTER_CHECKLIST.md",
+    "docs/REFERENCES_AND_DESIGN_LESSONS.md",
+    "templates/competition_drill_report.md",
+    "templates/competition_release_manifest.yaml",
+    "templates/env.production.example",
+    "templates/experiment_record.yaml",
+    "templates/groundtruth_examples.jsonl",
+    "templates/search_profiles.yaml",
+    "templates/submission_contract.yaml"
+  ]
+}

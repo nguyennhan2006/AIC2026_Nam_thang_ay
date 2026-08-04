@@ -1,0 +1,70 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.eggs/
+
+# ---- Virtual environments ----
+.venv/
+venv/
+env/
+
+# ---- Tooling caches ----
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# ---- IDE / OS ----
+.idea/
+.vscode/
+Thumbs.db
+.DS_Store
+
+# ---- Dataset artifacts (never commit raw media or indexes) ----
+# Raw/processed data lives under AIC_DATA_ROOT, outside version control.
+data/
+datasets/
+*.mp4
+*.mkv
+*.avi
+*.npy
+*.npz
+*.faiss
+
+# Contract artifacts in contracts/ MUST stay tracked (do not ignore *.json).
+
+# ---- Local secrets/config ----
+.env
+.env.local
+.env.*.local
+
+# ---- PR-12: FPT experiment outputs — có thể chứa response/log không nên
+# commit; xem AIC2026_FPT_API_SINGLE_VIDEO_TEST_TUNING_GUIDE.md §5. Config/
+# split/prompt registry (không phải outputs/) vẫn được track bình thường.
+experiments/*/outputs/
+
+# ---- outputs/checkpoints/: snapshot git diff/status thô trước mỗi lần chạy
+# thí nghiệm — trùng lặp với chính git history, và diff có thể vô tình chứa
+# lại nội dung fixture "trông giống secret" của test suite (đã gặp thật khi
+# outputs/checkpoints/pr13/uncommitted_changes.patch nhúng lại chuỗi test của
+# tests/test_check_secret_leak.py). Không commit thư mục này; outputs/evaluation/
+# thì GIỮ track — đó là bằng chứng kết quả PR, không phải log tạm.
+outputs/checkpoints/
+
+# ---- PR-12/13: nghệ tạo phẩm dữ liệu thật L21_V001 (stage pack/embedding/
+# index/weights model) — nặng, sinh lại được từ input/ + script, không commit.
+# Không ignore `storage/exports/`, `storage/processed/keyframes/{L01,L16}_V001/`,
+# `storage/indexes/`, `storage/raw/videos/README.md` — đó là fixture ví dụ đã
+# track sẵn cho test.
+storage/packs/
+storage/exports_l21/
+storage/indexes_l21/
+storage/models/
+storage/cache/
+storage/processed/keyframes/L21_V001/
+storage/processed/embeddings/
+storage/processed/clip_embeddings/
+storage/raw/videos/L21_V001.mp4

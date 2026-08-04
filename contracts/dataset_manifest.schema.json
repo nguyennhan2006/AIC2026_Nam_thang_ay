@@ -1,0 +1,220 @@
+{
+  "$defs": {
+    "IndexArtifact": {
+      "additionalProperties": false,
+      "properties": {
+        "backend": {
+          "enum": [
+            "faiss",
+            "qdrant",
+            "bm25",
+            "file"
+          ],
+          "title": "Backend",
+          "type": "string"
+        },
+        "checksum": {
+          "anyOf": [
+            {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Checksum"
+        },
+        "dimension": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dimension"
+        },
+        "entity": {
+          "enum": [
+            "scene",
+            "keyframe"
+          ],
+          "title": "Entity",
+          "type": "string"
+        },
+        "location": {
+          "title": "Location",
+          "type": "string"
+        },
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "vector_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Vector Name"
+        }
+      },
+      "required": [
+        "backend",
+        "name",
+        "entity",
+        "location"
+      ],
+      "title": "IndexArtifact",
+      "type": "object"
+    },
+    "ModelArtifact": {
+      "additionalProperties": false,
+      "properties": {
+        "config_checksum": {
+          "anyOf": [
+            {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Config Checksum"
+        },
+        "model_name": {
+          "minLength": 1,
+          "title": "Model Name",
+          "type": "string"
+        },
+        "revision": {
+          "minLength": 1,
+          "title": "Revision",
+          "type": "string"
+        },
+        "task": {
+          "enum": [
+            "scene",
+            "keyframe",
+            "caption",
+            "ocr",
+            "object",
+            "asr",
+            "embedding",
+            "reranker",
+            "color"
+          ],
+          "title": "Task",
+          "type": "string"
+        }
+      },
+      "required": [
+        "task",
+        "model_name",
+        "revision"
+      ],
+      "title": "ModelArtifact",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "build_id": {
+      "minLength": 1,
+      "title": "Build Id",
+      "type": "string"
+    },
+    "clip_count": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Clip Count",
+      "type": "integer"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "dataset_id": {
+      "minLength": 1,
+      "title": "Dataset Id",
+      "type": "string"
+    },
+    "event_count": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Event Count",
+      "type": "integer"
+    },
+    "export_checksums": {
+      "additionalProperties": {
+        "pattern": "^sha256:[0-9a-f]{64}$",
+        "type": "string"
+      },
+      "title": "Export Checksums",
+      "type": "object"
+    },
+    "indexes": {
+      "items": {
+        "$ref": "#/$defs/IndexArtifact"
+      },
+      "title": "Indexes",
+      "type": "array"
+    },
+    "keyframe_count": {
+      "minimum": 0,
+      "title": "Keyframe Count",
+      "type": "integer"
+    },
+    "models": {
+      "items": {
+        "$ref": "#/$defs/ModelArtifact"
+      },
+      "title": "Models",
+      "type": "array"
+    },
+    "pipeline_version": {
+      "minLength": 1,
+      "title": "Pipeline Version",
+      "type": "string"
+    },
+    "scene_count": {
+      "minimum": 0,
+      "title": "Scene Count",
+      "type": "integer"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "video_count": {
+      "minimum": 0,
+      "title": "Video Count",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "dataset_id",
+    "build_id",
+    "pipeline_version",
+    "video_count",
+    "scene_count",
+    "keyframe_count"
+  ],
+  "title": "DatasetManifest",
+  "type": "object"
+}

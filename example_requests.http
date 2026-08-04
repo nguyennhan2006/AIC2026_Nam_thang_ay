@@ -1,0 +1,40 @@
+### Health
+GET http://localhost:8000/v1/health
+
+### KIS with OCR evidence
+POST http://localhost:8000/v1/search/kis
+Content-Type: application/json
+
+{
+  "query": "Một nhóm người đứng trước căn nhà có dòng chữ \"Gừng cay muối mặn xin đừng quên nhau\"",
+  "top_k": 10,
+  "debug": true
+}
+
+### Ordered visual sequence
+POST http://localhost:8000/v1/search/sequence
+Content-Type: application/json
+
+{
+  "query": "Người cào muối, sau đó đoàn người vẫy tay, cuối cùng đứng trước căn nhà",
+  "top_k": 5
+}
+
+### AVS
+POST http://localhost:8000/v1/search/avs
+Content-Type: application/json
+
+{
+  "query": "Hoạt động của người dân trên cánh đồng muối",
+  "top_k": 20
+}
+
+### Retrieval-augmented VQA
+POST http://localhost:8000/v1/vqa
+Content-Type: application/json
+
+{
+  "question": "Dòng chữ trên căn nhà là gì?",
+  "top_k_evidence": 5
+}
+

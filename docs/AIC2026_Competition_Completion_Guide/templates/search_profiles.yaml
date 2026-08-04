@@ -1,0 +1,38 @@
+profiles:
+  competition_fast:
+    branch_top_k:
+      dense_frame: 300
+      dense_scene: 200
+      caption_sparse: 300
+      ocr: 100
+      asr: 100
+    rerank:
+      text_top_n: 50
+      vlm_top_n: 0
+    total_deadline_ms: 2000
+
+  competition_balanced:
+    branch_top_k:
+      dense_frame: 500
+      dense_scene: 300
+      caption_sparse: 500
+      ocr: 200
+      asr: 200
+    rerank:
+      text_top_n: 100
+      vlm_top_n: 10
+    total_deadline_ms: 5000
+
+  competition_quality:
+    branch_top_k:
+      dense_frame: 1000
+      dense_scene: 500
+      caption_sparse: 1000
+      ocr: 300
+      asr: 300
+    rerank:
+      text_top_n: 300
+      vlm_top_n: 20
+    total_deadline_ms: 12000
+
+# Các giá trị trên là placeholder; phải benchmark trước khi freeze.

@@ -1,0 +1,131 @@
+/* Reset + nền tảng. Load ngay sau tokens.css, trước mọi file component. */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+}
+
+/* App khoá trong viewport: KHÔNG có scrollbar ở body, mọi cuộn xảy ra bên
+   trong từng panel (.scroll-y). Đây là điều kiện để layout 3 cột giữ được
+   header/footer cố định và không sinh khoảng trống cuối trang. */
+html,
+body,
+#root {
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
+}
+
+body {
+  background: var(--surface-app);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: var(--text-body);
+  line-height: var(--leading-normal);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+#root {
+  width: 100%;
+  text-align: left;
+}
+
+/* ---- Typography scale ---- */
+h1 { font-size: var(--text-display); font-weight: var(--weight-semibold); line-height: var(--leading-tight); }
+h2 { font-size: 17px; font-weight: var(--weight-semibold); line-height: var(--leading-tight); }
+h3 { font-size: var(--text-title); font-weight: var(--weight-semibold); line-height: var(--leading-tight); }
+h4 { font-size: var(--text-label); font-weight: var(--weight-semibold); line-height: var(--leading-tight); }
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+code, pre, .mono { font-family: var(--font-mono); font-size: var(--text-caption); }
+
+ul, ol { list-style: none; }
+
+button, input, select, textarea {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+}
+
+button { background: none; border: none; cursor: pointer; }
+button:disabled { cursor: not-allowed; }
+
+/* Focus: chỉ hiện khi điều hướng bàn phím — click chuột không nháy viền. */
+:focus { outline: none; }
+:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: var(--radius-control);
+}
+
+/* ---- Scrollbar 5px, chỉ hiện khi hover vùng cuộn ---- */
+.scroll-y {
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  transition: scrollbar-color var(--transition-base);
+}
+.scroll-y:hover { scrollbar-color: var(--border-strong) transparent; }
+
+.scroll-y::-webkit-scrollbar { width: var(--scrollbar-w); height: var(--scrollbar-w); }
+.scroll-y::-webkit-scrollbar-track { background: transparent; }
+.scroll-y::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: var(--radius-pill);
+  transition: background var(--transition-base);
+}
+.scroll-y:hover::-webkit-scrollbar-thumb { background: var(--border-strong); }
+.scroll-y::-webkit-scrollbar-thumb:hover { background: rgba(148, 176, 214, 0.35); }
+
+.scroll-x {
+  overflow-x: auto;
+  overflow-y: hidden;
+  min-width: 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+.scroll-x::-webkit-scrollbar { height: var(--scrollbar-w); }
+.scroll-x::-webkit-scrollbar-track { background: transparent; }
+.scroll-x::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: var(--radius-pill); }
+
+/* ---- Text utilities ---- */
+.text-secondary { color: var(--text-secondary); }
+.text-tertiary { color: var(--text-tertiary); }
+.eyebrow {
+  font-size: var(--text-micro);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+.truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.tabular { font-variant-numeric: tabular-nums; }
+
+.visually-hidden {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -1,0 +1,4 @@
+{"query_id": "q1_ocr_quoted", "query": "Người cào muối, sau đó đoàn người vẫy tay, cuối cùng nhóm người đứng trước căn nhà có chữ \"Gừng cay muối mặn xin đừng quên nhau\"", "video_id": "L01_V001", "start_sec": 20.0, "end_sec": 30.0, "scene_ids": ["L01_V001_S0002"]}
+{"query_id": "q2_visual_action", "query": "người cào muối trên cánh đồng", "video_id": "L01_V001", "start_sec": 0.0, "end_sec": 10.0, "scene_ids": ["L01_V001_S0000"]}
+{"query_id": "q3_ocr_other_sign", "query": "đoàn người vẫy tay phía sau bảng chữ \"Hẹn ngày gặp lại\"", "video_id": "L01_V001", "start_sec": 10.0, "end_sec": 20.0, "scene_ids": ["L01_V001_S0001"]}
+{"query_id": "q4_ocr_no_diacritics", "query": "can nha co dong chu \"gung cay muoi man xin dung quen nhau\"", "video_id": "L01_V001", "start_sec": 20.0, "end_sec": 30.0, "scene_ids": ["L01_V001_S0002"]}

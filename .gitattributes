@@ -1,0 +1,11 @@
+# Normalize line endings so checkouts on Windows/macOS/Linux stay identical.
+* text=auto
+*.py text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.toml text eol=lf
+
+# Never touch binary media.
+*.jpg binary
+*.png binary
+*.mp4 binary

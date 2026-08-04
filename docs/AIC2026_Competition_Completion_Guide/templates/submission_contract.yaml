@@ -1,0 +1,28 @@
+status: pending_official_rule
+base_url: null
+auth:
+  type: pending
+  header: null
+
+kis:
+  endpoint: null
+  max_results: null
+  fields: []
+  allow_resubmit: null
+
+vqa:
+  endpoint: null
+  answer_max_length: null
+  evidence_required: null
+
+avs:
+  endpoint: null
+  max_results: null
+  fields: []
+
+network:
+  connect_timeout_ms: 2000
+  read_timeout_ms: 5000
+  retryable_statuses: [500, 502, 503, 504]
+  max_retries: 2
+  idempotency_header: null

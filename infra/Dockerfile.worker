@@ -1,0 +1,8 @@
+FROM pytorch/pytorch:2.5.1-cuda12.4-cudnn9-runtime
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PYTHONPATH=/app
+WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*
+COPY . /app
+RUN pip install --no-cache-dir ".[api,gpu]"
+EXPOSE 8010
+CMD ["uvicorn", "offline.worker:app", "--host", "0.0.0.0", "--port", "8010"]

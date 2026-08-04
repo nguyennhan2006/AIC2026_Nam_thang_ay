@@ -1,0 +1,187 @@
+# Skeleton for the THI ĐẤU / THỰC TẾ profile (docs/11_SERVER_IMPLEMENTATION.md).
+# Target host: 2 GPU (GPU 0 = A100 80GB for vllm-32b, GPU 1 = A100 40GB+ for the rest),
+# >=64GB RAM, NVMe >=100GB for models + index.
+# NOT yet exercised on a real server — pin image tags, model revisions and the
+# Vietnamese ES analyzer plugin on the rented machine before trusting it.
+name: aic-prod
+services:
+  qdrant:
+    image: qdrant/qdrant:v1.15.1
+    restart: unless-stopped
+    volumes:
+      - qdrant_data:/qdrant/storage
+    expose: ["6333"]
+    healthcheck:
+      test: ["CMD", "bash", "-c", "</dev/tcp/127.0.0.1/6333"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.0
+    restart: unless-stopped
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: -Xms2g -Xmx2g
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    expose: ["9200"]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:9200/_cluster/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    expose: ["6379"]
+
+  vllm-32b:
+    image: vllm/vllm-openai:latest
+    restart: unless-stopped
+    command: >
+      --model ${AIC_VLLM_32B_MODEL:-Qwen/Qwen3-VL-32B-Instruct}
+      --max-model-len 16384
+      --gpu-memory-utilization 0.92
+      --api-key ${AIC_VLLM_API_KEY:-change-me}
+    environment:
+      CUDA_VISIBLE_DEVICES: "0"
+    volumes:
+      - model_cache:/root/.cache
+    expose: ["8000"]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+              device_ids: ["0"]
+    healthcheck:
+      test: ["CMD", "bash", "-c", "</dev/tcp/127.0.0.1/8000"]
+      interval: 15s
+      timeout: 5s
+      retries: 60
+
+  vllm-14b:
+    image: vllm/vllm-openai:latest
+    restart: unless-stopped
+    # Pin the exact AWQ revision when provisioning.
+    command: >
+      --model ${AIC_VLLM_14B_MODEL:-Qwen/Qwen3-14B-Instruct-AWQ}
+      --max-model-len 8192
+      --gpu-memory-utilization 0.30
+      --api-key ${AIC_VLLM_API_KEY:-change-me}
+    environment:
+      CUDA_VISIBLE_DEVICES: "1"
+    volumes:
+      - model_cache:/root/.cache
+    expose: ["8000"]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+              device_ids: ["1"]
+    healthcheck:
+      test: ["CMD", "bash", "-c", "</dev/tcp/127.0.0.1/8000"]
+      interval: 15s
+      timeout: 5s
+      retries: 60
+
+  worker:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.worker
+    restart: unless-stopped
+    env_file: ../.env
+    environment:
+      CUDA_VISIBLE_DEVICES: "1"
+      AIC_VLLM_URL: http://vllm-32b:8000/v1
+      AIC_VLLM_API_KEY: ${AIC_VLLM_API_KEY:-change-me}
+    volumes:
+      - ../storage:/app/storage
+      - model_cache:/root/.cache
+    expose: ["8010"]
+    depends_on:
+      vllm-32b:
+        condition: service_healthy
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+              device_ids: ["1"]
+
+  rq-worker:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.worker
+    restart: unless-stopped
+    command: ["python", "-m", "offline.queue_worker"]
+    env_file: ../.env
+    environment:
+      CUDA_VISIBLE_DEVICES: "1"
+      AIC_REDIS_URL: redis://redis:6379/0
+      AIC_GPU_URL: http://worker:8010
+      AIC_VLLM_URL: http://vllm-32b:8000/v1
+    volumes:
+      - ../storage:/app/storage
+      - model_cache:/root/.cache
+    depends_on:
+      - redis
+      - worker
+
+  backend:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.backend
+    restart: unless-stopped
+    env_file: ../.env
+    environment:
+      AIC_QDRANT_URL: http://qdrant:6333
+      AIC_ELASTICSEARCH_URL: http://elasticsearch:9200
+      AIC_REDIS_URL: redis://redis:6379/0
+      AIC_EMBEDDING_URL: http://worker:8010/v1/embed/text
+      AIC_RERANK_URL: http://worker:8010/v1/rerank
+      AIC_VLLM_URL: http://vllm-32b:8000/v1
+      AIC_PARSER_URL: http://vllm-14b:8000/v1
+    volumes:
+      - ../storage:/app/storage:ro
+    ports:
+      - "${AIC_PUBLIC_PORT:-8000}:8000"
+    depends_on:
+      qdrant:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+
+  # Ops stack — start with: docker compose --profile ops up -d
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    profiles: ["ops"]
+    restart: unless-stopped
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prom_data:/prometheus
+    expose: ["9090"]
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    profiles: ["ops"]
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${AIC_GRAFANA_PASSWORD:-change-me}
+    volumes:
+      - grafana_data:/var/lib/grafana
+    expose: ["3000"]
+
+volumes:
+  qdrant_data:
+  es_data:
+  redis_data:
+  model_cache:
+  prom_data:
+  grafana_data:

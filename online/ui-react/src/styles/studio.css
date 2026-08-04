@@ -1,0 +1,238 @@
+/* Studio (trang Search): cột nội dung + rail phải cố định 372px.
+
+   Cấu trúc bám ảnh tham chiếu:
+     ┌──────────────── studio-main ────────────────┬─ studio-aside ─┐
+     │ controls: task | top-k | mode               │ dataset stats  │
+     │ query composer + actions                    │                │
+     │ ┌ weights 292 ─┬─ results 1fr ────────────┐ │ preview panel  │
+     │ │              │                          │ │  (fill)        │
+     └─┴──────────────┴──────────────────────────┴─┴────────────────┘
+   Mọi cột đều min-height:0 + overflow:hidden để cuộn xảy ra bên trong panel. */
+
+/* MỘT luồng dọc duy nhất — không có cột `aside` riêng chạy song song, vì cột
+   đó là thứ vỡ ở breakpoint (stats rơi xuống đáy, chừa lại cột trống). */
+.studio {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Hàng truy vấn: ô nhập + dataset stats cùng hàng, stats rộng đúng bằng cột
+   Preview bên dưới để hai khối thẳng mép phải. */
+.query-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--workbench-right-w);
+  gap: var(--space-4);
+  flex: 0 0 auto;
+  align-items: stretch;
+}
+
+/* ---- Hàng điều khiển: task / top-k / mode ---- */
+.studio-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  flex: 0 0 auto;
+  min-width: 0;
+}
+.control-group { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
+.control-group-label {
+  font-size: var(--text-micro);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+.topk-input { width: 68px; }
+.studio-controls-spacer { margin-left: auto; }
+
+/* ---- Query composer ---- */
+.query-card {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 148px;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  background: var(--surface-panel);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-panel);
+}
+.query-main { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; }
+.query-head { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
+.query-textarea {
+  width: 100%;
+  min-height: 46px;
+  max-height: 92px;
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: var(--text-primary);
+  font-size: var(--text-body);
+  line-height: var(--leading-normal);
+  resize: none;
+}
+.query-textarea:focus { border: none; background: transparent; }
+.query-footer {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 20px;
+  min-width: 0;
+}
+.query-hint {
+  font-size: var(--text-caption);
+  color: var(--text-disabled);
+  white-space: nowrap;
+}
+.query-counter { margin-left: auto; font-size: var(--text-caption); color: var(--text-disabled); flex: 0 0 auto; }
+.query-actions { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; }
+.query-chips { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; min-width: 0; }
+
+/* Advanced drawer: chỉ hiện khi chọn Advanced — không chiếm chỗ ở Simple. */
+.advanced-drawer {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-4);
+  padding: var(--space-4);
+  background: var(--surface-panel);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-panel);
+}
+
+/* ---- Thân: weights | results | preview ---- */
+.studio-body {
+  flex: 1 1 auto;
+  display: grid;
+  grid-template-columns: var(--workbench-left-w) minmax(0, 1fr) var(--workbench-right-w);
+  gap: var(--space-4);
+  min-height: 0;
+  overflow: hidden;
+}
+.studio-body > * { min-width: 0; min-height: 0; }
+
+/* ---- Dataset stat cards ---- */
+/* 2×2 trong rail phải: 4 ô ngang trong 372px chỉ còn ~52px cho chữ, đủ để
+   cắt "KEYFRAMES" thành "KEYFRA…". 2 cột cho mỗi ô ~186px — nhãn thở được
+   và số to hơn, đúng hướng "mềm, mật độ cao" hơn là nhồi 4 ô chật. */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: 1fr;
+  gap: var(--space-3);
+  min-width: 0;
+}
+.stat-card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-3);
+  background: var(--surface-panel);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-nested);
+  min-width: 0;
+}
+.stat-card-head { display: flex; align-items: center; gap: var(--space-2); color: var(--text-tertiary); min-width: 0; }
+/* 9px + tracking hẹp: "KEYFRAMES" (9 ký tự) phải vừa trong ô ~84px ở rail
+   372px mà không bị cắt thành "KEYFRA…". */
+.stat-card-label {
+  font-size: 9px;
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.stat-card-value {
+  font-size: 19px;
+  font-weight: var(--weight-bold);
+  line-height: 1.1;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+.stat-scenes .stat-card-head { color: var(--accent); }
+.stat-keyframes .stat-card-head { color: var(--accent-cyan); }
+.stat-videos .stat-card-head { color: var(--accent-purple); }
+.stat-asr .stat-card-head { color: var(--accent-pink); }
+
+/* ---- Trang phụ (Dataset/Submission/System/Analytics) ---- */
+.page-simple {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-height: 0;
+  overflow: hidden;
+}
+.page-simple-head { flex: 0 0 auto; display: flex; flex-direction: column; gap: var(--space-1); }
+.page-simple-title { font-size: 17px; font-weight: var(--weight-semibold); }
+.page-simple-sub { font-size: var(--text-caption); color: var(--text-tertiary); }
+.page-simple-body { flex: 1 1 auto; min-height: 0; overflow: hidden; display: flex; }
+.page-simple-body > * { flex: 1 1 auto; min-height: 0; }
+
+/* ---- Thanh trạng thái sau khi search ---- */
+.status-strip {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex: 0 0 auto;
+  padding: var(--space-2) var(--space-4);
+  background: var(--surface-panel);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-nested);
+  font-size: var(--text-caption);
+  color: var(--text-secondary);
+  min-width: 0;
+}
+.status-strip.is-error { background: var(--danger-soft); border-color: rgba(242, 89, 107, 0.3); color: var(--danger); }
+
+/* ================= Responsive ================= */
+/* Nguyên tắc: bỏ bớt CỘT, không bao giờ để lại cột rỗng hay đẩy khối xuống
+   đáy. Thứ tự hy sinh: Preview (còn xem được bằng cách bấm lại) → Weights
+   (còn chỉnh được ở màn rộng) → stats. */
+
+/* 1440–1706: rail phải hẹp lại, cột trọng số giữ nguyên vì đọc được là ưu
+   tiên cao hơn (đây chính là panel người dùng phàn nàn là quá hẹp). */
+@media (max-width: 1706px) {
+  :root { --workbench-right-w: 336px; }
+}
+
+/* 1280–1439: stats xuống dưới ô truy vấn thành 4 ô ngang; 3 cột vẫn giữ. */
+@media (max-width: 1439px) {
+  :root { --workbench-right-w: 300px; --workbench-left-w: 272px; }
+  .query-row { grid-template-columns: minmax(0, 1fr); }
+  .query-row .stat-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .stat-card { flex-direction: row; align-items: center; gap: var(--space-3); }
+  .stat-card-value { font-size: 17px; margin-left: auto; }
+}
+
+/* <1280: bỏ cột Preview khỏi thân — nội dung của nó vẫn còn ở tab Evidence
+   và ở card kết quả, nên không mất thông tin nào. */
+@media (max-width: 1279px) {
+  :root { --workbench-left-w: 264px; }
+  .studio-body { grid-template-columns: var(--workbench-left-w) minmax(0, 1fr); }
+  .studio-body > .preview-panel { display: none; }
+  .query-card { grid-template-columns: minmax(0, 1fr) 132px; }
+}
+
+/* <1024: chỉ còn cột kết quả. */
+@media (max-width: 1023px) {
+  .studio-body { grid-template-columns: minmax(0, 1fr); }
+  .studio-body > .weight-panel { display: none; }
+  .query-row .stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 767px) {
+  .studio { gap: var(--space-3); }
+  .studio-controls { flex-wrap: wrap; gap: var(--space-3) var(--space-4); }
+  .studio-controls-spacer { margin-left: 0; }
+  .query-card { grid-template-columns: minmax(0, 1fr); }
+  .query-actions { flex-direction: row; }
+  .query-actions .btn { flex: 1 1 auto; }
+  .advanced-drawer { grid-template-columns: minmax(0, 1fr); }
+}
