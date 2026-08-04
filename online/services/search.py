@@ -32,6 +32,7 @@ from online.services.negative_constraints import apply_negative_constraints, ext
 from online.services.qa import QaProcessor
 from online.services.query_planner import RuleBasedQueryPlanner, compute_modality_weights
 from online.services.registry import RetrieverRegistry
+from online.services.normalizers import ScoreNormalizers
 from online.services.rerank_pipeline import RerankPipeline
 from online.services.score_normalization import normalize_all
 from online.services.retrieval_orchestrator import RetrievalOrchestrator, _branch_identity
@@ -375,6 +376,10 @@ class SearchService:
         candidates, statuses = await self._retrieve(plan, self.candidate_limit)
         candidates = await self._attach_events(candidates)
         fusion_options = plan.search_options.fusion
+        # Chuẩn hoá điểm phải chốt TRƯỚC dedup: nếu tính sau, mẫu số đổi theo
+        # `max_results_per_video` và nới cap sẽ làm xáo trộn cả thứ hạng đã có
+        # (EVAL-01 prefix invariance).
+        normalizers = ScoreNormalizers.from_pool(candidates)
         candidates = deduplicate_for_task(
             candidates,
             task,
@@ -399,7 +404,7 @@ class SearchService:
             + [warning for hit in results for warning in hit.warnings]
         )
         task_results, task_warnings = await self._run_task_processor(
-            task, plan, request, results, candidates, rerank.packs
+            task, plan, request, results, candidates, rerank.packs, normalizers
         )
         warnings = warnings + task_warnings
         return SearchResponse(
@@ -493,6 +498,7 @@ class SearchService:
             minimum_matching_branches=fusion_options.minimum_matching_branches,
         )
         candidates = await self._attach_events(candidates)
+        normalizers = ScoreNormalizers.from_pool(candidates)
         candidates = deduplicate_for_task(
             candidates, task,
             scope_override=(
@@ -525,7 +531,7 @@ class SearchService:
             + [warning for hit in results for warning in hit.warnings]
         )
         task_results, task_warnings = await self._run_task_processor(
-            task, plan, request, results, candidates, rerank.packs
+            task, plan, request, results, candidates, rerank.packs, normalizers
         )
         warnings = warnings + task_warnings
         response = SearchResponse(
@@ -553,6 +559,7 @@ class SearchService:
         results: list[SearchHit],
         candidates: list[Candidate],
         packs: dict,
+        normalizers: ScoreNormalizers,
     ) -> tuple[dict, list[str]]:
         """Chạy processor chuyên biệt của task trên kết quả đã rerank.
 
@@ -569,7 +576,7 @@ class SearchService:
             return {
                 "kis": self.kis_processor.rank(
                     plan.original_query, results, documents,
-                    packs=packs, limit=request.top_k,
+                    packs=packs, limit=request.top_k, normalizers=normalizers,
                 )
             }, []
 
@@ -592,14 +599,14 @@ class SearchService:
         if task == TaskType.QA:
             qa_results, qa_warnings = await self.qa_processor.answer_async(
                 plan.original_query, evidence_packs,
-                frame_scores=scores, limit=request.top_k,
+                frame_scores=scores, limit=request.top_k, normalizers=normalizers,
             )
             return {"qa": qa_results}, qa_warnings
         if task == TaskType.AVS:
             return {
                 "avs": self.avs_processor.rank(
                     plan.original_query, evidence_packs,
-                    retrieval_scores=scores, limit=request.top_k,
+                    retrieval_scores=scores, limit=request.top_k, normalizers=normalizers,
                 )
             }, []
         return {}, []

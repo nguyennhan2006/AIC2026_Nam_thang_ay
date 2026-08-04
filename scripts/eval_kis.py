@@ -92,6 +92,10 @@ from online.services.search import SearchService
 
 
 K_VALUES = (1, 5, 20, 50, 100)
+
+# Dedup nhận số nguyên, không nhận None để nói 'không giới hạn' (None = dùng
+# mặc định của task). Dùng một số đủ lớn để không policy nào chạm tới.
+_UNLIMITED = 1_000_000
 MODES = ("metadata_only", "vector_only", "ocr_only", "fusion")
 
 
@@ -303,7 +307,7 @@ async def evaluate_mode(
             SearchRequest(
                 query=gt.query, task=TaskType.TEXTUAL_KIS, top_k=args.top_k,
                 search_options=(
-                    SearchOptions(fusion=FusionOptions(max_results_per_video=args.max_per_video))
+                    SearchOptions(fusion=FusionOptions(max_results_per_video=_UNLIMITED if args.max_per_video == 0 else args.max_per_video))
                     if args.max_per_video is not None
                     else None
                 ),
@@ -388,7 +392,10 @@ async def main() -> None:
     parser.add_argument("--use-query-prep", action="store_true",
                         help="bật tách target/ocr/context (Phương án F)")
     parser.add_argument("--max-per-video", type=int, default=None,
-                        help="ghi đè fusion.max_results_per_video. BẮT BUỘC khi dataset chỉ có "
+                        help="ghi đè fusion.max_results_per_video; 0 = BỎ HẲN giới hạn. "
+                             "Lưu ý: KHÔNG truyền cờ này không có nghĩa là không giới hạn — "
+                             "khi đó dedup dùng mặc định của task (KIS = 5/video). BẮT BUỘC "
+                             "đặt khi dataset chỉ có "
                              "1 video: dedup KIS mặc định giữ 5 kết quả/video nên R@20/50/100 "
                              "sẽ bằng hệt R@5 và mọi số trên K=5 là vô nghĩa")
     parser.add_argument("--use-rerank", action="store_true",

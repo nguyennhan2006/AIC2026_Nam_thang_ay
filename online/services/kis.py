@@ -18,6 +18,11 @@ không có ngoặc kép hoàn toàn không được hưởng cơ chế này.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from online.services.normalizers import ScoreNormalizers
+
 from dataclasses import dataclass, field
 import re
 
@@ -149,13 +154,23 @@ class KisProcessor:
         *,
         packs: dict[str, EvidencePack] | None = None,
         limit: int = 100,
+        normalizers: "ScoreNormalizers | None" = None,
     ) -> list[KisResultItem]:
         signature = build_signature(query)
         config = self.config
-        # Điểm fusion không cùng thang giữa các query; chuẩn hóa theo hit tốt
-        # nhất để trộn được với các thành phần signature nằm trong [0, 1].
-        best_score = max((hit.score for hit in hits), default=0.0) or 1.0
-        branch_ceiling = max((len(hit.matched_branches) for hit in hits), default=1) or 1
+        # Điểm fusion không cùng thang giữa các query; chuẩn hóa để trộn được
+        # với các thành phần signature nằm trong [0, 1].
+        #
+        # Mẫu số PHẢI đến từ pool trước dedup (`normalizers`), không phải từ
+        # `hits`: `hits` đã bị `fusion.max_results_per_video` cắt, nên lấy max
+        # trên nó khiến nới cap là đổi cả thứ hạng đã có (EVAL-01). Fallback
+        # về max-trong-tập chỉ để caller cũ/test gọi trực tiếp vẫn chạy.
+        if normalizers is not None:
+            best_score = normalizers.best_retrieval_score
+            branch_ceiling = normalizers.branch_ceiling
+        else:
+            best_score = max((hit.score for hit in hits), default=0.0) or 1.0
+            branch_ceiling = max((len(hit.matched_branches) for hit in hits), default=1) or 1
 
         scored: list[tuple[float, KisResultItem]] = []
         for hit in hits:

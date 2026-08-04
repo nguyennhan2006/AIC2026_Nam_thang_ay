@@ -24,11 +24,15 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass
 import re
+from typing import TYPE_CHECKING
 import unicodedata
 
 from online.domain.evidence import EvidencePack
 from online.domain.task_results import AnswerCandidate, AnswerType, QaResultItem, VerifierStatus
 from online.errors import DependencyUnavailableError
+
+if TYPE_CHECKING:
+    from online.services.normalizers import ScoreNormalizers
 
 _NUMBER_WORDS_VI = {
     "không": 0, "một": 1, "hai": 2, "ba": 3, "bốn": 4, "năm": 5,
@@ -353,6 +357,7 @@ class QaProcessor:
         frame_scores: dict[str, float] | None = None,
         event_description: str | None = None,
         limit: int = 100,
+        normalizers: "ScoreNormalizers | None" = None,
     ) -> tuple[list[QaResultItem], list[str]]:
         """Bản async của `answer()` — gọi thêm LLM nếu có cấu hình.
 
@@ -363,7 +368,7 @@ class QaProcessor:
 
         base = self.answer(
             question, packs, frame_scores=frame_scores,
-            event_description=event_description, limit=limit,
+            event_description=event_description, limit=limit, normalizers=normalizers,
         )
         if self.llm_answerer is None or not base:
             return base, []
@@ -412,11 +417,17 @@ class QaProcessor:
         frame_scores: dict[str, float] | None = None,
         event_description: str | None = None,
         limit: int = 100,
+        normalizers: "ScoreNormalizers | None" = None,
     ) -> list[QaResultItem]:
         parsed = self.parser.parse(question, event_description)
         tool = ANSWER_TOOLS[parsed.answer_type]
         frame_scores = frame_scores or {}
-        best_frame_score = max(frame_scores.values(), default=1.0) or 1.0
+        # Cùng lý do với kis.py: mẫu số lấy từ pool trước dedup, không phải
+        # max của lát cắt hiện tại (EVAL-01 prefix invariance).
+        best_frame_score = (
+            normalizers.best_retrieval_score if normalizers is not None
+            else (max(frame_scores.values(), default=1.0) or 1.0)
+        )
 
         rows: list[tuple[float, QaResultItem]] = []
         for pack in packs:

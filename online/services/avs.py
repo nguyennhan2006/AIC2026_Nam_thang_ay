@@ -18,6 +18,11 @@ embedding, và đủ để tách hai sự kiện khác nhau.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from online.services.normalizers import ScoreNormalizers
+
 from dataclasses import dataclass
 import re
 
@@ -156,11 +161,17 @@ class AvsProcessor:
         *,
         retrieval_scores: dict[str, float] | None = None,
         limit: int = 100,
+        normalizers: "ScoreNormalizers | None" = None,
     ) -> list[AvsResultItem]:
         config = self.config
         criteria = extract_criteria(query)
         scores = retrieval_scores or {}
-        best_score = max(scores.values(), default=1.0) or 1.0
+        # Mẫu số từ pool trước dedup (EVAL-01) — max của lát cắt hiện tại làm
+        # thứ hạng phụ thuộc `fusion.max_results_per_video`.
+        best_score = (
+            normalizers.best_retrieval_score if normalizers is not None
+            else (max(scores.values(), default=1.0) or 1.0)
+        )
 
         graded: list[tuple[EvidencePack, int, float, set[str]]] = []
         for pack in packs:
