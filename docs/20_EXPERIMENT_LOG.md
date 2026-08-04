@@ -489,6 +489,92 @@ routing → lexical → retrieval → **chất lượng dữ liệu offline**.
 
 ---
 
+## SCENE-COVERAGE-01 — Scene có lát kín video không?
+
+**Trạng thái: TRƯỢT. Tìm ra nguyên nhân gốc chính xác, chưa sửa.**
+
+### Số đo
+
+```
+L21_V001: 217 scene / 37849 frame
+coverage = 0.786441          <- chỉ phủ 78.6% video
+gap      = 84 (mất 8083 frame)
+overlap  = 0    zero_length = 0    out_of_range = 0
+```
+
+Scene ID **không liên tục**: `S0000 → S0002`, `S0004 → S0006`, `S0006 → S0009`.
+Đây là dấu hiệu scene bị mất khi export, không phải detector bỏ sót — chế độ
+hỏng C, không phải A (gap thật) hay B (nhầm quy ước interval).
+
+### Nguyên nhân gốc
+
+`storage/exports_l21/quarantine.jsonl` có đúng **119 dòng**, tất cả cùng một
+lý do, ở stage `keyframe`:
+
+```
+scene L21_V001_S0001 [9, 54) không có keyframe nào
+  — canonical Scene bắt buộc >= 1 keyframe
+```
+
+Đối chiếu:
+
+```
+input/scene_manifest.jsonl (TransNetV2) : 336 scene
+keyframe đã trích                        : 307
+scene sống sót vào export                : 217        (336 - 119)
+
+scene BỊ LOẠI  : dài trung vị 61 frame, min 9,  max 204
+scene GIỮ LẠI  : dài trung vị 98 frame
+stride trích keyframe ~123 frame
+```
+
+**Keyframe được trích theo stride cố định ~123 frame, không phải theo scene.**
+Scene ngắn hơn stride rơi trọn qua lưới, không nhận được keyframe nào, rồi bị
+schema canonical (`>= 1 keyframe`) loại bỏ. 119 scene biến mất, để lại 84 gap.
+
+Schema không sai — scene không có keyframe thì thật sự không dùng được. Sai ở
+**bước trích keyframe**: nó phải bảo đảm mỗi scene ít nhất một frame.
+
+### Vì sao điều này chặn mọi thứ phía trên
+
+5/35 bước TRAKE có frame gold rơi vào các gap này. Candidate tương ứng **không
+tồn tại trong corpus**, nên caption tốt hơn, dense retrieval, BM25 thông minh
+hơn hay reranker đều không thể tìm ra. Đây là trần cứng.
+
+### Cách sửa (offline)
+
+```
+1. Trích lại keyframe THEO SCENE: mỗi scene ít nhất 1 frame (vd giữa scene),
+   thay vì stride toàn cục.
+   -> 119 scene × ≥1 frame; nguồn có sẵn: input/scene_manifest.jsonl +
+      storage/raw/videos/L21_V001.mp4
+2. Caption 119 scene mới (FPT VLM) — không có caption thì scene tồn tại nhưng
+   vẫn không khớp được truy vấn nào.
+3. offline assemble lại, kiểm tra coverage = 1.0.
+4. Chạy lại Stage B baseline + E5.
+```
+
+Bước 2 tốn tiền API nên cần quyết định trước khi chạy.
+
+### Kỳ vọng sau khi sửa
+
+```
+coverage ratio                    0.786 -> 1.0
+gold event có scene chứa nó       30/35 -> 35/35
+gold_region_recall@100            không được giảm
+queries_with_all_events           không được giảm
+```
+
+Chưa kỳ vọng retrieval tìm đúng cả 5 ngay — bước này chỉ bảo đảm chúng **tồn
+tại để có thể được tìm**.
+
+Công cụ: `scripts/check_scene_coverage.py`, artifact
+`outputs/evaluation/scene_coverage_l21.json`.
+Test: `tests/test_scene_coverage.py` (8 test, gồm quy ước nửa mở và trường hợp
+scene ngắn hơn stride).
+
+---
+
 ## Việc tiếp theo
 
 **BM25-01 — concept coverage.** Đây là kết luận chung của cả hai thí nghiệm
