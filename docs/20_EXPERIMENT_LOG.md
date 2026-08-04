@@ -308,21 +308,50 @@ lý) nhưng neo vào **vùng sai hoàn toàn**. Đó là dấu hiệu ràng bu�
 cách đang lấn át độ liên quan của từng bước — beam tìm được một chuỗi "đẹp về
 hình thức" ở sai chỗ.
 
+### T3-ablation — ràng buộc thời gian KHÔNG phải thủ phạm
+
+Giả thuyết "ordering_weight/gap_penalty lấn át độ liên quan" đã đo và **sai**:
+
+| | mean_r_score | lệch TB | bước trong cửa sổ |
+|---|---|---|---|
+| A hiện tại | **0.138** | **249.8s** | 6/35 |
+| B order_weight=0 | 0.075 | 351.3s | 3/35 |
+| C gap_penalty=0 | 0.075 | 316.2s | 3/35 |
+| D cả hai = 0 | 0.075 | 316.2s | 3/35 |
+
+Tắt ràng buộc làm **tệ đi**. Chúng đang cứu vãn chứ không phá — nghĩa là đầu
+vào của beam đã sai sẵn.
+
+### Nút thắt thật: retrieval của TỪNG BƯỚC
+
+```
+query tách đúng số bước                    :  8/8   ĐẠT
+frame ứng viên tồn tại quanh gold (±2–7s)  : 34/35  ĐẠT
+retrieval từng bước tìm ra vùng gold /top-100: 13/35  TRƯỢT
+   trong số tìm được: top-1 = 1, top-5 = 6, rank trung vị = 10
+```
+
+**22/35 bước không có vùng gold trong top-100 của chính bước đó.** Beam không
+thể ghép đúng từ một pool không chứa đáp án. Chuỗi nó trả về tự nhất quán vì
+ràng buộc thứ tự/khoảng cách vẫn hoạt động — chỉ là trên tập ứng viên sai.
+
+Lưu ý cách đọc: text mỗi bước đến từ việc tách `(1)...(2)...` trong query,
+KHÔNG phải từ gold — gold event chỉ có cửa sổ frame, không có trường mô tả
+(`event_description_*` rỗng ở cả 35 event).
+
+### Việc phải làm
+
+Vấn đề là **chất lượng khớp ngữ nghĩa của một câu mô tả ngắn** ("cột nước
+được quay từ xa") với caption của scene. Đây đúng là khoảng trống đã xác định
+từ đầu đợt: hệ thống có 4 nhánh BM25 lexical + 1 nhánh CLIP ảnh, **không có
+nhánh dense text nào trên caption**. Câu ngắn + BM25 token = giòn.
+
+⇒ Thí nghiệm tiếp theo cho TRAKE chính là **DENSE-TEXT-01**, không phải tinh
+chỉnh beam. Đo lại `13/35` này sau khi có caption dense branch là phép thử
+trực tiếp nhất.
+
 ### T4 — chưa xét
-Chỉ có nghĩa sau khi T3 chọn đúng vùng.
-
-### Việc phải làm (online, không phải offline)
-
-Ngược hẳn kết luận cũ: **không cần trích dày lại**. Nghi phạm theo thứ tự:
-
-1. Điểm liên quan của từng event quá yếu (text mỗi bước ngắn) nên bị
-   `ordering_weight` / `gap_penalty_per_sec` lấn át — kiểm tra bằng cách đặt
-   hai hệ số đó về 0 và xem chuỗi có nhảy về đúng vùng không.
-2. Stage B lấy candidate mỗi event từ một pool quá hẹp hoặc đã bị dedup cắt
-   trước khi beam nhìn thấy.
-3. Beam pruning bỏ nhánh đúng sớm.
-
-Đây đều là thay đổi ở tầng online, đo được ngay bằng harness sẵn có.
+Chỉ có nghĩa sau khi tỉ lệ 13/35 ở trên được cải thiện.
 
 ---
 

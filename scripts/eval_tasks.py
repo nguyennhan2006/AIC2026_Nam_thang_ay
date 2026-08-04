@@ -194,6 +194,58 @@ def ndcg_at_k(grades: list[int], ideal: list[int], k: int) -> float:
     return dcg(grades) / best if best else 0.0
 
 
+@dataclass(frozen=True, slots=True)
+class WindowPolicy:
+    """Cửa sổ chấp nhận của MỘT step TRAKE.
+
+    Luật chấm: tổng cửa sổ 2–7 giây tuỳ độ dài scene, KHÔNG phải một hằng số.
+    Cửa sổ ±4 frame ghi trong file gold là mốc ngữ nghĩa của khoảnh khắc, không
+    phải dung sai chấm — nhầm hai thứ này từng dẫn tới một chẩn đoán sai
+    (xem docs/20_EXPERIMENT_LOG.md § TRAKE).
+    """
+
+    min_sec: float = 2.0
+    max_sec: float = 7.0
+    ratio: float = 0.5
+
+    def half_window_sec(self, scene_duration_sec: float | None) -> float:
+        if scene_duration_sec is None:
+            width = self.min_sec
+        else:
+            width = min(max(scene_duration_sec * self.ratio, self.min_sec), self.max_sec)
+        return width / 2.0
+
+
+def resolve_step_window(
+    step: "Interval",
+    scenes: list,
+    fps: float,
+    policy: WindowPolicy,
+) -> tuple[float, str]:
+    """Trả `(tolerance_frames_mỗi_phía, nguồn_interval)`.
+
+    Thứ tự ưu tiên:
+      1. interval event tường minh trong gold — nếu nó rộng hơn mốc ngữ nghĩa
+         (>1s) thì đó là dung sai thật, dùng thẳng;
+      2. scene chứa mốc đó — suy cửa sổ từ độ dài scene;
+      3. fallback tối thiểu.
+    """
+
+    gold_width_sec = (step.end_frame - step.start_frame + 1) / max(fps, 1e-9)
+    if gold_width_sec > 1.0:
+        return gold_width_sec / 2.0 * fps, "explicit_gold_interval"
+
+    centre = (step.start_frame + step.end_frame) // 2
+    scene = next(
+        (item for item in scenes if item.start_frame <= centre < item.end_frame_exclusive),
+        None,
+    )
+    if scene is not None:
+        duration = scene.end_sec - scene.start_sec
+        return policy.half_window_sec(duration) * fps, "derived_scene_window"
+    return policy.half_window_sec(None) * fps, "fallback_min_window"
+
+
 def load_fps(metadata: Path, default: float = 30.0) -> float:
     """FPS thật của video, đọc từ `videos.jsonl` cạnh file scene.
 
@@ -234,6 +286,8 @@ async def evaluate(
         use_rerank=args.use_rerank,
         candidate_limit=max(args.top_k, 100),
     )
+    # Cần scene để suy cửa sổ chấp nhận của TRAKE từ độ dài scene.
+    scenes = await repository.all()
     kis = RankedMetrics()
     qa_evidence = RankedMetrics()
     qa_answer_correct = 0
@@ -320,12 +374,27 @@ async def evaluate(
             else:
                 trake_video_correct += 1
                 frame_ids = best.frame_ids
-                tolerance_frames = args.trake_tolerance_sec * load_fps(args.metadata)
+                policy = WindowPolicy(
+                    min_sec=args.trake_window_min_sec,
+                    max_sec=args.trake_window_max_sec,
+                    ratio=args.trake_window_ratio,
+                )
+                fps = load_fps(args.metadata)
+                windows = [resolve_step_window(gt, scenes, fps, policy) for gt in item.steps]
                 hits = sum(
                     1
-                    for step, step_gt in zip(frame_ids, item.steps, strict=False)
-                    if step_gt.contains(step, tolerance_frames)
+                    for step, step_gt, (tol, _src) in zip(frame_ids, item.steps, windows, strict=False)
+                    if step_gt.contains(step, tol)
                 )
+                record["windows"] = [
+                    {
+                        "window_width_sec": round(tol * 2 / fps, 3),
+                        "tolerance_before_sec": round(tol / fps, 3),
+                        "tolerance_after_sec": round(tol / fps, 3),
+                        "interval_source": src,
+                    }
+                    for tol, src in windows
+                ]
                 # Sai video = 0; đúng video = tỷ lệ step rơi đúng cửa sổ GT.
                 r_score = hits / len(item.steps) if item.steps else 0.0
                 trake_r_scores.append(r_score)
@@ -432,10 +501,12 @@ async def _main() -> None:
     parser.add_argument("--use-rules", action="store_true")
     parser.add_argument("--use-expansion", action="store_true")
     parser.add_argument("--use-query-prep", action="store_true")
-    parser.add_argument("--trake-tolerance-sec", type=float, default=3.0,
-                         help="nửa cửa sổ chấp nhận cho mỗi step TRAKE, tính bằng GIÂY "
-                              "(mặc định 3.0 = cửa sổ 6s). File gold chỉ ghi ±4 frame "
-                              "quanh mốc ngữ nghĩa, không phải dung sai chấm thật")
+    parser.add_argument("--trake-window-min-sec", type=float, default=2.0,
+                         help="tổng cửa sổ chấp nhận tối thiểu của một step TRAKE (giây)")
+    parser.add_argument("--trake-window-max-sec", type=float, default=7.0,
+                         help="tổng cửa sổ chấp nhận tối đa của một step TRAKE (giây)")
+    parser.add_argument("--trake-window-ratio", type=float, default=0.5,
+                         help="cửa sổ = clamp(độ_dài_scene * ratio, min, max)")
     parser.add_argument("--max-per-video", type=int, default=None,
                          help="ghi đè fusion.max_results_per_video; 0 = BỎ HẲN giới hạn. "
                               "Lưu ý: KHÔNG truyền cờ này không có nghĩa là không giới hạn — "
