@@ -9,6 +9,7 @@ import re
 from online.domain.models import Candidate, Modality, QueryPlan, SceneDocument
 from online.ports.interfaces import SceneRepository
 from online.services.branch_options import effective_limit, effective_weight
+from online.services.lexical_coverage import CoverageConfig, compute_coverage
 
 
 TOKEN_RE = re.compile(r"\w+", flags=re.UNICODE)
@@ -34,9 +35,13 @@ class BM25Index:
         *,
         k1: float = 1.5,
         b: float = 0.75,
+        coverage: CoverageConfig | None = None,
     ) -> None:
         self.documents = documents
         self.field = field
+        # BM25-01. Mặc định None = BM25 nguyên bản (nhánh A của ablation), nên
+        # thêm module coverage KHÔNG tự động đổi hành vi của ai.
+        self.coverage = coverage
         self.k1 = k1
         self.b = b
         self.tokens = [tokenize(item.field_text(field)) for item in documents]
@@ -68,6 +73,12 @@ class BM25Index:
                 )
                 score += self.idf.get(token, 0.0) * frequency * (self.k1 + 1) / denominator
             if score > 0:
+                if self.coverage is not None and not self.coverage.is_noop:
+                    # Coverage nhân theo điểm BM25 chứ không cộng hằng số: hai
+                    # đại lượng này khác thang đo, cộng thẳng sẽ để coverage
+                    # lấn át ở query mà BM25 vốn cho điểm thấp.
+                    result = compute_coverage(query, document.field_text(self.field), self.idf)
+                    score *= max(0.0, 1.0 + result.adjustment(self.coverage))
                 scored.append((document, score))
         scored.sort(key=lambda item: (-item[1], _document_id(item[0])))
         return scored[:limit]

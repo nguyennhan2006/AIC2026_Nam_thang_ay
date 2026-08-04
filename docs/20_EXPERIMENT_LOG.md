@@ -160,6 +160,88 @@ Commit: `d242201` (implement) + revert mặc định. Test:
 
 ---
 
+## BM25-01 — Concept coverage cho lexical branch
+
+**Trạng thái: DROP làm mặc định. Giữ cơ chế sau `CoverageConfig`.**
+
+### Giả thuyết
+Candidate đúng khớp nhiều phần khác nhau của query và khớp token phân biệt
+cao; candidate sai chỉ khớp một mảnh hoặc khớp token phổ biến. Chấm coverage
+sẽ tách được hai loại đó.
+
+### Biến thay đổi duy nhất
+`CoverageConfig` truyền vào `BM25Index`. Evaluator, RRF, modality weight,
+candidate limit giữ nguyên. Cộng bonus/penalty **nhân** vào điểm BM25, KHÔNG
+lọc cứng.
+
+### Số đo — ablation A–E
+
+| KIS | R@1 | R@5 | MRR | recall | w/t/l |
+|---|---|---|---|---|---|
+| A baseline | **0.417** | 0.833 | **0.585** | 0.917 | — |
+| B unique | 0.333 | 0.833 | 0.578 | 0.917 | 2/9/1 |
+| C idf | 0.333 | 0.833 | 0.564 | 0.917 | 1/10/1 |
+| D groups | 0.333 | 0.833 | 0.577 | 0.917 | 2/8/2 |
+| E idf+groups | 0.333 | 0.833 | 0.577 | 0.917 | 2/8/2 |
+
+| QA | R@1 | R@5 | MRR | recall | w/t/l |
+|---|---|---|---|---|---|
+| A baseline | 0.083 | 0.250 | 0.179 | **0.917** | — |
+| B–E (giống hệt nhau) | **0.167** | **0.417** | **0.278** | 0.833 | **7/3/2** |
+
+AVS: năm nhánh bằng nhau.
+
+### Vì sao DROP — cơ chế hỏng đúng trên case mục tiêu
+
+Case regression "cột nước phun lên từ lòng đất" cho ranking **không đổi một
+chữ** giữa A và E. Chẩn đoán:
+
+```
+nhóm khái niệm sinh ra: [['cột','nước','phun','lên'], ['lòng','đất']]
+                        -> 2 nhóm, không phải 3
+
+gold-like  group = 0.5
+"lở đất"   group = 0.5      <- Y HỆT NHAU
+```
+
+Tách nhóm bằng ranh giới hư từ **không hoạt động với tiếng Việt viết liền**:
+"cột nước phun lên" không có hư từ ở giữa nên gộp làm một nhóm, thay vì tách
+chất (nước) khỏi chuyển động (phun lên). Gold và false positive nhận cùng
+điểm nhóm ⇒ concept-group coverage vô hiệu.
+
+Chỉ `unique`/`idf` coverage phân biệt được (0.67 vs 0.17) — và đó mới là thứ
+tạo ra thay đổi số liệu, không phải nhóm khái niệm.
+
+### Đối chiếu tiêu chí giữ
+
+| Tiêu chí | Kết quả |
+|---|---|
+| hard-negative pair accuracy tăng rõ | KHÔNG (đi ngang/giảm nhẹ) |
+| case "lở đất" bị đẩy xuống | KHÔNG — ranking không đổi |
+| KIS R@5 không giảm | Đạt (0.833) |
+| candidate recall không giảm đáng kể | KHÔNG — QA 0.917 -> 0.833, mất 1 query |
+| không chỉ cải thiện một query | Đạt cho QA (7 query) |
+
+Ba tiêu chí trượt ⇒ DROP.
+
+### Lead đáng theo (một vòng có giới hạn, KHÔNG làm ngay)
+
+QA MRR +55% (0.179 -> 0.278), R@5 +67%, 7 thắng / 2 thua — nhất quán qua cả
+bốn biến thể, tức nó đến từ `idf coverage + partial_penalty` chứ không phải
+từ nhóm khái niệm. Đây là tín hiệu lớn nhất đo được trong cả đợt. Cái giá là
+1 QA query rớt khỏi top-100. Một vòng chỉnh riêng `partial_penalty` (thấp
+hơn 0.3) rất có thể giữ được phần lợi mà không mất recall — nhưng phải là
+một thí nghiệm riêng, có điểm dừng riêng.
+
+Muốn nhóm khái niệm chạy thật thì cần từ điển cụm hoặc LLM decomposition
+(§5.2 của tài liệu giả định `concept_groups` do LLM sinh), không phải chỉnh
+thêm danh sách hư từ.
+
+Test: `tests/test_lexical_coverage.py` (8 test, gồm 2 test khoá lại GIỚI HẠN
+của segmenter để không ai giả định nhầm là nó đang chạy).
+
+---
+
 ## Việc tiếp theo
 
 **BM25-01 — concept coverage.** Đây là kết luận chung của cả hai thí nghiệm
