@@ -6,7 +6,7 @@
     input/asr_segments.jsonl        264 segment (faster-whisper large-v3)
     input/mapping_L21_V001.csv      n,pts_time,fps,frame_idx — map keyframe ordinal -> frame_idx THẬT
     input/L21_V001/001.jpg..307.jpg keyframe, đặt tên theo ordinal `n` trong mapping
-    input/L21_V001.mp4               video gốc
+    storage/raw/videos/L21_V001.mp4  video gốc (bản trong input/ đã xoá vì trùng)
 
 `mapping_L21_V001.csv` là mảnh còn thiếu đã chặn việc dùng dữ liệu này: 307 file
 jpg không có EXIF/frame_idx nhúng vào tên, và không map 1:1 với 336 scene

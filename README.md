@@ -111,7 +111,7 @@ thi đấu — không phải kế hoạch đã chốt thực thi, xem README ri�
 ## Lệnh kiểm tra
 
 ```bash
-python -m pytest tests/ -q                    # 465 pass
+python -m pytest tests/ -q                    # 483 pass
 python -m datasection.cli storage/exports
 python -m scripts.preflight
 python -m compileall -q datasection offline online scripts tests
