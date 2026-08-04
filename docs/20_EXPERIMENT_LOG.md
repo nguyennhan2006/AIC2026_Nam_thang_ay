@@ -396,6 +396,99 @@ Chỉ có nghĩa sau khi tỉ lệ 13/35 ở trên được cải thiện.
 
 ---
 
+## DENSE-TEXT-01 — Caption dense branch (E5)
+
+**Trạng thái: KHÔNG đạt ngưỡng giữ. Nhưng đo được tín hiệu thật và định vị
+được nút thắt kế tiếp — nằm ở OFFLINE, không phải retrieval.**
+
+### Chuẩn bị
+- Model tải bằng `scripts/download_hf_model.py` (curl, né lỗi SSL của Python).
+- Index: `scripts/build_caption_dense_index.py`, schema `caption_dense_v1`
+  (caption + object + action + keyword; **chưa** có OCR/ASR để không lẫn gain).
+  216/217 scene có text dùng được, dim 1024, fingerprint `e6cfd51b353220d7`.
+- Nhánh online: `online/adapters/dense_text.py::CaptionDenseRetriever`, prefix
+  `query:`/`passage:` đọc từ manifest để online-offline không lệch.
+- Sanity check trước full run: dense cứu `"cán bộ phát biểu trong cuộc họp"`
+  từ rank 59 → 1, nhưng mất `"bác sĩ tiến hành phẫu thuật"` (4 → không thấy).
+
+### Số đo — trên Stage B THẬT
+
+| | R@20 | R@50 | R@100 | median rank | đủ mọi event |
+|---|---|---|---|---|---|
+| A baseline | 15/35 | 18/35 | 21/35 | 13 | 1/8 |
+| B dense only | 17/35 | 18/35 | 19/35 | **3** | 0/8 |
+| C baseline+dense | **17/35** | **20/35** | **22/35** | 6.0 | 1/8 |
+
+Đối chiếu ngưỡng đã chốt:
+
+| Tiêu chí | Kết quả |
+|---|---|
+| R@100 > 25/35 | **TRƯỢT** — 22/35 |
+| đủ mọi event ≥ 4/8 | **TRƯỢT** — 1/8, không đổi |
+| R@20 không giảm | Đạt — 15 → 17 |
+
+### Điều quan trọng hơn con số
+
+Dense cải thiện mạnh **thứ hạng** (median 13 → 3) nhưng gần như không cải
+thiện **độ phủ** (21 → 22). Nghĩa là: khi caption có mô tả đúng nội dung,
+dense tìm ra nó tốt hơn hẳn BM25. Nhưng 14 bước không tìm được thì không phải
+vì retriever kém.
+
+### Error analysis — 14 bước không bao giờ tìm thấy
+
+```
+tìm thấy                             : 21/35
+KHÔNG có scene nào chứa frame gold   :  5/35   <- lỗ hổng phân đoạn scene
+scene tồn tại nhưng document rỗng    :  0/35
+scene + caption có, nhưng không khớp :  9/35   <- chất lượng caption
+```
+
+Ví dụ chế độ hỏng thứ hai:
+
+```
+event  "xe cứu hỏa bật đèn xanh"
+caption "một đám cháy rừng dữ dội với ánh sáng đỏ rực và khói bốc lên cao"
+        -> đúng hiện trường, nhưng caption không hề nhắc tới xe cứu hỏa
+
+event  "rùa được thả từ thuyền xuống biển"
+caption "những người đang giúp đỡ một người khác lên tàu trên biển"
+        -> bỏ sót hoàn toàn con rùa, tức chủ thể của sự kiện
+```
+
+Còn gặp một caption lẫn tiếng Trung (`色彩鲜艳的建筑在背景中`) — lỗi của
+VLM lúc enrichment.
+
+**Không encoder text nào cứu được hai chế độ này.** Caption không chứa thông
+tin thì embedding nó cũng không có. 5 bước còn lại thậm chí không có scene nào
+chứa frame gold — scene không lát kín video.
+
+### Quyết định
+
+- **Không promote** caption dense làm mặc định: trượt 2/3 tiêu chí.
+- **Giữ code** (`dense_text.py`, builder, runner) vì nó đã chứng minh cải
+  thiện thứ hạng rõ rệt và sẽ có giá trị NGAY khi caption tốt lên.
+- **KHÔNG tải BGE-M3 lúc này.** So hai encoder khi 14/35 thất bại nằm ở dữ
+  liệu chứ không ở encoder là so nhầm chỗ. Điều kiện để tải: sau khi sửa
+  caption/scene, `R@100` vượt ~25/35 mà vẫn còn khoảng cách đáng kể.
+
+### Nút thắt kế tiếp (offline)
+
+```
+1. 9/35 — caption bỏ sót chủ thể của sự kiện
+   -> prompt enrichment phải liệt kê phương tiện/động vật/vai trò người,
+      không chỉ tả không khí chung của cảnh
+   -> caption lẫn ngôn ngữ khác cần bị bắt và sinh lại
+
+2. 5/35 — không scene nào chứa frame gold
+   -> kiểm tra scene có lát kín [0, frame_count) không; nếu có khoảng trống
+      thì gold rơi vào đó và không candidate nào tồn tại
+```
+
+Đây là lần thứ tư trong đợt mà nút thắt lùi thêm một tầng: evaluator →
+routing → lexical → retrieval → **chất lượng dữ liệu offline**.
+
+---
+
 ## Việc tiếp theo
 
 **BM25-01 — concept coverage.** Đây là kết luận chung của cả hai thí nghiệm
