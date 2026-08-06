@@ -26,6 +26,10 @@ export interface SubmissionBoardProps {
   avs: AvsResultItem[];
   /** Dùng để tra `video_path` và quy đổi frame -> giây. Không gọi thêm API. */
   results?: SearchHit[];
+  /** Báo lên trên chuỗi nào đang chọn, để panel xem bên phải đi theo.
+   *  Thiếu callback này thì bảng và panel xem chỉ vào hai chuỗi khác nhau —
+   *  bấm dòng 2 mà bên phải vẫn hiện chuỗi 0. */
+  onSelectSequence?: (index: number) => void;
 }
 
 /** Một dòng sẽ nộp, đã tách khỏi kiểu của từng task để bảng dùng chung. */
@@ -41,24 +45,26 @@ interface Row {
    *  được chuỗi, chỉ thấy đúng cảnh đầu. */
   steps?: TrakeStep[];
   playback?: PlaybackWindow | null;
+  /** Vị trí trong mảng gốc của task — dùng để đồng bộ với panel xem. */
+  sourceIndex: number;
 }
 
 function toRows(task: TaskType, kis: KisResultItem[], qa: QaResultItem[], trake: TrakeResultItem[]): Row[] {
   if (task === "TEXTUAL_KIS") {
-    return kis.map((item) => ({
-      key: `${item.video_id}-${item.frame_idx}`,
+    return kis.map((item, index) => ({
+      key: `${item.video_id}-${item.frame_idx}`, sourceIndex: index,
       videoId: item.video_id, frameIdx: item.frame_idx, sceneId: item.scene_id,
     }));
   }
   if (task === "QA") {
-    return qa.map((item) => ({
-      key: `${item.video_id}-${item.frame_idx}-${item.canonical_answer}`,
+    return qa.map((item, index) => ({
+      key: `${item.video_id}-${item.frame_idx}-${item.canonical_answer}`, sourceIndex: index,
       videoId: item.video_id, frameIdx: item.frame_idx, sceneId: item.scene_id,
       answer: item.answer,
     }));
   }
-  return trake.map((item) => ({
-    key: `${item.video_id}-${item.rank}`,
+  return trake.map((item, index) => ({
+    key: `${item.video_id}-${item.rank}`, sourceIndex: index,
     videoId: item.video_id, frameIdx: item.frame_ids[0] ?? 0,
     sceneId: item.steps[0]?.scene_id ?? null, frameIds: item.frame_ids,
     steps: item.steps, playback: item.playback ?? null,
@@ -114,7 +120,7 @@ function StepStrip({
   );
 }
 
-export function SubmissionBoard({ apiConfig, task, kis, qa, trake, avs, results = [] }: SubmissionBoardProps) {
+export function SubmissionBoard({ apiConfig, task, kis, qa, trake, avs, results = [], onSelectSequence }: SubmissionBoardProps) {
   const [result, setResult] = useState<SubmissionBuildResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -288,7 +294,11 @@ export function SubmissionBoard({ apiConfig, task, kis, qa, trake, avs, results 
               <button
                 type="button"
                 className="submission-main"
-                onClick={() => setSelected(row.key === selected ? null : row.key)}
+                onClick={() => {
+                  const next = row.key === selected ? null : row.key;
+                  setSelected(next);
+                  if (next) onSelectSequence?.(row.sourceIndex);
+                }}
                 title="Bấm để xem đoạn video tại frame này"
               >
                 <Play size={12} />

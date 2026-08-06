@@ -327,6 +327,10 @@ function App() {
                       trake={result?.trake ?? []}
                       avs={result?.avs ?? []}
                       results={result?.results ?? []}
+                      onSelectSequence={(index) => {
+                        setSelectedSequenceIndex(index);
+                        setActiveStepIndex(null);
+                      }}
                     />
                   </PanelBody>
                 )}
