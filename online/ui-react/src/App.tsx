@@ -338,6 +338,7 @@ function App() {
                 selectedSequence={result?.trake?.[selectedSequenceIndex] ?? null}
                 activeStepIndex={activeStepIndex}
                 selectedHit={selectedHit}
+                onSelectStep={setActiveStepIndex}
               />
             </div>
         </div>

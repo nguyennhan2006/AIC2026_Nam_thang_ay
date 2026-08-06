@@ -14,6 +14,8 @@ export interface PreviewPanelProps {
   activeStepIndex: number | null;
   /** Candidate đang chọn ở Results (task không phải TRAKE). */
   selectedHit: SearchHit | null;
+  /** Cho phép đổi bước ngay tại panel xem; thiếu thì dải bước chỉ để đọc. */
+  onSelectStep?: (index: number) => void;
 }
 
 type InspectorTab = "preview" | "evidence" | "trace";
@@ -44,6 +46,40 @@ function fragmentUrl(base: string, window: PlaybackWindow): string {
   return `${base}#t=${window.start_sec.toFixed(3)},${window.end_sec.toFixed(3)}`;
 }
 
+/** Dải bước của chuỗi TRAKE, ngay trong panel xem.
+ *
+ * Không có nó thì mỗi lần muốn xem bước khác phải quay về cột giữa — mà một
+ * dòng TRAKE là `video_id, f1, ..., fn` và điểm phụ thuộc CẢ n khoảnh khắc,
+ * nên duyệt qua lại giữa các bước là thao tác chính chứ không phải phụ.
+ */
+function StepStrip({
+  steps, active, onPick,
+}: {
+  steps: TrakeStep[];
+  active: number | null;
+  onPick: ((index: number) => void) | undefined;
+}) {
+  return (
+    <div className="step-strip" role="group" aria-label="Các bước trong chuỗi">
+      {steps.map((step) => (
+        <button
+          key={`${step.step}-${step.frame_idx}`}
+          type="button"
+          className={step.step - 1 === active ? "step-chip is-active" : "step-chip"}
+          onClick={() => onPick?.(step.step - 1)}
+          disabled={!onPick}
+          title={`Bước ${step.step} · frame ${step.frame_idx}`}
+        >
+          <span className="step-chip-index tabular">{step.step}</span>
+          <span className="step-chip-time tabular">
+            {step.timestamp_sec != null ? `${step.timestamp_sec.toFixed(1)}s` : `#${step.frame_idx}`}
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function activeStep(sequence: TrakeResultItem | null, stepIndex: number | null): TrakeStep | null {
   if (!sequence || stepIndex === null) return null;
   return sequence.steps.find((step) => step.step - 1 === stepIndex) ?? null;
@@ -62,7 +98,7 @@ function DetailRow({ label, value }: { label: string; value: string }) {
 
 /** Preview & Details — rail phải. Ba tab để "mức 3" (trace) chỉ render khi
  * người dùng mở, không đổ JSON dài xuống cuối trang như bản cũ. */
-export function PreviewPanel({ apiConfig, result, selectedSequence, activeStepIndex, selectedHit }: PreviewPanelProps) {
+export function PreviewPanel({ apiConfig, result, selectedSequence, activeStepIndex, selectedHit, onSelectStep }: PreviewPanelProps) {
   const [tab, setTab] = useState<InspectorTab>("preview");
   const videoRef = useRef<HTMLVideoElement>(null);
   const [videoError, setVideoError] = useState(false);
@@ -76,9 +112,22 @@ export function PreviewPanel({ apiConfig, result, selectedSequence, activeStepIn
   const evidenceCandidateId = step?.scene_id ?? selectedHit?.candidate_id ?? null;
 
   useEffect(() => setVideoError(false), [playback?.media_path]);
+
+  // Đặt `currentTime` TRƯỚC khi metadata tải xong thì trình duyệt bỏ qua —
+  // video nằm im ở đầu đoạn dù đã tính đúng mốc giây, và người dùng thấy
+  // "video không khớp với bước đang chọn". Phải thử ngay (khi video đã sẵn
+  // sàng từ lần chọn trước) VÀ nghe `loadedmetadata` cho lần tải mới.
+  // `SubmissionBoard` đã xử lý bẫy này từ trước; ở đây thì chưa.
   useEffect(() => {
-    if (videoRef.current && seekTo != null) videoRef.current.currentTime = seekTo;
-  }, [seekTo]);
+    const element = videoRef.current;
+    if (!element || seekTo == null) return;
+    const apply = () => {
+      element.currentTime = Math.max(seekTo, 0);
+    };
+    if (element.readyState >= 1) apply();
+    element.addEventListener("loadedmetadata", apply);
+    return () => element.removeEventListener("loadedmetadata", apply);
+  }, [seekTo, playback?.media_path]);
 
   const header = <PanelHeader title="Preview & Details" icon={<PanelRight size={14} />} />;
 
@@ -109,7 +158,7 @@ export function PreviewPanel({ apiConfig, result, selectedSequence, activeStepIn
         ]}
       />
 
-      {tab === "preview" && !step && !selectedHit && (
+      {tab === "preview" && !step && !selectedHit && !selectedSequence && (
         /* Chưa chọn gì: MỘT empty state duy nhất — không dựng khung media đen
            rỗng rồi kèm thêm một empty state nữa bên dưới. */
         <EmptyState
@@ -120,7 +169,7 @@ export function PreviewPanel({ apiConfig, result, selectedSequence, activeStepIn
         />
       )}
 
-      {tab === "preview" && (step || selectedHit) && (
+      {tab === "preview" && (step || selectedHit || selectedSequence) && (
         <PanelBody className="preview-body">
           <div className="preview-media">
             {playback && !videoError ? (
@@ -139,6 +188,14 @@ export function PreviewPanel({ apiConfig, result, selectedSequence, activeStepIn
               </span>
             )}
           </div>
+
+          {selectedSequence && selectedSequence.steps.length > 1 && (
+            <StepStrip
+              steps={selectedSequence.steps}
+              active={activeStepIndex}
+              onPick={onSelectStep}
+            />
+          )}
 
           {playback ? (
             <p className="preview-media-note">
