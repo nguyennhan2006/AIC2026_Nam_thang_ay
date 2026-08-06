@@ -80,3 +80,14 @@ notebooks/__pycache__/
 aic_debug_bundle/
 aic_debug_bundle.zip
 *.patch
+
+# Dump nặng của harness đo offline — dựng lại được bằng
+# scripts/dump_kis_features.py và scripts/dump_avs_candidates.py (mỗi cái ~43
+# phút gọi API). Repo chỉ theo dõi file tổng kết nhỏ, xem outputs/ đã có.
+outputs/evaluation/kis_features.json
+outputs/evaluation/avs_candidates.json
+outputs/evaluation/quick/
+# Kết quả đã hết hiệu lực: giữ trên đĩa để tra cứu, không commit 19MB số liệu
+# mà chính README của nó nói là không dùng để ra quyết định được.
+outputs/evaluation/_superseded/*.json
+outputs/evaluation/_superseded/**/*.json
