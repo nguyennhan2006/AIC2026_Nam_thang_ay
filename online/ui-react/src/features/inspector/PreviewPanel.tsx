@@ -4,7 +4,7 @@ import type { ApiClientConfig } from "../../api";
 import { mediaUrl } from "../../api";
 import { BranchStatusPanel } from "../../components/BranchStatusPanel";
 import { EvidenceInspector } from "../../components/EvidenceInspector";
-import type { SearchResponse, SearchHit, TrakeResultItem, TrakeStep } from "../../types";
+import type { PlaybackWindow, SearchResponse, SearchHit, TrakeResultItem, TrakeStep } from "../../types";
 import { Button, EmptyState, PanelBody, PanelHeader, Surface, Tabs } from "../../ui";
 
 export interface PreviewPanelProps {
@@ -18,9 +18,30 @@ export interface PreviewPanelProps {
 
 type InspectorTab = "preview" | "evidence" | "trace";
 
-function videoPathFor(result: SearchResponse | null, videoId: string | undefined): string | null {
-  if (!result || !videoId) return null;
-  return result.sequences.find((item) => item.video_id === videoId)?.scenes[0]?.video_path ?? null;
+/** Cửa sổ phát của thứ đang chọn.
+ *
+ * Bản cũ tra `result.sequences[].scenes[0].video_path` — chỉ TRAKE mới có
+ * `sequences`, nên KIS/QA/AVS luôn rơi về ảnh tĩnh dù `selectedHit.video_path`
+ * nằm ngay đó. Và kể cả khi tìm ra đường dẫn, nó phát TOÀN BỘ video chứ không
+ * phải đoạn của kết quả.
+ *
+ * Nay backend trả `playback` đã nới bối cảnh sẵn (scene p50 chỉ 4.1 giây, xem
+ * đúng 4 giây thì không hiểu chuyện gì). UI chỉ đọc, không tự tính lại.
+ */
+function playbackFor(
+  sequence: TrakeResultItem | null,
+  hit: SearchHit | null
+): PlaybackWindow | null {
+  return sequence?.playback ?? hit?.playback ?? null;
+}
+
+/** `#t=start,end` để trình duyệt chỉ phát đúng đoạn — endpoint `/v1/media`
+ * đã hỗ trợ HTTP Range nên tua được.
+ *
+ * `base` PHẢI là kết quả của `mediaUrl()`. `media_path` là đường dẫn tương
+ * đối trần; tự nối chuỗi sẽ ra `/v1/media/%2Fv1%2Fmedia%2F...` và nhận 400. */
+function fragmentUrl(base: string, window: PlaybackWindow): string {
+  return `${base}#t=${window.start_sec.toFixed(3)},${window.end_sec.toFixed(3)}`;
 }
 
 function activeStep(sequence: TrakeResultItem | null, stepIndex: number | null): TrakeStep | null {
@@ -47,12 +68,14 @@ export function PreviewPanel({ apiConfig, result, selectedSequence, activeStepIn
   const [videoError, setVideoError] = useState(false);
 
   const step = activeStep(selectedSequence, activeStepIndex);
-  const videoPath = videoPathFor(result, selectedSequence?.video_id ?? selectedHit?.video_id);
+  const playback = playbackFor(selectedSequence, selectedHit);
   const imagePath = step?.image_path ?? selectedHit?.best_keyframe_path ?? null;
-  const seekTo = step?.timestamp_sec ?? selectedHit?.best_timestamp_sec ?? null;
+  // Ưu tiên timestamp của step đang chọn (TRAKE bấm vào từng bước), nếu không
+  // thì nhảy tới khung được nộp chứ không tới đầu đoạn đã nới.
+  const seekTo = step?.timestamp_sec ?? playback?.focus_sec ?? null;
   const evidenceCandidateId = step?.scene_id ?? selectedHit?.candidate_id ?? null;
 
-  useEffect(() => setVideoError(false), [videoPath]);
+  useEffect(() => setVideoError(false), [playback?.media_path]);
   useEffect(() => {
     if (videoRef.current && seekTo != null) videoRef.current.currentTime = seekTo;
   }, [seekTo]);
@@ -100,8 +123,13 @@ export function PreviewPanel({ apiConfig, result, selectedSequence, activeStepIn
       {tab === "preview" && (step || selectedHit) && (
         <PanelBody className="preview-body">
           <div className="preview-media">
-            {videoPath && !videoError ? (
-              <video ref={videoRef} src={mediaUrl(apiConfig, videoPath)} controls onError={() => setVideoError(true)} />
+            {playback && !videoError ? (
+              <video
+                ref={videoRef}
+                src={fragmentUrl(mediaUrl(apiConfig, playback.media_path), playback)}
+                controls
+                onError={() => setVideoError(true)}
+              />
             ) : imagePath ? (
               <img src={mediaUrl(apiConfig, imagePath)} alt="Khung hình đang chọn" />
             ) : (
@@ -111,6 +139,21 @@ export function PreviewPanel({ apiConfig, result, selectedSequence, activeStepIn
               </span>
             )}
           </div>
+
+          {playback ? (
+            <p className="preview-media-note">
+              Đang phát {playback.start_sec.toFixed(1)}s – {playback.end_sec.toFixed(1)}s
+              {" "}({(playback.end_sec - playback.start_sec).toFixed(1)}s, đã nới ±
+              {playback.pad_sec.toFixed(0)}s quanh khung nộp ở {playback.focus_sec.toFixed(1)}s)
+            </p>
+          ) : imagePath ? (
+            /* Phân biệt "chưa có video nguồn" với "player hỏng" — V002/V003
+               hiện chỉ được cấp ảnh keyframe, không có mp4. */
+            <p className="preview-media-note">
+              Chưa có file video cho {selectedHit?.video_id ?? selectedSequence?.video_id ?? "video này"};
+              đang hiển thị khung hình tĩnh.
+            </p>
+          ) : null}
 
           {step ? (
             <div className="detail-list">

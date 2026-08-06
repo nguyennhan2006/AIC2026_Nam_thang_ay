@@ -24,6 +24,16 @@
   font-size: var(--text-caption);
 }
 
+/* Nói rõ đang phát đoạn nào và vì sao nó dài hơn scene. Không có dòng này thì
+   người xem tưởng player tự tua lung tung, hoặc tưởng kết quả sai khi thấy
+   cảnh trước/sau khung được nộp. */
+.preview-media-note {
+  margin: var(--space-2) 0 0;
+  color: var(--text-secondary);
+  font-size: var(--text-caption);
+  line-height: 1.45;
+}
+
 /* ---- Danh sách nhãn/giá trị ---- */
 .detail-list { display: flex; flex-direction: column; }
 .detail-row {

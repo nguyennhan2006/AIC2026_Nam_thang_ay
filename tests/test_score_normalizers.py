@@ -35,6 +35,27 @@ def _candidate(candidate_id: str, score: float, branches: int) -> Candidate:
     )
 
 
+def _fused_candidate(candidate_id: str, score: float, branches: int) -> Candidate:
+    """Candidate ĐÚNG HÌNH DẠNG mà `fuse_candidates` sinh ra.
+
+    Khác `_candidate` ở chỗ nó KHÔNG có `branch_scores` — fusion ghi thông tin
+    nhánh vào `payload["matched_branches"]`. Fixture cũ giàu hơn dữ liệu thật,
+    và chính khoảng cách đó đã giấu lỗi `branch_ceiling` luôn bằng 1 ở đường
+    production suốt nhiều đợt đo.
+    """
+
+    return Candidate(
+        candidate_id=candidate_id,
+        video_id="L21_V001",
+        scene_id=candidate_id,
+        source="bm25_caption.raw",
+        modality="caption",
+        raw_score=score,
+        rank=1,
+        payload={"matched_branches": [f"b{index}" for index in range(branches)]},
+    )
+
+
 def _pack(candidate_id: str) -> EvidencePack:
     from online.domain.candidate import FrameEvidence
 
@@ -55,6 +76,17 @@ class ScoreNormalizersTests(unittest.TestCase):
         pool = [_candidate("a", 0.9, 3), _candidate("b", 0.4, 1), _candidate("c", 0.2, 2)]
         self.assertEqual(ScoreNormalizers.from_pool(pool).best_retrieval_score, 0.9)
         self.assertEqual(ScoreNormalizers.from_pool(pool).branch_ceiling, 3)
+
+    def test_ceiling_works_on_candidates_shaped_like_fusion_output(self) -> None:
+        """Hình dạng THẬT của production: chỉ có `payload`, không `branch_scores`.
+
+        Bản trước chỉ đọc `branch_scores` nên trả `branch_ceiling = 1` cho mọi
+        pool thật, biến `agreement` ở kis.py từ thang 0–1 thành 4.0–8.0 và làm
+        nó thành số hạng lớn nhất của công thức chấm KIS.
+        """
+
+        pool = [_fused_candidate("a", 0.9, 8), _fused_candidate("b", 0.4, 3)]
+        self.assertEqual(ScoreNormalizers.from_pool(pool).branch_ceiling, 8)
 
     def test_truncating_the_pool_changes_the_normalizer(self) -> None:
         """Chính là cái bẫy: cắt bớt pool làm mẫu số đổi.

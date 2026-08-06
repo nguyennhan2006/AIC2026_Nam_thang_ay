@@ -395,9 +395,18 @@ async def build_submission(
         issues = await validate_trake(items, frame_count=lookup)
         csv_text = trake_to_csv(items)
     else:
+        # AVS là task đánh giá NỘI BỘ — người dùng xác nhận 2026-08-06: vòng sơ
+        # loại chỉ nộp KIS, QA, TRAKE. Đầu ra AVS là danh sách segment có thứ
+        # hạng, lấy thẳng từ `/v1/search/avs`, không đi qua exporter CSV.
+        #
+        # Từng có một lần thử thêm CSV cho AVS ở đây, dựa trên docstring của
+        # `online/domain/submission.py` và `docs/19` §14.1. Cả hai nguồn đó
+        # SAI: docstring viện dẫn `docs/12 §6 "Xuất CSV nộp bài"` — mục không
+        # tồn tại. Luật BTC mới là nguồn đúng.
         raise HTTPException(
             status_code=422,
-            detail="AVS is an internal task and has no official submission format",
+            detail="AVS là task nội bộ, chưa có format nộp chính thức — "
+                   "dùng /v1/search/avs để lấy danh sách segment có thứ hạng",
         )
     return SubmissionBuildResponse(
         task=request.task,
@@ -422,7 +431,9 @@ async def validate_submission(
     elif request.task == TaskType.TRAKE:
         issues = await validate_trake(build_trake_submission(request.trake), frame_count=lookup)
     else:
-        raise HTTPException(status_code=422, detail="AVS has no official submission format")
+        raise HTTPException(
+            status_code=422, detail="AVS là task nội bộ, chưa có format nộp chính thức"
+        )
     return [SubmissionIssue(**dataclasses.asdict(item)) for item in issues]
 
 
@@ -453,7 +464,13 @@ async def evaluate_local(request: EvaluateLocalRequest) -> EvaluateLocalResponse
         )
         result = score_trake(items[0], TrakeGold(request.video_id, step_windows))
     else:
-        raise HTTPException(status_code=422, detail="AVS has no official submission format")
+        # AVS là task nội bộ, không nộp bài, nên cũng không có scorer cục bộ
+        # theo luật BTC. Muốn đo chất lượng AVS thì dùng
+        # `scripts/eval_tasks.py --tasks AVS` (nDCG khử trùng theo sự kiện).
+        raise HTTPException(
+            status_code=422,
+            detail="AVS là task nội bộ — đo bằng scripts/eval_tasks.py --tasks AVS",
+        )
     return EvaluateLocalResponse(
         score=result.score, best_rank=result.best_rank, detail=result.detail
     )

@@ -63,6 +63,19 @@ function toRows(task: TaskType, kis: KisResultItem[], qa: QaResultItem[], trake:
  * nên fps suy ra được tại chỗ — không cần thêm endpoint, và không phải giả
  * định 30fps (video khác fps sẽ tua sai chỗ).
  */
+/** Nguồn cho thẻ `<video>`: ưu tiên cửa sổ phát do backend tính (đã nới bối
+ * cảnh và đã kiểm file tồn tại), rơi về `video_path` thô nếu chưa có.
+ *
+ * `#t=start,end` giới hạn đoạn phát; `/v1/media` hỗ trợ HTTP Range nên tua
+ * được trong đoạn đó. */
+function playerSrc(hit: SearchHit, base: (path: string) => string): string | null {
+  if (hit.playback) {
+    const { media_path, start_sec, end_sec } = hit.playback;
+    return `${base(media_path)}#t=${start_sec.toFixed(3)},${end_sec.toFixed(3)}`;
+  }
+  return hit.video_path ? base(hit.video_path) : null;
+}
+
 function seekSecondsFor(hit: SearchHit, frameIdx: number): number {
   const frameSpan = hit.end_frame_exclusive - hit.start_frame;
   const secondSpan = hit.end_sec - hit.start_sec;
@@ -254,17 +267,19 @@ export function SubmissionBoard({ apiConfig, task, kis, qa, trake, avs, results 
               title="Chọn một dòng để xem"
               description="Video sẽ tua thẳng tới đúng frame sẽ nộp."
             />
-          ) : selectedHit?.video_path && !videoError ? (
+          ) : selectedHit && playerSrc(selectedHit, (p) => mediaUrl(apiConfig, p)) && !videoError ? (
             <>
               <video
                 ref={videoRef}
-                src={mediaUrl(apiConfig, selectedHit.video_path)}
+                src={playerSrc(selectedHit, (p) => mediaUrl(apiConfig, p)) ?? undefined}
                 controls
                 onError={() => setVideoError(true)}
               />
               <p className="submission-preview-meta tabular">
                 {selectedRow.videoId} · frame {selectedRow.frameIdx}
                 {seekTo != null && ` · ${seekTo.toFixed(2)}s`}
+                {selectedHit.playback &&
+                  ` · đoạn ${selectedHit.playback.start_sec.toFixed(1)}–${selectedHit.playback.end_sec.toFixed(1)}s`}
               </p>
             </>
           ) : selectedHit?.best_keyframe_path ? (

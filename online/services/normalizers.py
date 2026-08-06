@@ -28,6 +28,21 @@ from dataclasses import dataclass
 from online.domain.models import Candidate
 
 
+def _branch_count(candidate) -> int:
+    """Số nhánh cùng thấy một candidate, đọc từ nguồn NÀO CÓ.
+
+    `fuse_candidates` ghi `payload["matched_branches"]`; một số caller cũ dựng
+    `Candidate` với `branch_scores`. Chấp nhận cả hai để không phụ thuộc vào
+    việc ai dựng object — chính sự lệch giữa hai hình dạng này đã giấu lỗi
+    `branch_ceiling` suốt nhiều đợt đo.
+    """
+
+    matched = candidate.payload.get("matched_branches") if candidate.payload else None
+    if matched:
+        return len(matched)
+    return len(candidate.branch_scores or ())
+
+
 @dataclass(frozen=True, slots=True)
 class ScoreNormalizers:
     """Mẫu số dùng chung cho mọi task processor của MỘT lần search."""
@@ -46,7 +61,24 @@ class ScoreNormalizers:
         """
 
         best = max((candidate.raw_score for candidate in candidates), default=0.0) or 1.0
-        ceiling = max((len(candidate.branch_scores) for candidate in candidates), default=1) or 1
+        # ĐỌC TỪ `payload["matched_branches"]`, không phải `branch_scores`.
+        #
+        # `fuse_candidates` ghi thông tin nhánh vào `payload`; `branch_scores`
+        # là trường KHÔNG AI GHI VÀO nên luôn rỗng — đo được: rỗng ở 100/100
+        # candidate, khiến `branch_ceiling` luôn bằng 1.
+        #
+        # Hậu quả ở `kis.py:187` (`agreement = len(hit.matched_branches) /
+        # branch_ceiling`): agreement nhận 4.0–8.0 thay vì 0–1, nên số hạng
+        # `0.15 × agreement` cho 0.60–1.20 và trở thành số hạng LỚN NHẤT của
+        # công thức, vượt cả `retrieval_weight`. Xếp hạng KIS bị quyết định bởi
+        # ĐẾM SỐ NHÁNH thay vì độ liên quan.
+        #
+        # Test không bắt được vì đường fallback (`normalizers is None`) tự tính
+        # đúng từ `hit.matched_branches` — test đi đường đúng, production đi
+        # đường sai. Nay cả hai đọc CÙNG một nguồn.
+        ceiling = max(
+            (_branch_count(candidate) for candidate in candidates), default=1
+        ) or 1
         return cls(best_retrieval_score=best, branch_ceiling=ceiling)
 
 

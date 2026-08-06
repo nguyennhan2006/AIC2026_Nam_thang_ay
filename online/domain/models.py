@@ -17,6 +17,7 @@ from online.domain.candidate import (  # noqa: F401 - re-export: nhiều adapter
 from online.domain.execution import BranchStatus  # noqa: F401 - re-export
 from online.domain.scores import BranchScore, ScoreKind  # noqa: F401 - re-export
 from online.domain.search_config import SearchOptions
+from online.domain.task_results import PlaybackWindow
 from online.domain.task_results import (  # noqa: F401 - re-export
     AvsResultItem,
     KisResultItem,
@@ -55,6 +56,14 @@ class SearchRequest(StrictModel):
     filters: SearchFilters = Field(default_factory=SearchFilters)
     debug: bool = False
     search_options: SearchOptions | None = None
+    # Nhờ LLM đề xuất trọng số cho từng nhánh theo truy vấn này. Đề xuất đi
+    # kèm response ở `recommended_weights`, KHÔNG được tự áp: trọng số đổi ngầm
+    # giữa hai lần tìm thì không ai tái lập được kết quả.
+    recommend_weights: bool = False
+    # Nhờ LLM lọc bằng chứng thô xuống phần thật sự liên quan tới truy vấn.
+    # Không bật thì `evidence` giữ nguyên bản gộp máy móc, trong đó logo đài và
+    # đồng hồ trên màn hình đứng ngang hàng với nội dung cảnh.
+    select_evidence: bool = False
 
     @field_validator("task", mode="before")
     @classmethod
@@ -193,6 +202,9 @@ class Evidence(StrictModel):
 class SearchHit(StrictModel):
     """Một kết quả đã hydrate, sẵn sàng để hiển thị và để build submission."""
 
+    #: Đoạn video cần phát, ĐÃ nới bối cảnh. `None` = chưa có file video nguồn
+    #: (khác với "phát lỗi"). UI đọc trường này thay vì tự tính lại phần nới.
+    playback: "PlaybackWindow | None" = None
     rank: int = Field(default=1, ge=1)
     candidate_id: str
     scene_id: str
@@ -282,6 +294,17 @@ class SearchResponse(StrictModel):
     branch_status: list[BranchStatus] = Field(default_factory=list)
     query_plan: QueryPlan | None = None
     warnings: list[str] = Field(default_factory=list)
+    # Chỉ có khi request đặt `recommend_weights=true`. Là ĐỀ XUẤT để người dùng
+    # xem rồi tự quyết, không phải trọng số đã dùng cho lần tìm này.
+    recommended_weights: dict | None = None
+    # Chỉ có khi request đặt `select_evidence=true`. Cùng thứ tự với `results`.
+    selected_evidence: list[dict] = Field(default_factory=list)
+    # AVS-GRADE-01: đếm candidate trước/sau cổng grade + danh sách bị loại.
+    avs_diagnostics: dict | None = None
+    # P2: dấu vết TỪNG TẦNG, chỉ khi `debug=true`. Không có nó thì eval chỉ
+    # thấy điểm cuối và không biết candidate đúng rơi ở tầng nào —
+    # "recall đủ nhưng xếp sai" và "không tìm ra" cần hai cách sửa khác hẳn.
+    pipeline_trace: dict | None = None
 
 
 class VQARequest(StrictModel):

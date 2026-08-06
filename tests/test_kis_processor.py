@@ -48,6 +48,27 @@ class SignatureTests(unittest.TestCase):
         self.assertIn("14", sig.rare_cues)
         self.assertIn("UNESCO", sig.rare_cues)
 
+    def test_lowercase_accented_words_are_not_proper_nouns(self) -> None:
+        """Từ THƯỜNG mở đầu bằng nguyên âm có dấu không phải danh từ riêng.
+
+        Dải Unicode `À-Ỹ` xen kẽ hoa và thường, nên lớp ký tự `[A-ZĐÀ-Ỹ]` khớp
+        cả `đ à á ê ô`. Hậu quả đo được trên 36 truy vấn KIS: `rare_cues` chứa
+        `đó, được, đường, đêm, đất, áo đen, đàn ông` — tức những từ phổ biến
+        nhất, đúng ngược với ý nghĩa "khớp được thì gần như chắc đúng".
+        """
+
+        sig = build_signature(
+            "Tìm cảnh người đàn ông mặc áo đen đứng trên đường ướt trong đêm"
+        )
+        self.assertEqual(sig.rare_cues, ())
+
+    def test_proper_nouns_still_detected_next_to_lowercase_accents(self) -> None:
+        sig = build_signature("Tìm cảnh ông Nguyễn Văn Nam phát biểu ở Hà Nội")
+        self.assertIn("Nguyễn Văn Nam", sig.rare_cues)
+        self.assertIn("Hà Nội", sig.rare_cues)
+        # "ông" là chức danh viết thường, không được nuốt vào tên riêng.
+        self.assertNotIn("ông Nguyễn Văn Nam", sig.rare_cues)
+
     def test_negative_constraint_is_extracted_and_excluded_from_must_match(self) -> None:
         sig = build_signature("cảnh có xe máy, không có ô tô")
         self.assertTrue(sig.negative)

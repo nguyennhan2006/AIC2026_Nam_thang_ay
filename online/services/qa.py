@@ -343,10 +343,23 @@ class QaProcessor:
         parser: QuestionParser | None = None,
         *,
         llm_answerer=None,
+        llm_rank_mode: str = "keep",
         llm_top_n: int = 5,
     ) -> None:
         self.parser = parser or QuestionParser()
         self.llm_answerer = llm_answerer
+        # QA-JOINT-01. `joint_score` quyết định thứ hạng, mà LLM chạy SAU khi
+        # nó đã được tính — nên `confidence` của LLM bị vứt hoàn toàn. Đo được:
+        # answer_accuracy 0.583 và pairing_accuracy 0.875 (khi có đủ hai mảnh
+        # thì chúng ĐÃ nằm cùng dòng), nhưng joint_top1 chỉ 0.083. Tức dòng
+        # đúng có tồn tại và chỉ đơn giản là bị xếp thấp.
+        #
+        #   keep          giữ nguyên (hành vi cũ) — LLM chỉ đổi chữ, không đổi hạng
+        #   scale         joint × conf_llm — dòng LLM không chắc bị tụt mạnh
+        #   boost         joint × (1 + conf_llm) — cùng chiều nhưng nén khoảng cách
+        #   promote       joint × 2 — đối chứng, không dùng confidence
+        #   answer_first  conf_llm là chính, joint chỉ để phá hoà
+        self.llm_rank_mode = llm_rank_mode
         self.llm_top_n = llm_top_n
 
     async def answer_async(
@@ -397,17 +410,61 @@ class QaProcessor:
                 # LLM mâu thuẫn với evidence — giữ answer rule-based an toàn hơn.
                 enhanced.append(item)
                 continue
-            enhanced.append(
-                item.model_copy(
-                    update={
-                        "answer": llm_candidate.surface,
-                        "canonical_answer": llm_candidate.canonical,
-                        "answer_type": llm_candidate.answer_type,
-                        "verifier_status": status,
-                    }
-                )
+            update = {
+                "answer": llm_candidate.surface,
+                "canonical_answer": llm_candidate.canonical,
+                "answer_type": llm_candidate.answer_type,
+                "verifier_status": status,
+            }
+            rescored = self._rescore(item.joint_score, llm_candidate.confidence)
+            if rescored is not None:
+                update["joint_score"] = rescored
+            enhanced.append(item.model_copy(update=update))
+
+        if self.llm_rank_mode != "keep":
+            # Sắp lại VÀ đánh số lại: đổi `joint_score` mà không sắp lại thì
+            # thứ hạng vẫn y như cũ và cả thay đổi thành vô nghĩa.
+            enhanced.sort(
+                key=lambda row: (-row.joint_score, row.video_id, row.frame_idx)
             )
+            enhanced = [
+                row.model_copy(update={"rank": index})
+                for index, row in enumerate(enhanced, start=1)
+            ]
         return enhanced, warnings
+
+    def _rescore(self, current: float, llm_confidence: float) -> float | None:
+        """`joint_score` mới theo `llm_rank_mode`. None = giữ nguyên.
+
+        `joint` gốc là tích `evidence_conf * answer_conf * verifier_weight`.
+        Ở đây chỉ thay phần `answer_conf`, nên phải chia lại chứ không nhân
+        thẳng — nhân thẳng sẽ phạt hai lần độ tin cậy của answer.
+        """
+
+        mode = self.llm_rank_mode
+        if mode == "keep":
+            return None
+        if mode == "scale":
+            # Phạt mạnh dòng mà LLM không chắc. Giữ nguyên thứ tự tương đối
+            # của evidence khi LLM tin như nhau.
+            return current * llm_confidence
+        if mode == "boost":
+            # Cùng chiều `scale` nhưng nén: dòng LLM chấm 0.0 vẫn giữ được
+            # điểm evidence, nên không bao giờ tụt xuống 0.
+            return current * (1.0 + llm_confidence)
+        if mode == "promote":
+            # Đẩy dòng có LLM trả lời lên bằng một hằng số, KHÔNG dùng
+            # confidence. Biến thể đối chứng: nếu nó bằng `boost` thì cái ăn
+            # điểm là việc ưu tiên dòng LLM, chứ confidence không mang thông
+            # tin gì — điều đó quyết định luôn việc có đáng chưng cất
+            # confidence sang reranker nhỏ hay không (PR-6).
+            return current * 2.0
+        if mode == "answer_first":
+            # Độ tin cậy của answer là chính; `current` chỉ còn vai trò phá hoà.
+            # Đây là biến thể quyết liệt nhất — nó gần như bỏ qua thứ hạng
+            # evidence, nên cũng là biến thể dễ hỏng nhất nếu LLM hiệu chỉnh kém.
+            return llm_confidence + current * 1e-6
+        return None
 
     def answer(
         self,

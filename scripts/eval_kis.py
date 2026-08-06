@@ -180,11 +180,20 @@ async def build_dense(repository: JsonlSceneRepository, backend: str) -> DenseRe
         # Xem online/api/container.py: warmup phải xảy ra NGOÀI request path,
         # nếu không truy vấn đầu tiên mất nhánh dense và mọi so sánh metric
         # đều nhiễu ở một hai query đầu.
+        # Warmup hỏng thì DỪNG HẲN, không hạ cấp: đây là script ĐO. Một lần
+        # chạy thiếu nhánh dense vẫn in ra đủ R@1/R@5/MRR trông hợp lệ, và con
+        # số sai đó sẽ được ghi vào docs/20_EXPERIMENT_LOG.md như thể là kết
+        # quả thật. Thà không có số còn hơn có số sai.
         if hasattr(encoder, "warmup"):
             try:
                 encoder.warmup()
-            except Exception as exc:  # noqa: BLE001
-                print(f"cảnh báo: không warmup được encoder ({exc})", file=sys.stderr)
+            except Exception as exc:  # noqa: BLE001 - đổi thành lỗi cấu hình có ngữ cảnh
+                raise SystemExit(
+                    f"không nạp được text encoder {settings.visual_embedding_model!r}: {exc}. "
+                    "Export này có embedding thật nên nhánh dense_visual bắt buộc cần encoder. "
+                    "Trỏ AIC_VISUAL_EMBEDDING_MODEL vào model đã tải sẵn "
+                    "(vd storage/models/clip-vit-large-patch14) rồi chạy lại."
+                ) from exc
         return DenseRetriever(encoder, InMemoryVectorStore(frame_rows), branch_id="dense_visual", backend_kind="vector")
 
     encoder = HashingTextEncoder()
@@ -297,16 +306,33 @@ async def evaluate_mode(
     groundtruth: list[GroundTruthItem],
     args: argparse.Namespace,
 ) -> dict:
-    service = await build_service(
-        mode,
-        repository,
-        backend=args.backend,
-        use_rules=args.use_rules,
-        use_expansion=args.use_expansion,
-        use_query_prep=args.use_query_prep,
-        use_rerank=args.use_rerank,
-        candidate_limit=max(args.top_k, 100),
-    )
+    if args.pipeline == "container":
+        # Đo ĐÚNG pipeline mà server chạy, không phải một bản dựng song song.
+        # `build_service` bên dưới là định nghĩa pipeline THỨ HAI: nó không có
+        # nhánh object/action/color/event, không có VLM rerank, và không bọc
+        # encoder bằng TranslatingTextEncoder — nên số nó in ra không phải số
+        # của server dù trông vẫn hợp lệ. Giữ lại chỉ để làm ablation từng
+        # nhánh (metadata_only / vector_only / ocr_only).
+        from online.api.container import build_container
+        from online.config import Settings
+
+        if mode != "fusion":
+            raise SystemExit(
+                f"--pipeline container chỉ đo được mode 'fusion' (đang là {mode!r}); "
+                "các mode ablation dùng --pipeline legacy"
+            )
+        service = (await build_container(Settings.from_env())).search_service
+    else:
+        service = await build_service(
+            mode,
+            repository,
+            backend=args.backend,
+            use_rules=args.use_rules,
+            use_expansion=args.use_expansion,
+            use_query_prep=args.use_query_prep,
+            use_rerank=args.use_rerank,
+            candidate_limit=max(args.top_k, 100),
+        )
     ranks: list[int | None] = []          # rank hit-in-interval đầu tiên
     video_ranks: list[int | None] = []    # rank đúng-video đầu tiên
     per_query: list[dict] = []
@@ -410,6 +436,14 @@ async def main() -> None:
                         help="bật text rerank + QA answer generation qua FPT (fallback worker tự "
                              "host qua AIC_RERANK_TEXT_URL cho rerank, không có fallback cho QA) "
                              "— cần env tương ứng, xem online/config.py")
+    parser.add_argument(
+        "--pipeline",
+        choices=("legacy", "container"),
+        default="legacy",
+        help="container = dựng qua online/api/container.py, tức ĐÚNG pipeline server chạy "
+             "(đọc cấu hình từ env/AIC_ENV_FILE, có VLM rerank + dịch query nếu bật). "
+             "legacy = bản dựng riêng của script, chỉ dùng cho ablation từng nhánh.",
+    )
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--json", type=Path, default=None,
                         help="ghi kết quả JSON để lưu vết ablation")

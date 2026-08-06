@@ -24,6 +24,7 @@ from online.services.trake.sequence_search import (
     SequenceHypothesis,
     local_variants,
     search_sequences,
+    search_sequences_dp,
 )
 from online.services.trake.video_retriever import (
     VideoCandidate,
@@ -64,7 +65,12 @@ class TrakeProcessor:
 
         results: list[TrakeResultItem] = []
         for video in videos:
-            hypotheses = search_sequences(
+            solver = (
+                search_sequences_dp
+                if self.sequence_config.strategy == "dp"
+                else search_sequences
+            )
+            hypotheses = solver(
                 video.video_id, step_hits, self.sequence_config, limit=limit
             )
             for hypothesis in hypotheses:
@@ -170,6 +176,18 @@ def trake_processor_for_request(
     if "gap_penalty_per_sec" in fields_set and options.gap_penalty_per_sec is not None:
         sequence_config = _dataclass_replace(
             sequence_config, gap_penalty_per_sec=options.gap_penalty_per_sec
+        )
+    for field_name, target in (
+        ("video_context_weight", "context_weight"),
+        ("video_duplicate_penalty", "duplicate_penalty"),
+        ("video_coverage_weight", "coverage_weight"),
+    ):
+        value = getattr(options, field_name, None)
+        if field_name in fields_set and value is not None:
+            video_config = _dataclass_replace(video_config, **{target: value})
+    if "sequence_strategy" in fields_set and options.sequence_strategy is not None:
+        sequence_config = _dataclass_replace(
+            sequence_config, strategy=options.sequence_strategy
         )
     if "missing_step_penalty" in fields_set and options.missing_step_penalty is not None:
         sequence_config = _dataclass_replace(

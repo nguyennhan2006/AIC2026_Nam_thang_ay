@@ -26,6 +26,30 @@ AnswerType = Literal[
 ]
 
 
+class PlaybackWindow(StrictModel):
+    """Đoạn video cần phát cho một kết quả, đã nới thêm bối cảnh.
+
+    Trước đây UI không phát được đoạn của kết quả vì không result nào mang
+    thời gian LẪN đường dẫn video: KIS/QA chỉ có giây khi `evidence` đi kèm,
+    TRAKE/AVS không có giây nào cả.
+
+    `start_sec`/`end_sec` ĐÃ cộng `pad_sec` mỗi phía — scene p50 chỉ 4.1 giây,
+    xem đúng 4 giây thì không đủ hiểu chuyện gì. `focus_sec` là thời điểm của
+    frame được nộp; UI nên nhảy tới đó, phần nới chỉ là bối cảnh.
+    """
+
+    video_id: str
+    #: Đường dẫn TƯƠNG ĐỐI so với `AIC_DATA_ROOT`, cùng quy ước với
+    #: `video_path`/`image_path`. KHÔNG kèm prefix `/v1/media/` — client tự
+    #: ghép, và bake sẵn prefix vào đây làm URL bị nhân đôi thành
+    #: `/v1/media/%2Fv1%2Fmedia%2F...` rồi trả 400 "invalid media path".
+    media_path: str
+    start_sec: float = Field(ge=0.0)
+    end_sec: float = Field(gt=0.0)
+    focus_sec: float = Field(ge=0.0)
+    pad_sec: float = Field(ge=0.0)
+
+
 class KisResultItem(StrictModel):
     rank: int = Field(ge=1)
     video_id: str
@@ -36,6 +60,7 @@ class KisResultItem(StrictModel):
     safe_frame_score: float | None = None
     must_match_coverage: float | None = Field(default=None, ge=0.0, le=1.0)
     evidence: EvidencePack | None = None
+    playback: PlaybackWindow | None = None
 
 
 class AnswerCandidate(StrictModel):
@@ -59,6 +84,7 @@ class QaResultItem(StrictModel):
     scene_id: str | None = None
     evidence_ids: list[str] = Field(default_factory=list)
     evidence: EvidencePack | None = None
+    playback: PlaybackWindow | None = None
 
     @model_validator(mode="after")
     def require_non_empty_answer(self) -> "QaResultItem":
@@ -98,6 +124,9 @@ class TrakeResultItem(StrictModel):
     # không phân biệt được "chain đủ 5 step" với "chain 5 frame nhưng thật ra
     # chỉ có 3 step thật, 2 frame còn lại là step khác bị dồn vào" (PR-14A).
     missing_steps: list[int] = Field(default_factory=list)
+    # TRAKE nộp NHIỀU frame; cửa sổ phát trải từ frame đầu tới frame cuối của
+    # chuỗi, không phải một scene, để người chấm xem được cả chuỗi hành động.
+    playback: PlaybackWindow | None = None
     # True khi video được chọn dù dưới min_step_coverage (không còn lựa chọn
     # nào khác) — kết quả suy yếu, tầng hiển thị nên cảnh báo rõ với người dùng.
     degraded: bool = False
@@ -124,9 +153,11 @@ class AvsResultItem(StrictModel):
     score: float
     cluster_id: str | None = None
     best_frame_idx: int | None = Field(default=None, ge=0)
+    playback: PlaybackWindow | None = None
 
 
 __all__ = [
+    "PlaybackWindow",
     "AnswerCandidate",
     "AnswerType",
     "AvsResultItem",

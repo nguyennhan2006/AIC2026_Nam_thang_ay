@@ -77,10 +77,21 @@ class FptQaAnswerer:
     xếp hạng bằng rule-based, để chi phí/độ trễ có giới hạn dự đoán được.
     """
 
-    def __init__(self, client: FptClient, *, model_id: str, max_evidence_chars: int = 3000) -> None:
+    def __init__(
+        self,
+        client: FptClient,
+        *,
+        model_id: str,
+        max_evidence_chars: int = 3000,
+        max_tokens: int = 3000,
+    ) -> None:
         self.client = client
         self.model_id = model_id
         self.max_evidence_chars = max_evidence_chars
+        # 200 token là quá ít cho model reasoning: nó tiêu hết vào
+        # `reasoning_content` rồi trả `content=None`, nên MỌI câu QA đều
+        # hỏng và rơi về rule-based mà không ai để ý (đã xảy ra thật).
+        self.max_tokens = max_tokens
 
     async def answer(self, question: str, pack: EvidencePack) -> AnswerCandidate | None:
         evidence = pack.rerank_text(max_chars=self.max_evidence_chars).strip()
@@ -93,7 +104,7 @@ class FptQaAnswerer:
                 messages,
                 model=self.model_id,
                 temperature=0.0,
-                max_tokens=200,
+                max_tokens=self.max_tokens,
                 response_format={"type": "json_object"},
             )
 

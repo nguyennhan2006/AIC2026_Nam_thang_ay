@@ -84,8 +84,36 @@ class SubmissionRoutesTests(unittest.TestCase):
         self.assertEqual(response.json()["score"], 0.0)
 
     def test_avs_task_is_rejected_for_submission_build(self) -> None:
+        """AVS là task đánh giá NỘI BỘ, không nộp bài.
+
+        Xác nhận với luật BTC 2026-08-06: vòng sơ loại chỉ nộp KIS, QA, TRAKE.
+        Từng có một lần thử thêm CSV cho AVS ở route này, dựa trên docstring
+        của `online/domain/submission.py` và `docs/19` §14.1. Cả hai nguồn đó
+        sai — docstring còn viện dẫn `docs/12 §6 "Xuất CSV nộp bài"`, một mục
+        không tồn tại. Đầu ra AVS lấy thẳng từ `/v1/search/avs`.
+        """
+
         response = self.client.post("/v1/submissions/build", json={"task": "AVS"})
         self.assertEqual(response.status_code, 422)
+        self.assertIn("nội bộ", response.json()["detail"])
+
+    def test_avs_search_still_returns_ranked_segments(self) -> None:
+        """Không nộp bài không có nghĩa là không dùng được.
+
+        AVS phải trả danh sách segment CÓ THỨ HẠNG kèm đủ trường để đánh giá
+        thủ công: `segment_id`, biên đoạn, và frame đại diện.
+        """
+
+        response = self.client.post(
+            "/v1/search/avs", json={"query": "cảnh ban đêm có đèn khẩn cấp", "top_k": 5}
+        )
+        self.assertEqual(response.status_code, 200)
+        avs = response.json()["avs"]
+        if not avs:
+            self.skipTest("fixture không sinh được AVS candidate nào")
+        for field in ("rank", "video_id", "segment_id", "start_frame", "end_frame", "score"):
+            self.assertIn(field, avs[0])
+        self.assertEqual([row["rank"] for row in avs], sorted(row["rank"] for row in avs))
 
     def test_qa_csv_has_three_columns(self) -> None:
         response = self.client.post(

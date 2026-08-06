@@ -29,6 +29,7 @@ from online.services.evidence_builder import EvidenceBuilder
 from online.services.fusion import fuse_candidates
 from online.services.kis import KisProcessor
 from online.services.negative_constraints import apply_negative_constraints, extract_negative_constraints
+from online.services.playback import DEFAULT_PAD_SEC, build_window
 from online.services.qa import QaProcessor
 from online.services.query_planner import RuleBasedQueryPlanner, compute_modality_weights
 from online.services.registry import RetrieverRegistry
@@ -57,18 +58,34 @@ class SearchService:
         qa_processor: QaProcessor | None = None,
         session_store: SessionStore | None = None,
         dataset_version: str | None = None,
+        weight_recommender=None,
+        evidence_selector=None,
+        avs_config=None,
+        avs_idf=None,
+        playback_pad_sec: float = DEFAULT_PAD_SEC,
+        media_root=None,
+        branch_timeout_ms: int | None = None,
+        evidence_select_top_n: int = 10,
     ) -> None:
         if not retrievers:
             raise ValueError("at least one retriever is required")
         self.repository = repository
         self.retrievers = retrievers
         self.registry = RetrieverRegistry(retrievers)
-        self.orchestrator = RetrievalOrchestrator(retrievers)
+        self.orchestrator = RetrievalOrchestrator(
+            retrievers,
+            **({"default_timeout_ms": branch_timeout_ms} if branch_timeout_ms else {}),
+        )
         # None = không lưu trace (vd script/test không cần replay). Có store
         # thì MỌI lần search (kể cả qua endpoint convenience) đều ghi lại
         # được, vì tất cả đều đi qua đúng một hàm `search()` này.
         self.session_store = session_store
         self.dataset_version = dataset_version
+        # Hai "cố vấn" LLM: chỉ đọc kết quả rồi nói lại, KHÔNG đụng vào
+        # retrieval. Hỏng thì mất lời khuyên chứ không mất kết quả tìm kiếm.
+        self.weight_recommender = weight_recommender
+        self.evidence_selector = evidence_selector
+        self.evidence_select_top_n = evidence_select_top_n
         self.evidence_builder = evidence_builder or EvidenceBuilder(repository)
         # None = không có tầng rerank nào; cascade vẫn chạy được và chỉ ghi
         # warning "chưa cấu hình", nên hành vi mặc định không đổi.
@@ -78,7 +95,12 @@ class SearchService:
         self.kis_processor = KisProcessor()
         self.qa_processor = qa_processor or QaProcessor()
         self.trake_processor = TrakeProcessor()
-        self.avs_processor = AvsProcessor()
+        self.avs_processor = AvsProcessor(avs_config, idf=avs_idf)
+        # Nới cửa sổ phát mỗi phía. Scene p50 chỉ 4.1s — xem đúng 4 giây
+        # không đủ để người chấm hiểu bối cảnh.
+        self.playback_pad_sec = playback_pad_sec
+        self.media_root = media_root
+        self._last_avs_diagnostics: dict = {}
         self.planner = planner or RuleBasedQueryPlanner()
         self.candidate_limit = candidate_limit
         self.rrf_k = rrf_k
@@ -350,6 +372,7 @@ class SearchService:
                 documents,
                 limit=request.top_k,
             )
+            await _attach_playback(self.repository, trake, self.playback_pad_sec, self.media_root)
             sequences = link_event_hits(event_hit_lists, limit=request.top_k)
             warnings = _status_warnings(statuses)
             if not trake:
@@ -378,6 +401,28 @@ class SearchService:
 
         candidates, statuses = await self._retrieve(plan, self.candidate_limit)
         candidates = await self._attach_events(candidates)
+        # P2: chụp thứ hạng TRƯỚC rerank. Phải chụp tại đây, không suy ngược
+        # được từ kết quả cuối — rerank và task processor đều sắp lại. Thiếu nó
+        # thì eval chỉ thấy điểm cuối, không biết candidate đúng rơi ở TẦNG NÀO,
+        # mà "recall đủ nhưng xếp sai" với "không tìm ra" cần hai cách sửa khác
+        # hẳn nhau.
+        trace: dict | None = None
+        if request.debug:
+            trace = {
+                "branch_latency_ms": {st.execution_id: st.latency_ms for st in statuses},
+                "branch_state": {st.execution_id: st.state for st in statuses},
+                "branch_count": {st.execution_id: st.candidate_count for st in statuses},
+                "prefusion_total": sum(st.candidate_count for st in statuses),
+                "fused": [
+                    {
+                        "candidate_id": c.candidate_id,
+                        "video_id": c.video_id,
+                        "score": round(c.raw_score, 6),
+                        "n_branches": len(c.payload.get("matched_branches") or ()),
+                    }
+                    for c in candidates[:100]
+                ],
+            }
         fusion_options = plan.search_options.fusion
         # Chuẩn hoá điểm phải chốt TRƯỚC dedup: nếu tính sau, mẫu số đổi theo
         # `max_results_per_video` và nới cap sẽ làm xáo trộn cả thứ hạng đã có
@@ -399,6 +444,12 @@ class SearchService:
             plan.normalized_query, candidates, plan.search_options.rerank
         )
         candidates = rerank.candidates
+        if trace is not None:
+            trace["post_rerank"] = [
+                {"candidate_id": c.candidate_id, "video_id": c.video_id,
+                 "score": round(c.raw_score, 6)}
+                for c in candidates[:100]
+            ]
         hits = await self._hydrate(candidates[: request.top_k], plan.normalized_query)
         results = _format_results(hits, request.top_k, plan.search_options.results)
         warnings = (
@@ -406,10 +457,20 @@ class SearchService:
             + rerank.warnings
             + [warning for hit in results for warning in hit.warnings]
         )
+        # Xoá TRƯỚC khi chạy processor. Xoá sau là xoá đúng thứ vừa ghi —
+        # lỗi đã mắc: mọi số đo pre/post gate về 0 trong khi cơ chế vẫn chạy.
+        self._last_avs_diagnostics = {}
         task_results, task_warnings = await self._run_task_processor(
             task, plan, request, results, candidates, rerank.packs, normalizers
         )
         warnings = warnings + task_warnings
+        # `results` là danh sách UI hiển thị cho mọi task không phải TRAKE.
+        # Không gắn ở đây thì UI phải tự suy cửa sổ phát và tự đoán phần nới.
+        await _attach_playback(self.repository, results, self.playback_pad_sec, self.media_root)
+        recommended_weights = await self._recommend_weights(request, plan, task)
+        selected_evidence = await self._select_evidence(
+            request, plan, candidates, rerank.packs
+        )
         return SearchResponse(
             query_id=query_id,
             task=task,
@@ -419,6 +480,10 @@ class SearchService:
             branch_status=statuses,
             query_plan=plan if request.debug else None,
             warnings=warnings,
+            recommended_weights=recommended_weights,
+            selected_evidence=selected_evidence,
+            avs_diagnostics=self._last_avs_diagnostics or None,
+            pipeline_trace=trace,
             **task_results,
         )
 
@@ -537,6 +602,7 @@ class SearchService:
             task, plan, request, results, candidates, rerank.packs, normalizers
         )
         warnings = warnings + task_warnings
+        await _attach_playback(self.repository, results, self.playback_pad_sec, self.media_root)
         response = SearchResponse(
             query_id=query_id, task=task, took_ms=(perf_counter() - started) * 1000,
             status="COMPLETED_WITH_WARNINGS" if warnings else "COMPLETED",
@@ -553,6 +619,50 @@ class SearchService:
                 sorted({hit.scene_id for hit in hits})
             )
         }
+
+    async def _recommend_weights(self, request, plan, task) -> dict | None:
+        """Đề xuất trọng số nhánh cho truy vấn này — chỉ khi được hỏi.
+
+        Danh sách nhánh lấy từ retriever ĐANG đăng ký, không phải một bảng
+        cứng: cấu hình tắt nhánh nào thì LLM cũng không được đề xuất nhánh đó,
+        nếu không người dùng nhận về trọng số cho thứ không tồn tại.
+        """
+
+        if not request.recommend_weights or self.weight_recommender is None:
+            return None
+        branch_ids = sorted(
+            {
+                getattr(retriever, "branch_id", None) or retriever.name
+                for retriever in self.retrievers
+            }
+        )
+        return await self.weight_recommender.recommend(
+            plan.normalized_query, task=task.value, branch_ids=branch_ids
+        )
+
+    async def _select_evidence(self, request, plan, candidates, packs) -> list[dict]:
+        """Lọc bằng chứng thô xuống phần thật sự liên quan — chỉ khi được hỏi.
+
+        Dùng lại pack mà rerank đã dựng nếu có; chỉ dựng thêm cho candidate
+        chưa có pack. Dựng lại từ đầu là đọc lại repository cho cùng một scene.
+        """
+
+        if not request.select_evidence or self.evidence_selector is None:
+            return []
+        head = candidates[: self.evidence_select_top_n]
+        if not head:
+            return []
+        resolved = []
+        for candidate in head:
+            pack = packs.get(candidate.candidate_id) if packs else None
+            if pack is None:
+                pack = await self.evidence_builder.build(candidate)
+            if pack is not None:
+                resolved.append(pack)
+        if not resolved:
+            return []
+        selected = await self.evidence_selector.select_many(plan.normalized_query, resolved)
+        return [item for item in selected if item is not None]
 
     async def _run_task_processor(
         self,
@@ -576,12 +686,12 @@ class SearchService:
             return {}, []
         if task == TaskType.TEXTUAL_KIS:
             documents = await self._documents_for(results)
-            return {
-                "kis": self.kis_processor.rank(
-                    plan.original_query, results, documents,
-                    packs=packs, limit=request.top_k, normalizers=normalizers,
-                )
-            }, []
+            kis_results = self.kis_processor.rank(
+                plan.original_query, results, documents,
+                packs=packs, limit=request.top_k, normalizers=normalizers,
+            )
+            await _attach_playback(self.repository, kis_results, self.playback_pad_sec, self.media_root)
+            return {"kis": kis_results}, []
 
         # QA và AVS đều cần evidence pack đầy đủ; dựng lazy cho đúng phần đầu.
         by_id = {item.candidate_id: item for item in candidates}
@@ -604,15 +714,92 @@ class SearchService:
                 plan.original_query, evidence_packs,
                 frame_scores=scores, limit=request.top_k, normalizers=normalizers,
             )
+            await _attach_playback(self.repository, qa_results, self.playback_pad_sec, self.media_root)
             return {"qa": qa_results}, qa_warnings
         if task == TaskType.AVS:
-            return {
-                "avs": self.avs_processor.rank(
-                    plan.original_query, evidence_packs,
-                    retrieval_scores=scores, limit=request.top_k, normalizers=normalizers,
-                )
-            }, []
+            # AVS-GRADE-01: đổ số liệu trước/sau cổng grade vào response. Không
+            # có nó thì không phân biệt được "cổng từ vựng loại mất candidate
+            # đúng" với "pool vốn không có candidate nào tốt" — hai nguyên nhân
+            # của cùng một `zero_result_rate`.
+            diagnostics: dict = {}
+            avs_results = self.avs_processor.rank(
+                plan.original_query, evidence_packs,
+                retrieval_scores=scores, limit=request.top_k,
+                normalizers=normalizers, diagnostics=diagnostics,
+            )
+            self._last_avs_diagnostics = diagnostics
+            await _attach_playback(self.repository, avs_results, self.playback_pad_sec, self.media_root)
+            return {"avs": avs_results}, []
         return {}, []
+
+
+async def _attach_playback(
+    repository: SceneRepository, items: list, pad_sec: float,
+    media_root=None,
+) -> None:
+    """Gắn `playback` vào từng kết quả, tại chỗ.
+
+    Bốn task mang thông tin thời gian theo bốn cách khác nhau, nên phải quy về
+    một chỗ thay vì để UI tự đoán:
+
+        KIS/QA   `scene_id` + `frame_idx`
+        AVS      `segment_id` (chính là scene_id) + `start_frame`/`end_frame`
+        TRAKE    `frame_ids` — trải nhiều scene, phải tra scene của frame đầu
+
+    Thiếu `video_path` (V002/V003 hiện chỉ có ảnh, không có mp4) thì để `None`
+    chứ không trả URL hỏng — UI cần phân biệt "chưa có video" với "phát lỗi".
+    """
+
+    if not items:
+        return
+    scene_ids = {
+        getattr(item, "scene_id", None) or getattr(item, "segment_id", None)
+        for item in items
+    }
+    scene_ids.discard(None)
+    documents = {
+        document.scene_id: document
+        for document in await repository.get_many(sorted(scene_ids))
+    }
+    trake_videos = {
+        item.video_id for item in items if getattr(item, "frame_ids", None)
+    }
+    if trake_videos:
+        for document in await repository.all():
+            if document.video_id in trake_videos:
+                documents.setdefault(document.scene_id, document)
+
+    for item in items:
+        frame_ids = getattr(item, "frame_ids", None)
+        if frame_ids:
+            first, last = min(frame_ids), max(frame_ids)
+            scene = next(
+                (
+                    d for d in documents.values()
+                    if d.video_id == item.video_id
+                    and d.start_frame <= first < d.end_frame_exclusive
+                ),
+                None,
+            )
+            if scene is None:
+                continue
+            item.playback = build_window(
+                scene, focus_frame=first, start_frame=first, end_frame=last,
+                pad_sec=pad_sec, media_root=media_root,
+            )
+            continue
+
+        key = getattr(item, "scene_id", None) or getattr(item, "segment_id", None)
+        scene = documents.get(key)
+        if scene is None:
+            continue
+        item.playback = build_window(
+            scene,
+            focus_frame=getattr(item, "frame_idx", None) or getattr(item, "best_frame_idx", None),
+            start_frame=getattr(item, "start_frame", None),
+            end_frame=getattr(item, "end_frame", None),
+            pad_sec=pad_sec, media_root=media_root,
+        )
 
 
 def _annotate_thresholds(

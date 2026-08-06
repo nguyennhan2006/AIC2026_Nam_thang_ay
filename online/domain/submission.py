@@ -2,7 +2,8 @@
 
 Format đã xác nhận trong `docs/12_USER_GUIDE.md` §6 (mục "Xuất CSV nộp bài"):
 
-    KIS / AVS / TRAKE   mỗi dòng  <video_id>, <frame_id>[, <frame_id_2>, ...]
+    KIS / TRAKE   mỗi dòng  <video_id>, <frame_id>[, <frame_id_2>, ...]
+    (AVS là task NỘI BỘ — không có dòng nộp bài; xem /v1/search/avs)
     QA                  mỗi dòng  <video_id>, <frame_id>, "<answer>"
 
 Không có header, tối đa 100 dòng. `frame_idx` là **true frame index** của

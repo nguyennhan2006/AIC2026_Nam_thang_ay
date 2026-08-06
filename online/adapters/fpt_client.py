@@ -23,6 +23,7 @@ from pathlib import Path
 import random
 import ssl
 from time import perf_counter
+import uuid
 from typing import TYPE_CHECKING, Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -254,7 +255,33 @@ class FptClient:
         message = choices[0].get("message", {})
         text = message.get("content")
         if not isinstance(text, str):
-            raise SchemaInvalidError(f"/chat/completions choices[0].message.content không phải string: {type(text).__name__}")
+            # Model reasoning (Qwen3.6-27B, DeepSeek-V4-Flash, GLM-5.2 trên FPT)
+            # tiêu `max_tokens` cho `reasoning_content` TRƯỚC, rồi mới sinh
+            # `content`. Hết ngân sách giữa phần suy luận thì `content` là None
+            # và `finish_reason` là "length" — đo được: Qwen3.6-27B cần ~1650
+            # token chỉ để dịch một câu, nên max_tokens=200 không bao giờ đủ.
+            # Nói thẳng nguyên nhân, vì thông báo "content không phải string"
+            # trỏ nhầm sang lỗi schema và làm mất rất nhiều thời gian.
+            reasoning = message.get("reasoning_content")
+            finish_reason = choices[0].get("finish_reason")
+            if reasoning and finish_reason == "length":
+                raise SchemaInvalidError(
+                    f"model {body.get('model', model)!r} là model REASONING và đã dùng hết "
+                    f"max_tokens={max_tokens} cho phần suy luận nên chưa kịp sinh câu trả lời. "
+                    "Tăng max_tokens (cần vài nghìn) hoặc đổi sang model trả thẳng "
+                    "(gemma-4-31B-it, gemma-3-27b-it, gpt-oss-20b, Llama-3.3-70B-Instruct)."
+                )
+            # Quirk đo được của FPT: model reasoning + `response_format=json_object`
+            # trả câu trả lời HOÀN CHỈNH trong `reasoning_content` và để `content`
+            # là None, dù `finish_reason` là "stop". Cùng prompt bỏ response_format
+            # thì content đúng nhưng tốn 1091 token thay vì 22 — nên đường
+            # json_object vừa rẻ hơn 50 lần vừa đáng giữ, chỉ cần đọc đúng field.
+            if isinstance(reasoning, str) and reasoning.strip() and finish_reason == "stop":
+                text = reasoning
+            else:
+                raise SchemaInvalidError(
+                    f"/chat/completions choices[0].message.content không phải string: {type(text).__name__}"
+                )
         usage_raw = body.get("usage", {})
         usage = FptUsage(
             model_id=body.get("model", model),
@@ -264,6 +291,75 @@ class FptClient:
             retry_count=retries,
         )
         return FptChatResult(text=text, usage=usage, raw=body)
+
+    def transcribe(
+        self,
+        audio_path: "Path",
+        *,
+        model: str,
+        language: str | None = "vi",
+        response_format: str = "verbose_json",
+    ) -> dict[str, Any]:
+        """POST /audio/transcriptions — multipart/form-data.
+
+        Khác mọi endpoint còn lại của client này: chúng gửi JSON, còn phiên âm
+        phải upload file nên cần multipart. `_request_once` không dùng lại được.
+
+        `verbose_json` để lấy TỪNG ĐOẠN kèm mốc thời gian. `json` thường chỉ trả
+        một khối text liền, mà tầng online cần `start_sec`/`end_sec` để chiếu
+        lời nói vào đúng scene — không có mốc thời gian thì ASR vô dụng cho
+        retrieval theo khoảnh khắc.
+
+        KHÔNG retry ở đây: file audio có thể hàng chục MB, gửi lại mù quáng vừa
+        chậm vừa dễ đụng trần RPM. Caller tự quyết.
+        """
+
+        # CRLF la BAT BUOC theo RFC 7578, khong phai LF - nhieu server tu choi
+        # body dung LF. Dat thanh hang so de khong bi mat khi sua file qua cac
+        # cong cu hay nuot escape.
+        crlf = chr(13) + chr(10)
+        boundary = f"----aic{uuid.uuid4().hex}"
+        parts: list[bytes] = []
+
+        def field(name: str, value: str) -> None:
+            head = f'--{boundary}{crlf}Content-Disposition: form-data; name="{name}"'
+            parts.append(f"{head}{crlf}{crlf}{value}{crlf}".encode("utf-8"))
+
+        field("model", model)
+        field("response_format", response_format)
+        if language:
+            field("language", language)
+
+        file_header = (
+            f"--{boundary}{crlf}"
+            f'Content-Disposition: form-data; name="file"; filename="{audio_path.name}"{crlf}'
+            f"Content-Type: application/octet-stream{crlf}{crlf}"
+        )
+        parts.append(file_header.encode("utf-8"))
+        parts.append(audio_path.read_bytes())
+        parts.append(f"{crlf}--{boundary}--{crlf}".encode("utf-8"))
+        body = b"".join(parts)
+
+        request = Request(
+            f"{self.base_url}/audio/transcriptions",
+            data=body,
+            headers={
+                "Content-Type": f"multipart/form-data; boundary={boundary}",
+                "Authorization": f"Bearer {self.api_key}",
+            },
+            method="POST",
+        )
+        try:
+            with urlopen(request, timeout=self.timeout_sec, context=self._ssl_context) as response:
+                return json.loads(response.read().decode("utf-8"))
+        except HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace") if exc.fp else ""
+            raise classify_http_status(exc.code)(
+                f"FPT /audio/transcriptions -> HTTP {exc.code}: {detail[:500]}",
+                status_code=exc.code,
+            ) from exc
+        except (URLError, TimeoutError) as exc:
+            raise ProviderTimeoutError(f"FPT /audio/transcriptions không phản hồi: {exc}") from exc
 
     def embedding(self, text: str, *, model: str) -> FptEmbeddingResult:
         """POST /embeddings — dùng nếu chọn nhánh dense qua text-embedding

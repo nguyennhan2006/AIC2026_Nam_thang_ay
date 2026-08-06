@@ -129,7 +129,24 @@ export interface Evidence {
   score: number;
 }
 
+/** Đoạn video cần phát cho một kết quả, ĐÃ nới bối cảnh ở backend.
+ *
+ * `null` nghĩa là chưa có file video nguồn — KHÁC với "phát lỗi". UI phải
+ * hiện được sự khác biệt đó thay vì dựng một player 404. */
+export interface PlaybackWindow {
+  video_id: string;
+  /** Đường dẫn TƯƠNG ĐỐI so với data root — phải đưa qua `mediaUrl()` để
+   *  ghép, y như `video_path`/`best_keyframe_path`. Không tự nối chuỗi. */
+  media_path: string;
+  start_sec: number;
+  end_sec: number;
+  /** Thời điểm của frame được nộp — nhảy tới đây, phần nới chỉ là bối cảnh. */
+  focus_sec: number;
+  pad_sec: number;
+}
+
 export interface SearchHit {
+  playback: PlaybackWindow | null;
   rank: number;
   candidate_id: string;
   scene_id: string;
@@ -166,6 +183,7 @@ export interface SequenceHit {
 // ---- Task-specific result items — PR-07 ------------------------------------
 
 export interface KisResultItem {
+  playback?: PlaybackWindow | null;
   rank: number;
   video_id: string;
   frame_idx: number;
@@ -177,6 +195,7 @@ export interface KisResultItem {
 }
 
 export interface QaResultItem {
+  playback?: PlaybackWindow | null;
   rank: number;
   video_id: string;
   frame_idx: number;
@@ -200,6 +219,7 @@ export interface TrakeStep {
 }
 
 export interface TrakeResultItem {
+  playback?: PlaybackWindow | null;
   rank: number;
   video_id: string;
   frame_ids: number[];
@@ -216,6 +236,7 @@ export interface TrakeResultItem {
 }
 
 export interface AvsResultItem {
+  playback?: PlaybackWindow | null;
   rank: number;
   video_id: string;
   segment_id: string;

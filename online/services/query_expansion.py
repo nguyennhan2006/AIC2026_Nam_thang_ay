@@ -41,6 +41,7 @@ nhét synonym xa nghĩa — false positive của BM25 đến từ đây.
 
 from __future__ import annotations
 
+import asyncio
 from typing import Callable
 
 from online.adapters.ocr_fuzzy import normalize_vi
@@ -196,10 +197,16 @@ class QueryExpansionRetriever:
         lexicon: dict[str, list[str]] | None = None,
         *,
         max_terms: int = 6,
+        expander=None,
     ) -> None:
         self.inner = inner
         self.lexicon = lexicon
         self.max_terms = max_terms
+        # `expander` (tùy chọn): object có `.expand(str) -> str` trả thêm term.
+        # Có nó thì lexicon VI→EN cứng ở dưới gần như vô dụng — caption trong
+        # export hiện là TIẾNG VIỆT nên term tiếng Anh khớp 0 token. Xem
+        # online/adapters/fpt_query.py.
+        self.expander = expander
         # Wrapper KHÔNG đổi branch (vẫn cùng adapter/index), chỉ đổi biến thể
         # query. Trước PR-03 nó đặt name="bm25_caption_expanded" trong khi
         # candidate bên trong vẫn mang source="bm25_caption", nên cấu hình cho
@@ -213,22 +220,40 @@ class QueryExpansionRetriever:
         self.backend_kind = getattr(inner, "backend_kind", "lexical")
         self.supported_controls = getattr(inner, "supported_controls", ())
 
+    async def _extra_terms(self, texts: list[str]) -> dict[str, str]:
+        """Term thêm từ LLM cho từng đoạn văn bản, gọi NGOÀI event loop.
+
+        Gom các đoạn trùng nhau trước khi gọi: `normalized_query` và
+        `events[0].text` thường giống hệt nhau ở truy vấn một sự kiện, gọi hai
+        lần là trả tiền hai lần cho cùng một câu.
+        """
+
+        if self.expander is None:
+            return {}
+        unique = list(dict.fromkeys(text for text in texts if text))
+        if not unique:
+            return {}
+        results = await asyncio.gather(
+            *(asyncio.to_thread(self.expander.expand, text) for text in unique)
+        )
+        return dict(zip(unique, results, strict=True))
+
     async def search(self, plan: QueryPlan, *, limit: int) -> list[Candidate]:
+        extra = await self._extra_terms(
+            [plan.normalized_query, *(event.text for event in plan.events)]
+        )
+
+        def expand(text: str) -> str:
+            base = expand_query(text, self.lexicon, max_terms=self.max_terms)
+            terms = extra.get(text, "")
+            return f"{base} {terms}".strip() if terms else base
+
         expanded_events = [
-            event.model_copy(
-                update={
-                    "text": expand_query(
-                        event.text, self.lexicon, max_terms=self.max_terms
-                    )
-                }
-            )
-            for event in plan.events
+            event.model_copy(update={"text": expand(event.text)}) for event in plan.events
         ]
         expanded_plan = plan.model_copy(
             update={
-                "normalized_query": expand_query(
-                    plan.normalized_query, self.lexicon, max_terms=self.max_terms
-                ),
+                "normalized_query": expand(plan.normalized_query),
                 "events": expanded_events,
             }
         )

@@ -108,6 +108,14 @@ class TemporalOptions(StrictModel):
     order_weight: float | None = Field(default=None, ge=0.0, le=5.0)
     gap_penalty_per_sec: float | None = Field(default=None, ge=0.0, le=1.0)
     missing_step_penalty: float | None = Field(default=None, ge=0.0, le=5.0)
+    # "beam" | "dp" — cách ghép chuỗi. Xem search_sequences_dp.
+    sequence_strategy: Literal["beam", "dp"] | None = None
+    # PR-4B Stage A. Đo được: video ĐÚNG thắng áp đảo ở `context` (0.89 vs
+    # 0.31) nhưng vẫn thua vì `ordering` và `duplicate_penalty`. Cho chỉnh
+    # qua request để chạy ablation mà không sửa code.
+    video_context_weight: float | None = Field(default=None, ge=0.0, le=5.0)
+    video_duplicate_penalty: float | None = Field(default=None, ge=0.0, le=5.0)
+    video_coverage_weight: float | None = Field(default=None, ge=0.0, le=5.0)
     # Override trọng số modality riêng cho từng step TRAKE (thay compute_modality_
     # weights() tự động) — index theo thứ tự event 0-based; thiếu step nào thì
     # step đó vẫn dùng suy luận tự động từ nội dung như trước.

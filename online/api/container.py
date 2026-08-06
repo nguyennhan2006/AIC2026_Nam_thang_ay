@@ -11,19 +11,33 @@ from online.adapters.color_search import ColorSearchRetriever
 from online.adapters.dense_retriever import DenseRetriever
 from online.adapters.encoders import HashingTextEncoder, LocalClipTextEncoder, RemoteTextEncoder
 from online.adapters.event_search import EventSearchRetriever, JsonlEventRepository
+from online.adapters.fpt_advisor import FptEvidenceSelector, FptWeightRecommender
 from online.adapters.fpt_client import FptClient
+from online.adapters.fpt_query import (
+    FptQueryExpander,
+    FptQueryTranslator,
+    TranslatingTextEncoder,
+)
 from online.adapters.frame_vector_store import build_frame_vector_rows
 from online.adapters.json_metadata import JsonlSceneRepository
 from online.adapters.ocr_fuzzy import OcrFuzzyRetriever
 from online.adapters.qa_llm import FptQaAnswerer
-from online.adapters.rerank import BgeTextReranker, FptTextReranker, QwenVlReranker
+from online.adapters.rerank import (
+    BgeTextReranker,
+    FptTextReranker,
+    FptVlmReranker,
+    QwenVlReranker,
+)
 from online.adapters.session_store import InMemorySessionStore
 from online.adapters.vector_stores import InMemoryVectorStore, QdrantVectorStore
 from online.config import Settings
+from online.services.keyword_extraction import keyword_query
 from online.services.query_expansion import QueryExpansionRetriever
 from online.services.query_prep import PreparedQueryPlanner
 from online.services.evidence_builder import EvidenceBuilder
 from online.services.qa import QaProcessor
+from online.services.avs import AvsConfig
+from online.services.keyword_extraction import CorpusIdf
 from online.services.rerank_pipeline import RerankPipeline
 from online.services.rules import RuleConfig
 from online.services.search import SearchService
@@ -61,12 +75,39 @@ class AppContainer:
 async def build_container(settings: Settings) -> AppContainer:
     repository = await JsonlSceneRepository.load(settings.metadata_jsonl)
     dataset_manifest = _read_dataset_manifest(settings.metadata_jsonl)
+    # LLM mở rộng query bằng đồng nghĩa TIẾNG VIỆT — chỉ dựng một lần rồi dùng
+    # chung cho cả caption lẫn keyword để hai nhánh chia sẻ cache, không gọi
+    # LLM hai lần cho cùng một câu.
+    # Việc ngắn/máy móc dùng model "nhanh" (trả thẳng `content`); model chính
+    # để dành cho QA. Chọn nhầm model reasoning ở đây thì mỗi lần dịch một câu
+    # tốn ~1650 token và chỉ ra kết quả nếu max_tokens đủ lớn.
+    fast_llm_model = settings.fpt_fast_llm_model or settings.fpt_llm_model
+    query_expander = None
+    if settings.enable_llm_expansion:
+        if not (settings.fpt_enabled and fast_llm_model):
+            raise ValueError(
+                "AIC_ENABLE_LLM_EXPANSION=true nhưng chưa có LLM: cần "
+                "AIC_FPT_ENABLED=true và AIC_FPT_FAST_LLM_MODEL (hoặc AIC_FPT_LLM_MODEL)"
+            )
+        query_expander = FptQueryExpander(
+            FptClient.from_settings(settings), model_id=fast_llm_model
+        )
+
+    # Chỉ nhánh `keyword` được biến đổi truy vấn: caption/OCR/ASR là văn bản
+    # tự nhiên nên khớp cả câu vẫn hợp lý, còn keyword là nhãn object ngắn.
+    keyword_transform = keyword_query if settings.enable_keyword_extraction else None
+
     lexical = []
     for field in ("caption", "ocr", "asr", "keyword"):
-        retriever = await LexicalRetriever.build(field, repository)
+        retriever = await LexicalRetriever.build(
+            field, repository,
+            query_transform=keyword_transform if field == "keyword" else None,
+            drop_overlay_df=settings.ocr_overlay_df,
+            overlay_max_words=settings.ocr_overlay_max_words,
+        )
         # Phương án K: chỉ wrap caption/keyword — OCR/ASR phải giữ nguyên văn.
         if settings.enable_expansion and field in ("caption", "keyword"):
-            retriever = QueryExpansionRetriever(retriever)
+            retriever = QueryExpansionRetriever(retriever, expander=query_expander)
         lexical.append(retriever)
 
     local_frame_rows: list[tuple[str, str, list[float], dict]] = []
@@ -93,6 +134,24 @@ async def build_container(settings: Settings) -> AppContainer:
             encoder = LocalClipTextEncoder(
                 settings.visual_embedding_model, revision=settings.visual_embedding_model_revision
             )
+            # Text tower của CLIP chỉ biết tiếng Anh, mà truy vấn thi đấu là
+            # tiếng Việt — không dịch thì nhánh này vẫn trả số nhưng số đó gần
+            # như vô nghĩa. Bọc encoder chứ không sửa DenseRetriever: mọi thứ
+            # phía sau (vector store, fusion) không cần biết có bước dịch.
+            if settings.enable_query_translation:
+                if not (settings.fpt_enabled and fast_llm_model):
+                    raise ValueError(
+                        "AIC_ENABLE_QUERY_TRANSLATION=true nhưng chưa có LLM: cần "
+                        "AIC_FPT_ENABLED=true và AIC_FPT_FAST_LLM_MODEL (hoặc AIC_FPT_LLM_MODEL)"
+                    )
+                encoder = TranslatingTextEncoder(
+                    encoder,
+                    FptQueryTranslator(
+                        FptClient.from_settings(settings),
+                        model_id=fast_llm_model,
+                        cache_dir=settings.query_translation_cache_dir,
+                    ),
+                )
             vector_store = InMemoryVectorStore(local_frame_rows)
         else:
             encoder = HashingTextEncoder()
@@ -144,12 +203,24 @@ async def build_container(settings: Settings) -> AppContainer:
     # nuốt trọn ~3s thời gian nạp, vượt deadline nhánh và dense_visual bị bỏ
     # qua trong im lặng — đo được: 1-2 truy vấn đầu mỗi tiến trình cho ranking
     # khác hẳn các truy vấn sau.
-    if hasattr(encoder, "warmup"):
+    #
+    # Warmup hỏng thì PHẢI chặn khởi động, KHÔNG được chỉ cảnh báo: export này
+    # có embedding thật nên `dense_visual` đã được đăng ký và `/capabilities`
+    # quảng cáo nó là available. Encoder không nạp được nghĩa là nhánh đó
+    # `failed` ở MỌI request, trong khi server vẫn trả 200 — đúng kiểu hỏng
+    # âm thầm khiến người đo tưởng đang chạy đủ nhánh. Cùng quy ước fail-fast
+    # đã áp cho AIC_ENABLE_EVENT_SEARCH bên dưới.
+    if has_real_embeddings and hasattr(encoder, "warmup"):
         try:
             encoder.warmup()
-        except Exception as exc:  # noqa: BLE001 - thiếu model không được chặn khởi động
-            print(f"cảnh báo: không warmup được text encoder ({exc}) — "
-                  "truy vấn đầu tiên có thể mất nhánh dense", flush=True)
+        except Exception as exc:  # noqa: BLE001 - đổi thành lỗi cấu hình có ngữ cảnh
+            raise ValueError(
+                f"không nạp được text encoder {settings.visual_embedding_model!r}: {exc}. "
+                "Export có embedding thật nên nhánh dense_visual bắt buộc cần encoder này. "
+                "Trên máy không tải được từ HuggingFace, trỏ AIC_VISUAL_EMBEDDING_MODEL vào "
+                "thư mục model đã tải sẵn (vd storage/models/clip-vit-large-patch14) — xem "
+                "scripts/download_hf_model.py."
+            ) from exc
 
     retrievers = [dense, *lexical]
     if settings.enable_ocr_fuzzy:
@@ -176,8 +247,21 @@ async def build_container(settings: Settings) -> AppContainer:
         model_versions={
             key: value
             for key, value in (
-                ("text_reranker", settings.rerank_text_model if settings.rerank_text_url else ""),
-                ("vlm_reranker", settings.rerank_vlm_model if settings.rerank_vlm_url else ""),
+                # Ghi ĐÚNG model sẽ chạy thật, không phải model được cấu hình:
+                # bật FPT thì đường tự-host bị bỏ qua, mà trace vẫn ghi tên cũ
+                # thì so hai run sẽ tưởng cùng model trong khi khác hẳn.
+                (
+                    "text_reranker",
+                    settings.fpt_rerank_model
+                    if (settings.fpt_enabled and settings.fpt_rerank_model)
+                    else (settings.rerank_text_model if settings.rerank_text_url else ""),
+                ),
+                (
+                    "vlm_reranker",
+                    settings.fpt_vlm_model
+                    if (settings.fpt_enabled and settings.fpt_vlm_model)
+                    else (settings.rerank_vlm_model if settings.rerank_vlm_url else ""),
+                ),
                 ("dense_backend", settings.backend),
             )
             if value
@@ -196,27 +280,55 @@ async def build_container(settings: Settings) -> AppContainer:
             timeout_sec=settings.request_timeout_sec,
             api_key=settings.rerank_api_key,
         )
+    # VLM rerank: cùng chiến lược "FPT ưu tiên" như text rerank ở trên, nhưng
+    # KHÔNG dùng chung adapter được — QwenVlReranker nói contract của worker tự
+    # host, FPT chỉ có /chat/completions (xem FptVlmReranker).
+    vlm_reranker = None
+    if settings.enable_vlm_rerank and settings.fpt_enabled and settings.fpt_vlm_model:
+        vlm_reranker = FptVlmReranker(
+            FptClient.from_settings(settings),
+            model_id=settings.fpt_vlm_model,
+            data_root=settings.data_root,
+            frames_per_candidate=settings.rerank_vlm_frames_per_candidate,
+            max_concurrency=settings.fpt_max_concurrency,
+        )
+    elif settings.enable_vlm_rerank and settings.rerank_vlm_url:
+        vlm_reranker = QwenVlReranker(
+            settings.rerank_vlm_url,
+            model_id=settings.rerank_vlm_model,
+            timeout_sec=max(settings.request_timeout_sec, 30.0),
+            api_key=settings.rerank_api_key,
+        )
     rerank_pipeline = RerankPipeline(
         evidence_builder,
         text_reranker=text_reranker,
-        vlm_reranker=(
-            QwenVlReranker(
-                settings.rerank_vlm_url,
-                model_id=settings.rerank_vlm_model,
-                timeout_sec=max(settings.request_timeout_sec, 30.0),
-                api_key=settings.rerank_api_key,
-            )
-            if settings.rerank_vlm_url
-            else None
-        ),
+        vlm_reranker=vlm_reranker,
     )
     # QA answer generation: FPT LLM ưu tiên khi bật (cùng chiến lược với
     # rerank ở trên) — rule-based ANSWER_TOOLS vẫn luôn chạy làm baseline vì
     # score_qa chấm bất kỳ dòng nào trong submission, không chỉ rank 1.
     qa_llm_answerer = None
     if settings.fpt_enabled and settings.fpt_llm_model:
-        qa_llm_answerer = FptQaAnswerer(FptClient.from_settings(settings), model_id=settings.fpt_llm_model)
-    qa_processor = QaProcessor(llm_answerer=qa_llm_answerer, llm_top_n=settings.fpt_qa_top_n)
+        qa_llm_answerer = FptQaAnswerer(
+            FptClient.from_settings(settings),
+            model_id=settings.fpt_llm_model,
+            max_tokens=settings.fpt_qa_max_tokens,
+        )
+    qa_processor = QaProcessor(
+        llm_answerer=qa_llm_answerer,
+        llm_top_n=settings.fpt_qa_top_n,
+        llm_rank_mode=settings.qa_llm_rank_mode,
+    )
+
+    # Cố vấn LLM — chỉ dựng khi có model reasoning. Cả hai đều là tuỳ chọn
+    # theo từng request (`recommend_weights` / `select_evidence`), nên dựng sẵn
+    # không tốn gì cho các request không hỏi tới.
+    weight_recommender = None
+    evidence_selector = None
+    if settings.fpt_enabled and settings.fpt_llm_model:
+        client = FptClient.from_settings(settings)
+        weight_recommender = FptWeightRecommender(client, model_id=settings.fpt_llm_model)
+        evidence_selector = FptEvidenceSelector(client, model_id=settings.fpt_llm_model)
 
     search_service = SearchService(
         repository,
@@ -232,6 +344,22 @@ async def build_container(settings: Settings) -> AppContainer:
         # kể cả gọi qua endpoint convenience /search/kis, không chỉ /v1/search.
         session_store=InMemorySessionStore(),
         dataset_version=(dataset_manifest or {}).get("build_id"),
+        branch_timeout_ms=settings.branch_timeout_ms,
+        avs_config=AvsConfig(
+            grade_mode=settings.avs_grade_mode,
+            soft_lambda=settings.avs_soft_lambda,
+            semantic_tau=settings.avs_semantic_tau,
+            max_per_video=settings.avs_max_per_video,
+        ),
+        # AVS-CRITERIA-01: `AvsCriteria.grade` chấm bằng độ phủ token có trọng
+        # số IDF. Dựng IDF một lần lúc khởi động từ chính văn bản mà cổng grade
+        # sẽ đọc; thiếu nó thì rơi về độ phủ không trọng số và mất khả năng
+        # phân biệt `người`/`đang` với `thợ lặn`/`rùa biển`.
+        avs_idf=CorpusIdf.from_scenes(await repository.all()),
+        playback_pad_sec=settings.playback_pad_sec,
+        media_root=settings.data_root,
+        weight_recommender=weight_recommender,
+        evidence_selector=evidence_selector,
     )
     return AppContainer(
         settings=settings,

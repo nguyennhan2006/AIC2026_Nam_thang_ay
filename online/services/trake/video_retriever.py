@@ -45,7 +45,18 @@ class VideoRetrieverConfig:
     coverage_weight: float = 1.0
     ordering_weight: float = 0.6
     context_weight: float = 0.4
-    duplicate_penalty: float = 0.5
+    # PR-4B: đặt 0.0 sau khi đo được nó PHẠT CHÍNH TRUE POSITIVE.
+    #
+    # Ý định ban đầu: nhiều step trỏ về cùng một scene => nghi là đoạn tóm tắt
+    # đầu bản tin chứ không phải diễn biến thật. Nhưng trên dữ liệu 3 video,
+    # video ĐÚNG luôn bị phạt nặng hơn distractor (0.50–0.60 so với 0.00–0.25),
+    # vì các sự kiện của một diễn biến có thật thì tập trung gần nhau, còn hit
+    # của video sai thì rải rác ngẫu nhiên nên thoát phạt.
+    #
+    # Đo được: `video_recall@1` 0.625 -> 1.000, `mean_r_score` 0.144 -> 0.263.
+    # Giữ nguyên tham số để bật lại được khi có dữ liệu chứng minh nó bắt đúng
+    # montage — nhưng mặc định phải là 0.
+    duplicate_penalty: float = 0.0
     # Video thiếu quá nửa số step gần như chắc chắn sai; loại sớm cho rẻ.
     min_step_coverage: float = 0.5
     top_videos: int = 5

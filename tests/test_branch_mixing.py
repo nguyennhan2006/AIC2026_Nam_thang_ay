@@ -201,6 +201,25 @@ class NegativeConstraintsTests(unittest.TestCase):
     def test_no_negation_returns_empty(self) -> None:
         self.assertEqual(extract_negative_constraints("người cào muối trên cánh đồng"), [])
 
+    def test_khong_as_compound_noun_is_not_a_negation(self) -> None:
+        """`không gian`/`trên không` là danh từ, không phải phủ định.
+
+        Đây là LỌC CỨNG, nên đọc nhầm là xoá thẳng candidate khỏi pool. Đo trên
+        120 truy vấn gold: 3/5 constraint trích ra thuộc kiểu này, và ở
+        `V001_VQA_M03` cụm bị cấm chính là đặc điểm của đáp án đúng.
+        """
+
+        self.assertEqual(extract_negative_constraints("không gian bảo tàng rộng"), [])
+        self.assertEqual(
+            extract_negative_constraints("phương tiện bay trên không và mang túi nước"), []
+        )
+        self.assertEqual(extract_negative_constraints("bầu không khí trang nghiêm"), [])
+        self.assertEqual(extract_negative_constraints("hàng không dân dụng"), [])
+
+    def test_real_negation_survives_the_compound_guard(self) -> None:
+        self.assertEqual(extract_negative_constraints("cảnh không thấy người nào"), ["thay nguoi nao"])
+        self.assertEqual(extract_negative_constraints("a shot without cars"), ["cars"])
+
     def _doc(self, scene_id: str, object_labels: list[str]) -> SceneDocument:
         return SceneDocument(
             scene_id=scene_id, video_id="L01_V001", scene_idx=0,

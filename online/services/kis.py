@@ -30,6 +30,7 @@ from online.adapters.ocr_fuzzy import normalize_vi
 from online.domain.evidence import EvidencePack
 from online.domain.models import SceneDocument, SearchHit
 from online.domain.task_results import KisResultItem
+from online.services.keyword_extraction import SCENE_NOUNS
 from online.services.negative_constraints import extract_negative_constraints
 from online.services.query_planner import QUOTED_RE
 from online.services.safe_frame import SafeFrameConfig, select_safe_frame
@@ -39,8 +40,19 @@ NUMBER_RE = re.compile(r"\b\d[\d.,]*\b")
 # Danh từ riêng: chữ hoa giữa câu (kể cả acronym viết hoa toàn bộ như
 # "UNESCO"). Tiếng Việt viết hoa tên riêng nên đây là tín hiệu rẻ và khá
 # chắc cho "dấu hiệu hiếm".
+#
+# Chữ hoa PHẢI liệt kê tường minh. Dải Unicode `À-Ỹ` (U+00C0–U+1EF8) xen kẽ
+# hoa và thường: `à á ạ đ ê ô` đều nằm trong đó. Bản cũ dùng `[A-ZĐÀ-Ỹ]` nên
+# mọi từ THƯỜNG mở đầu bằng nguyên âm có dấu đều bị nhận là danh từ riêng —
+# đo được trên 36 truy vấn KIS: `rare_cues` toàn `đó, được, đường, đêm, đất`,
+# tức là những từ phổ biến nhất, đúng ngược với định nghĩa "dấu hiệu hiếm".
+_VN_UPPER = (
+    "A-ZÀÁÂÃÈÉÊÌÍÒÓÔÕÙÚÝĂĐĨŨƠƯ"
+    "ẠẢẤẦẨẪẬẮẰẲẴẶẸẺẼẾỀỂỄỆỈỊỌỎỐỒỔỖỘỚỜỞỠỢỤỦỨỪỬỮỰỲỴỶỸ"
+)
 PROPER_NOUN_RE = re.compile(
-    r"(?<!^)(?<![.!?]\s)\b([A-ZĐÀ-Ỹ][a-zà-ỹA-ZĐÀ-Ỹ]{1,}(?:\s+[A-ZĐÀ-Ỹ][a-zà-ỹA-ZĐÀ-Ỹ]{1,})*)"
+    rf"(?<!^)(?<![.!?]\s)\b([{_VN_UPPER}][a-zà-ỹ{_VN_UPPER}]{{1,}}"
+    rf"(?:\s+[{_VN_UPPER}][a-zà-ỹ{_VN_UPPER}]{{1,}})*)"
 )
 
 # Từ chức năng tiếng Việt/Anh — không mang thông tin phân biệt.
@@ -106,12 +118,18 @@ def build_signature(query: str) -> KisSignature:
 
     without_quotes = QUOTED_RE.sub(" ", query)
     content: list[str] = []
+    seen: set[str] = set()
     for token in TOKEN_RE.findall(without_quotes):
         normalized = normalize_vi(token)
-        if len(normalized) < 3 or normalized in STOPWORDS:
+        if len(normalized) < 3 or normalized in STOPWORDS or normalized in SCENE_NOUNS:
             continue
-        if normalized not in content:
-            content.append(token)
+        # So bằng dạng CHUẨN HÓA. Bản cũ đối chiếu `normalized` với `content`
+        # vốn chứa token nguyên gốc, nên hầu như không khử được trùng: một từ
+        # lặp lại vẫn chiếm chỗ trong `content[:3]` và đẩy dấu hiệu thật ra.
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        content.append(token)
 
     negative_words = {word for item in negatives for word in normalize_vi(item).split()}
     content = [item for item in content if normalize_vi(item) not in negative_words]

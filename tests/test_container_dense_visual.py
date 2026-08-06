@@ -18,6 +18,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest import mock
 
 from online.adapters.dense_retriever import DenseRetriever
 from online.adapters.encoders import LocalClipTextEncoder
@@ -64,15 +65,67 @@ class ContainerDenseVisualTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as raw:
             tmp = Path(raw)
             scenes_path = self._write_export(tmp)
-            container = run(build_container(_settings(scenes_path, tmp)))
+            # Chỉ kiểm tra WIRING, nên vô hiệu hoá warmup: nạp CLIP thật cần
+            # ~1.7GB tải về, không phù hợp unit test. Hành vi khi warmup hỏng
+            # được khoá riêng ở test dưới.
+            with mock.patch.object(LocalClipTextEncoder, "warmup", lambda self: None):
+                container = run(build_container(_settings(scenes_path, tmp)))
             dense = next(
                 r for r in container.search_service.retrievers if isinstance(r, DenseRetriever)
             )
             self.assertEqual(dense.branch_id, "dense_visual")
             self.assertEqual(dense.backend_kind, "vector")
             self.assertIsInstance(dense.encoder, LocalClipTextEncoder)
-            # Chưa gọi search() -> model chưa được nạp (lazy).
-            self.assertIsNone(dense.encoder._model)
+
+    def test_unloadable_visual_model_blocks_startup_instead_of_degrading(self) -> None:
+        """Model không nạp được PHẢI làm hỏng khởi động, không được chỉ cảnh báo.
+
+        Từng là lỗi thật: `.env.fpt.local` trỏ `AIC_VISUAL_EMBEDDING_MODEL` vào
+        repo HuggingFace `openai/clip-vit-large-patch14`, mà máy này chặn SSL
+        tới huggingface.co. `warmup()` nuốt exception, nên server vẫn lên,
+        `/capabilities` vẫn quảng cáo `dense_visual`, mọi request vẫn trả 200 —
+        chỉ có nhánh dense `failed` âm thầm ở từng request. Số đo thu được khi
+        đó trông hoàn toàn hợp lệ nhưng thiếu hẳn một nhánh.
+
+        Điều kiện phải giữ: thông báo lỗi nêu ĐÍCH DANH biến môi trường cần
+        sửa, vì đây là lỗi cấu hình chứ không phải lỗi lập trình.
+        """
+
+        with tempfile.TemporaryDirectory() as raw:
+            tmp = Path(raw)
+            scenes_path = self._write_export(tmp)
+
+            def explode(self) -> None:
+                raise OSError("couldn't connect to 'https://huggingface.co'")
+
+            with mock.patch.object(LocalClipTextEncoder, "warmup", explode):
+                with self.assertRaises(ValueError) as ctx:
+                    run(build_container(_settings(scenes_path, tmp)))
+            self.assertIn("AIC_VISUAL_EMBEDDING_MODEL", str(ctx.exception))
+
+    def test_export_without_embeddings_does_not_require_the_clip_model(self) -> None:
+        """Fixture chưa chạy PR-13 vẫn phải khởi động được.
+
+        Fail-fast chỉ áp cho export CÓ embedding thật; không thì `dense_visual`
+        đâu có được đăng ký, và bắt máy dev phải tải CLIP cho một export chạy
+        `lexical_hash_fallback` là vô nghĩa.
+        """
+
+        with tempfile.TemporaryDirectory() as raw:
+            tmp = Path(raw)
+            scene = copy.deepcopy(_BASE_SCENE)
+            scenes_path = tmp / "scenes.jsonl"
+            scenes_path.write_text(json.dumps(scene), encoding="utf-8")
+
+            def explode(self) -> None:
+                raise AssertionError("không được nạp CLIP khi export chưa có embedding")
+
+            with mock.patch.object(LocalClipTextEncoder, "warmup", explode):
+                container = run(build_container(_settings(scenes_path, tmp)))
+            dense = next(
+                r for r in container.search_service.retrievers if isinstance(r, DenseRetriever)
+            )
+            self.assertEqual(dense.branch_id, "lexical_hash_fallback")
 
 
 if __name__ == "__main__":

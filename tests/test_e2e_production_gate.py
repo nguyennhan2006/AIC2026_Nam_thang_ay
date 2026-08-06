@@ -111,6 +111,11 @@ class ProductionGateTests(unittest.TestCase):
         self.assertFalse(build.json()["has_errors"])
 
     def test_06_avs_returns_graded_segments_without_an_official_submission(self) -> None:
+        """AVS là task nội bộ: có kết quả chấm grade, KHÔNG có dòng nộp bài.
+
+        Xác nhận với luật BTC 2026-08-06 — vòng sơ loại chỉ nộp KIS, QA, TRAKE.
+        """
+
         search = self.client.post("/v1/search/avs", json={"query": "người và bảng chữ", "top_k": 5})
         self.assertEqual(search.status_code, 200)
         body = search.json()

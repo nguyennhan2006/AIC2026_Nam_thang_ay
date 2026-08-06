@@ -18,6 +18,7 @@ from scripts.eval_tasks import (
     _frame_hit,
     answer_matches,
     load_gold,
+    dedup_grades_by_event,
     ndcg_at_k,
     normalize_answer,
 )
@@ -80,6 +81,27 @@ class NdcgTests(unittest.TestCase):
         good = ndcg_at_k([3, 0, 0], [3, 3], 3)
         bad = ndcg_at_k([0, 0, 3], [3, 3], 3)
         self.assertGreater(good, bad)
+
+    def test_repeated_event_cannot_push_ndcg_above_one(self) -> None:
+        """Trả về cả chùm scene của MỘT sự kiện không phải là xếp hạng hoàn hảo.
+
+        Một interval gold trải qua 15–64 scene. Không khử trùng thì
+        `dcg(grades)` cộng trên nhiều vị trí hơn `dcg(ideal)` và nDCG vượt 1 —
+        đo được max 2.357 trên bộ gold thật.
+        """
+
+        hits = [(3, "E01"), (3, "E01"), (3, "E01"), (3, "E01")]
+        ideal = [3, 2]
+        self.assertGreater(ndcg_at_k([g for g, _ in hits], ideal, 100), 1.0)
+        graded = dedup_grades_by_event(hits)
+        self.assertEqual(graded, [3, 0, 0, 0])
+        self.assertLessEqual(ndcg_at_k(graded, ideal, 100), 1.0)
+
+    def test_distinct_events_all_count(self) -> None:
+        self.assertEqual(
+            dedup_grades_by_event([(3, "E01"), (2, "E02"), (0, None), (1, "E03")]),
+            [3, 2, 0, 1],
+        )
 
 
 class GoldLoaderTests(unittest.TestCase):

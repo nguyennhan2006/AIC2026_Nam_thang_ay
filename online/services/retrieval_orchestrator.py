@@ -21,7 +21,15 @@ from online.domain.execution import BranchStatus
 from online.domain.models import QueryPlan
 from online.errors import DependencyUnavailableError
 
-DEFAULT_TIMEOUT_MS = 3000
+# Deadline mỗi nhánh. 3000ms được chọn khi corpus có 217 scene; ở 765 scene
+# thì `dense_visual` (encode CLIP + quét 855 vector) và `ocr_fuzzy` (khớp mờ
+# trên mọi scene) chạy song song và bóp nghẹt nhau — đo được 1.6–3.9s, và
+# `dense_visual` timeout ở 25–60% truy vấn TRONG IM LẶNG (nhánh mạnh nhất biến
+# mất, kết quả vẫn trả về bình thường).
+#
+# Chạy riêng `dense_visual` chỉ mất ~200ms, nên đây là tranh chấp CPU chứ không
+# phải nhánh chậm. Deadline phải theo kích thước corpus, không phải hằng số.
+DEFAULT_TIMEOUT_MS = 8000
 
 
 def _branch_identity(retriever: object) -> tuple[str, str]:
@@ -36,11 +44,19 @@ def _branch_identity(retriever: object) -> tuple[str, str]:
     return str(branch_id), str(execution_id)
 
 
-def resolve_timeout_ms(plan: QueryPlan, execution_id: str, branch_id: str) -> int:
+def resolve_timeout_ms(
+    plan: QueryPlan, execution_id: str, branch_id: str, default_ms: int = DEFAULT_TIMEOUT_MS
+) -> int:
     override = plan.search_options.branches.get(execution_id) or plan.search_options.branches.get(
         branch_id
     )
-    return override.timeout_ms if override is not None else DEFAULT_TIMEOUT_MS
+    # Chỉ dùng override khi request ĐẶT TƯỜNG MINH `timeout_ms`. Trước đây mọi
+    # `BranchRuntimeOptions` đều mang default 3000, nên chỉ cần request chạm
+    # tới một nhánh (vd để đổi `weight`) là nhánh đó bị ép về 3000 — vô tình
+    # ghi đè cấu hình deployment bằng một giá trị người gửi không hề chọn.
+    if override is not None and "timeout_ms" in override.model_fields_set:
+        return override.timeout_ms
+    return default_ms
 
 
 class RetrievalOrchestrator:
@@ -56,7 +72,9 @@ class RetrievalOrchestrator:
         self, retriever, plan: QueryPlan, limit: int
     ) -> tuple[list[Candidate], BranchStatus]:
         branch_id, execution_id = _branch_identity(retriever)
-        timeout_ms = resolve_timeout_ms(plan, execution_id, branch_id) or self.default_timeout_ms
+        timeout_ms = resolve_timeout_ms(
+            plan, execution_id, branch_id, self.default_timeout_ms
+        )
         started = perf_counter()
 
         def elapsed() -> int:
