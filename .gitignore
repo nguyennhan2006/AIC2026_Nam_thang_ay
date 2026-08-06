@@ -75,3 +75,8 @@ storage/raw/videos/L21_V001.mp4
 input/
 input*.zip
 notebooks/__pycache__/
+
+# Gói chẩn đoán tạm — dựng lại được bằng scripts/, không commit
+aic_debug_bundle/
+aic_debug_bundle.zip
+*.patch

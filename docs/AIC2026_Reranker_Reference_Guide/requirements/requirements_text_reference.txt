@@ -1,0 +1,15 @@
+# Reference only. Install a PyTorch build matching the target CUDA separately.
+transformers>=4.51.0
+sentence-transformers>=5.4,<6
+datasets
+accelerate
+huggingface-hub
+scikit-learn
+pandas
+pyyaml
+jsonschema
+
+# Optional:
+# FlagEmbedding[finetune]
+# bitsandbytes
+# tensorboard

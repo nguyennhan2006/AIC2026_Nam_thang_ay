@@ -907,6 +907,881 @@ sự tồn tại của `warmup` vì caller dò bằng `hasattr`).
 
 ---
 
+## FPT-WIRE-01 — Cắm 4 model FPT vào các tầng còn rỗng
+
+### Phát hiện làm đổ mọi con số cũ
+
+`scripts/eval_kis.py::build_service` là **định nghĩa pipeline THỨ HAI**, không
+đi qua `online/api/container.py`. Nó thiếu nhánh object/action/color/event,
+thiếu VLM rerank, và không bọc encoder bằng `TranslatingTextEncoder`. Mọi số
+trong tài liệu này trước FPT-WIRE-01 đều là số của bản dựng đó, **không phải
+của hệ thống mà server chạy** — dù chúng trông hoàn toàn hợp lệ.
+
+Đã thêm `--pipeline container` cho cả `eval_kis.py` và `eval_tasks.py`. Bản
+`legacy` giữ lại vì các mode ablation (`metadata_only`/`vector_only`/
+`ocr_only`) cần nó, nhưng **không được dùng để báo cáo điểm nữa**.
+
+Riêng việc đo đúng pipeline đã đổi kết quả nhiều hơn bất kỳ thí nghiệm ranking
+nào từng chạy:
+
+| | legacy (số cũ) | container (A) |
+|---|---|---|
+| KIS MRR | 0.442 | **0.547** |
+| QA answer_accuracy | 0.333 | **0.500** |
+| TRAKE mean_r_score | 0.075 | **0.225** |
+
+QA tăng vì QA LLM trước đó **hỏng ở mọi lệnh gọi** mà không ai biết (xem dưới).
+
+### QA LLM chưa từng chạy được lần nào
+
+`AIC_FPT_LLM_MODEL=Qwen3.6-27B` là model reasoning. Với
+`response_format={"type":"json_object"}`, bản triển khai của FPT đặt TOÀN BỘ
+câu trả lời vào `reasoning_content` và để `content=None`, dù `finish_reason`
+là `"stop"` và chỉ tốn 22 token. `FptQaAnswerer` đọc `content` -> ném
+`SchemaInvalidError` -> `QaProcessor` lặng lẽ rơi về rule-based.
+
+Nên trước đợt này chỉ **2/9** model FPT thật sự sống (text rerank + VLM cho
+enrichment offline), không phải 3 như đã ghi.
+
+Bỏ `response_format` thì `content` đúng nhưng tốn **1091 token** thay vì 22 —
+nên đường json_object rẻ hơn 50 lần và đáng giữ, chỉ cần đọc đúng field.
+
+### Model nào trả thẳng, model nào reasoning
+
+Đo trên FPT, cùng một câu dịch VI→EN:
+
+| model | token | `content` |
+|---|---|---|
+| gemma-4-31B-it | 9 | OK |
+| gemma-3-27b-it | 11 | OK |
+| gpt-oss-20b | 165 | OK |
+| Llama-3.3-70B-Instruct | 4 | OK (nhưng dịch cụt) |
+| DeepSeek-V4-Flash | >200 | None (reasoning) |
+| GLM-5.2 | >200 | None (reasoning) |
+| Qwen3.6-27B | 1652 | OK (reasoning) |
+
+`DeepSeek-V4-Flash` được ghi sẵn ở vai "LLM nhanh" nhưng chính nó là model
+reasoning — sai vai. Đổi sang `gemma-4-31B-it`.
+
+Catalog thật có 17 model; `SaoLa3.1-medium` và `GLM-5.1` trong các dòng
+ablation đã comment **không tồn tại**.
+
+### Ablation — một biến mỗi lần, PYTHONHASHSEED=0, `--max-per-video 0`
+
+| metric | A gốc | B dịch | C expand | D dịch+expand |
+|---|---|---|---|---|
+| KIS R@1 | 0.333 | **0.500** | 0.333 | **0.500** |
+| KIS R@5 | 0.750 | **0.917** | 0.750 | **0.917** |
+| KIS R@20 | 0.917 | **1.000** | 0.917 | **1.000** |
+| KIS MRR | 0.547 | **0.720** | 0.512 | **0.720** |
+| QA R@1 | 0.083 | 0.083 | 0.167 | 0.167 |
+| QA MRR | 0.216 | 0.261 | 0.266 | **0.291** |
+| QA answer_acc | 0.500 | **0.583** | 0.500 | **0.583** |
+| TRAKE mean_r | 0.225 | **0.263** | 0.225 | 0.231 |
+| AVS nDCG@100 | 0.238 | **0.299** | 0.201 | **0.299** |
+| AVS P@100 | 0.333 | 0.312 | 0.271 | 0.312 |
+
+**B (dịch VI→EN trước CLIP text tower) — GIỮ.** Thắng ở 8/10 chỉ số, và là
+thay đổi lớn nhất từ trước tới nay: KIS R@20 đạt trần 1.000. Nguyên nhân rõ
+ràng chứ không phải may: vector ảnh sinh bằng `openai/clip-vit-large-patch14`,
+mà text tower của CLIP chỉ được huấn luyện trên tiếng Anh — đưa thẳng truy vấn
+tiếng Việt vào là so một câu model chưa từng học với vector ảnh.
+
+**C (mở rộng đồng nghĩa tiếng Việt cho BM25) — KHÔNG giữ cho KIS/AVS.** Nó
+làm GIẢM KIS MRR (0.547 -> 0.512) và AVS nDCG (0.238 -> 0.201). Đúng kiểu
+query drift: thêm term đồng nghĩa kéo theo candidate chỉ khớp term phụ.
+
+**E (dịch + VLM rerank) = B ĐÚNG TỪNG CHỮ SỐ trên cả 10 chỉ số.** Tốn
+~1400 lệnh gọi FPT và nhiều phút, dịch chuyển đúng 0 con số. Nguyên nhân nhìn
+thấy được khi thử lẻ: VLM cho điểm rất phân cực (0.80 cho scene đúng, 0.00 cho
+phần còn lại), nên đa số candidate hoà điểm 0.0 và sort ổn định giữ nguyên thứ
+tự cũ. Giá trị của nó nằm ở việc BÁC BỎ dương tính giả, mà bộ gold này không
+ép được điều đó — `correct_video_rate` đã là 1.000 từ đầu. **Không bật mặc
+định.**
+
+**D cho thấy hai biến gần như trực giao.** KIS/AVS của D bằng hệt B (expansion
+không thêm gì khi đã có dịch), còn QA MRR cao nhất (0.291). Nên cân nhắc bật
+expansion **chỉ cho QA**, tắt cho KIS/AVS — hiện `AIC_ENABLE_LLM_EXPANSION` là
+cờ toàn cục, chưa tách theo task được.
+
+### Kiểm kê prompt — đã gom về một nơi
+
+Trước: 4 prompt nằm rải rác dạng hằng số module trong 3 adapter. Không biết
+prompt nào đang chạy phiên bản nào, và ngân sách token bị hard-code tại chỗ
+gọi (chính là cách QA hỏng 100%). Nay `online/prompts/registry.py` giữ cả 6,
+mỗi cái khai **vai model** (`fast`/`reasoning`/`vlm`) thay vì tên model — tên
+model là chuyện môi trường, còn "việc này có cần suy luận nhiều bước không" là
+thuộc tính của chính việc đó.
+
+### Hai cố vấn LLM mới
+
+`FptWeightRecommender` — đề xuất trọng số nhánh, KHÔNG tự áp. Kiểm chứng thật
+với truy vấn `bảng hiệu có chữ "Gừng cay muối mặn"`: `bm25_ocr=3.0`,
+`ocr_fuzzy=2.5`, và tắt hẳn 7 nhánh còn lại kể cả `dense_visual=0.0`.
+
+`FptEvidenceSelector` — lọc bằng chứng thô. Giữ nội dung cảnh, loại `HTV9 HD`,
+`06:33:29`, `60 GIÂY`, `Lắk: Giảm 4 đơn vị hành chính...` như lớp phủ của đài.
+Truy vấn không khớp thì trả `supports:false` thay vì dựng bằng chứng giả.
+
+### Còn hở: LLM confidence bị bỏ khi xếp hạng QA
+
+`QaProcessor._enhance_with_llm` thay `answer`/`answer_type`/`verifier_status`
+nhưng **không đụng `joint_score`**, mà `joint_score` mới là thứ quyết định thứ
+hạng. Nên `confidence` của LLM bị vứt.
+
+Quan sát cụ thể trên submission thật, câu hỏi "Cột nước phun lên từ đâu?":
+
+    rank 1  L21_V001,6933,nguồn nước gần người đàn ông
+    rank 2  L21_V001,6933,người
+    rank 3  L21_V001,6099,giếng          <- LLM chấm 0.95, đây là đáp án đúng
+
+`joint_top1` = 0.083 phần lớn đến từ đây. Đây là thí nghiệm ranking nên phải
+đo trước khi giữ, không sửa thẳng.
+
+---
+
+## TRAKE-CONSTRAINT-01 — Ràng buộc hình thức và cửa sổ chấm
+
+**Trạng thái: DROP cả hai giả thuyết. Nút thắt là CHỌN FRAME.**
+
+Nền: cấu hình B (dịch bật, expansion tắt, VLM tắt), `PYTHONHASHSEED=0`,
+`--pipeline container --tasks TRAKE --max-per-video 0`.
+
+### Giả thuyết 1 — ràng buộc hình thức lấn át độ liên quan: SAI
+
+| cấu hình | mean_r_score |
+|---|---|
+| mặc định (`gap=0.002`, `order=0.6`) | 0.263 |
+| `--trake-gap-penalty 0` | 0.263 |
+| `--trake-order-weight 0` | 0.263 |
+| cả hai = 0 | **0.231** |
+
+Tắt riêng từng cái không đổi gì; tắt cả hai còn tệ hơn. Nghi vấn ghi ở mục
+"Việc tiếp theo" của TRAKE T1–T4 là **sai**.
+
+Nhìn lại thì rõ vì sao: thứ tự vốn ĐÃ là cổng cứng — `sequence_search.py:87`
+bỏ qua mọi hit có `best_frame_idx < last_frame + min_gap_frames`. Còn
+`max_gap_sec=300s` không bó gì khi khoảng cách bước thực chỉ ~12s. Hai tham số
+này chưa bao giờ là thứ đang quyết định.
+
+### Giả thuyết 2 — cửa sổ chấm quá hẹp: chỉ đúng một nửa, và không cứu được gì
+
+| nửa cửa sổ | mean_r_score | trần lý thuyết | khoảng cách tới trần |
+|---|---|---|---|
+| 2s (mặc định) | 0.263 | 0.800 | 0.537 |
+| 3s | 0.294 | 0.971 | 0.677 |
+| 4s | 0.319 | 1.000 | 0.681 |
+| 5s | 0.350 | 1.000 | 0.650 |
+
+Đúng là cửa sổ ±2s chặn trần ở 0.800 — khoảng cách xa nhất từ frame gold tới
+keyframe gần nhất là 92 frame = 3.07s, còn keyframe cách nhau trung vị 120
+frame. Nhưng nới lên 4s đẩy trần **+0.200** mà điểm thật chỉ được **+0.056**:
+khoảng cách tới trần *rộng ra*, không hẹp lại.
+
+### Đính chính một kết luận cũ
+
+`docs/21` từng ghi "7/35 bước TRAKE có candidate không tồn tại trong corpus —
+trần cứng". **Sai.** Candidate luôn tồn tại; 7/35 là hệ quả của cận dưới 2s
+trong `clamp(scene_duration * 0.5, 2.0, 7.0)`, không phải của dữ liệu.
+
+### Giả thuyết 3 — beam bỏ sót chuỗi tốt hơn: SAI
+
+Cài `search_sequences_dp` (quy hoạch động chính xác, cùng hàm mục tiêu với
+beam) + `--trake-strategy beam|dp`.
+
+| | mean_r_score |
+|---|---|
+| beam | 0.263 |
+| DP thiếu `max_gap_sec` | 0.094 |
+| DP đầy đủ ràng buộc | 0.231 |
+
+**Phát hiện phụ quan trọng:** bản DP đầu bỏ mất `max_gap_sec` và tụt xuống
+0.094 — TRAKE_E02 cho chuỗi trải 980 giây, nhảy tới frame 36764. `max_gap_sec`
+là chặn CỨNG và đang làm việc thật; `gap_penalty_per_sec` là phạt MỀM và không
+ảnh hưởng gì. Hai tham số này từng bị tôi gộp làm một nhóm "ràng buộc hình
+thức" — chúng không cùng loại.
+
+Với ràng buộc đầy đủ: **7/8 query giống hệt beam**, chỉ TRAKE_H01 khác
+(0.250 vs 0.000). Dưới ngưỡng kết luận. Beam rộng 50 đã đủ chính xác.
+
+Test: `tests/test_trake_dp.py` (6 test, gồm property test trên 60 input ngẫu
+nhiên khoá "DP không bao giờ thua beam trên hàm mục tiêu").
+
+### Còn lại đúng một giả thuyết
+
+Hệ **đang chọn nhầm frame** dù ứng viên đúng nằm sẵn trong tầm với, và cả ba
+giả thuyết về khâu tìm kiếm đều đã bị loại. Nguyên nhân còn lại chưa thử: điểm từng bước hiện là **tương đối** (điểm retrieval:
+"frame này tốt hơn frame kia không") trong khi R-score hỏi một câu **tuyệt
+đối** ("frame này có nằm trong cửa sổ không"). Thiết kế ở
+`docs/22_TRAKE_CHAIN_SCORING.md`.
+
+CLI mới: `--trake-gap-penalty`, `--trake-order-weight`, `--trake-missing-penalty`.
+
+---
+
+## METRIC-SPLIT-01 + QA-JOINT-01 (PR-1)
+
+### Tách metric — làm trước mọi thứ khác
+
+Không dùng một metric gộp làm căn cứ duy nhất nữa. Bốn task, mỗi task tách
+thành tầng riêng. Ngay khi tách đã lộ hai thứ mà số gộp che mất:
+
+| Task | Chỉ số tách | Giá trị | Đọc ra điều gì |
+|---|---|---|---|
+| KIS | `candidate_recall@20` | 1.000 | tìm kiếm ĐÃ xong việc |
+| KIS | `top1_pairwise_accuracy` | 0.545 (6/11) | 11/12 truy vấn có đáp án ở hạng 1–2, chọn đúng chỉ hơn tung đồng xu |
+| QA | `evidence_recall` | 0.833 | frame đúng gần như luôn có mặt |
+| QA | `pairing_accuracy` | 0.875 (7/8) | **ghép KHÔNG sai** — có đủ hai mảnh thì chúng đã cùng dòng |
+| TRAKE | `frame_oracle_coverage` | 0.800 | trần do dữ liệu |
+| TRAKE | `frame_selection_accuracy` | 0.328 | trong phần với tới được chỉ chọn đúng 1/3 |
+| AVS | `zero_result_rate` | 0.375 | 3/8 truy vấn trả về RỖNG |
+
+`pairing_accuracy = 0.875` sửa lại chẩn đoán trước đó của tôi. Tôi đã viết QA
+"ghép sai dòng"; thực ra ghép đúng, chỉ là **dòng đúng bị xếp thấp**.
+
+**Đồng thời phát hiện `joint_top1` bị thổi lên.** Bản cũ tính
+`answer_ok and rank == 1`, trong đó `answer_ok` là "CÓ DÒNG NÀO ĐÓ đúng cả ba"
+còn `rank == 1` là "DÒNG ĐẦU đúng video+frame" — hai vế rơi vào hai dòng khác
+nhau vẫn được tính đúng. Đã sửa thành "dòng đầu đúng cả ba".
+
+### QA-JOINT-01 — bốn cách tính `joint_score`
+
+`joint = evidence_conf × answer_conf × verifier_weight`, tính TRƯỚC khi LLM
+chạy, nên `confidence` của LLM không bao giờ vào thứ hạng.
+
+| mode | joint_top1 | QA MRR |
+|---|---|---|
+| `keep` (cũ) | 0.083 | 0.261 |
+| `scale` (× conf) | 0.083 | 0.261 |
+| `boost` (× (1+conf)) | **0.333** | **0.420** |
+| `answer_first` (conf là chính) | 0.333 | 0.420 |
+| `promote` (× 2, ĐỐI CHỨNG) | 0.333 | 0.418 |
+
+**GIỮ `boost`.** joint_top1 gấp 4 lần (1/12 → 4/12), trên ngưỡng nhiễu 2 query.
+
+**Kết quả quan trọng nhất là của biến thể đối chứng.** `promote` nhân một hằng
+số, hoàn toàn không dùng `confidence`, mà cho kết quả y hệt `boost`. Nghĩa là
+**`confidence` của LLM gần như không mang thông tin** — cái ăn điểm chỉ là việc
+ưu tiên dòng do LLM trả lời lên trên dòng rule-based.
+
+Điều này ảnh hưởng thẳng tới PR-6: **chưng cất `confidence` của LLM sang một
+reranker nhỏ không có cơ sở.** Nếu chưng cất thì phải chưng cất tín hiệu khác.
+
+### Một lỗi hạ tầng đã sửa
+
+`--json-out` không tự tạo thư mục cha: script chạy xong, in đủ số, rồi ném
+`FileNotFoundError` ở dòng cuối và mất trắng kết quả một lần chạy dài.
+
+### Cảnh báo về tính tái lập
+
+Một lần đọc được `evidence_recall = 0.750` trong khi bốn lần khác đều 0.833
+(cùng cấu hình). Lần dị thường đó chính là lần bị lỗi ghi file. Chưa giải thích
+được, và FPT rerank nằm trong đường xếp hạng nên kết quả không bit-reproducible.
+**Cần một phép đo repeat-stability trước khi tin các chênh lệch 1 query.**
+
+---
+
+## AVS-GRADE-01 + REPEAT-STABILITY-01 (PR-2)
+
+**Trạng thái: GIỮ `semantic_or_lexical`. Cổng từ vựng là thủ phạm, đã chứng minh trực tiếp.**
+
+### Đo trước/sau cổng — trả lời dứt điểm câu hỏi nguyên nhân
+
+Câu hỏi: *candidate đúng có thật sự bị cổng loại, hay 3 truy vấn kia vốn đã
+không có candidate tốt?*
+
+| | hard_gate | semantic_or_lexical |
+|---|---|---|
+| candidate TRƯỚC cổng | 48.4 | 48.4 |
+| candidate SAU cổng | **5.0** | 48.4 |
+| `correct_candidate_dropped_by_grade` | **1.000** | 0.000 |
+
+Cổng vứt **90% candidate**, và ở **cả 8/8 truy vấn** nó loại mất candidate đúng
+theo gold. Không phải pool nghèo — là cổng.
+
+### Ablation, 5 lần mỗi variant, chế độ FPT thật
+
+| variant | nDCG mean | min | max | sd | zero_result_rate |
+|---|---|---|---|---|---|
+| A `hard_gate` | 0.2995 | 0.2995 | 0.2995 | 0.0000 | 0.375 |
+| B `no_gate` | 0.4401 | 0.4210 | 0.4528 | 0.0174 | 0.000 |
+| C `soft` | 0.4384 | 0.3731 | 0.4881 | 0.0437 | 0.000 |
+| D `semantic_or_lexical` | **0.4528** | 0.4528 | 0.4528 | **0.0000** | 0.000 |
+
+Đọc theo khung đã định trước:
+
+- **B > A** -> xác nhận cổng cứng là thủ phạm. Chênh 0.14, ngoài mọi biên nhiễu.
+- **C ≈ B** -> KHÔNG kết luận được C hơn B: chênh 0.0017 trong khi sd của C là
+  0.0437. Nếu chỉ chạy một lần, C ra 0.4881 và trông như thắng rõ — đó chính là
+  con số tôi báo cáo trước khi có repeat-stability, và nó là đỉnh của dải.
+- **D > C** -> giữ D. Cao nhất về trung bình VÀ tất định tuyệt đối.
+
+### Vì sao D tất định còn C thì không
+
+C để điểm ngữ nghĩa làm tín hiệu xếp hạng chính, nên nó hứng trọn dao động của
+FPT rerank. D dùng ngưỡng để QUYẾT ĐỊNH GIỮ, rồi vẫn xếp hạng bằng công thức cũ
+(grade chiếm ưu thế) nên miễn nhiễm.
+
+Kết luận rộng hơn: **mở cổng làm lộ ra dao động vốn đã có sẵn.** Khi chỉ còn 5
+candidate thì thứ tự của reranker gần như không đổi được gì; giữ 48 candidate
+thì reranker mới thật sự quyết định đầu ra — và cùng lúc, sự bất định của nhà
+cung cấp mới nhìn thấy được.
+
+### REPEAT-STABILITY-01 — tách hai nguồn dao động
+
+`scripts/repeat_stability.py`. Bắt buộc tách hai chế độ:
+
+| chế độ | kết quả |
+|---|---|
+| `local` (AIC_FPT_ENABLED=false) | **sd = 0 trên mọi metric**, 1 dấu vân tay thứ hạng |
+| `fpt` | dao động chỉ xuất hiện ở variant để ngữ nghĩa dẫn dắt (C, B) |
+
+Hệ thống **tất định hoàn toàn khi không gọi mạng**. Toàn bộ dao động quan sát
+được là **do nhà cung cấp**, không phải do thuật toán. Hai thứ này phải báo cáo
+riêng, gộp lại là quy nhầm nguyên nhân.
+
+Điều này cũng giải thích được lần đọc `evidence_recall = 0.750` dị thường ở
+QA-JOINT-01: FPT nằm trong đường xếp hạng.
+
+### Giới hạn của chính metric `correct_candidate_dropped_by_grade`
+
+Chạy full với D cho `post_grade_candidate_count = 25.0` và
+`correct_candidate_dropped_by_grade = 0.875` — tức D VẪN loại mất candidate
+đúng ở 7/8 truy vấn, dù nó cho nDCG cao nhất.
+
+Không mâu thuẫn, nhưng cho thấy metric tôi định nghĩa quá thô: nó chỉ hỏi "có
+candidate đúng nào bị loại không", không phân biệt
+
+- loại mất candidate LẼ RA đã lọt vào đầu ra  (có hại), với
+- loại một candidate đúng nhưng thừa, vốn không bao giờ chen được vào top-3
+  vì `max_per_video = 3` đã chặn  (vô hại).
+
+Với trần 3 kết quả, phần lớn "drop" thuộc loại thứ hai. Muốn metric này dùng
+được để ra quyết định thì phải giới hạn nó vào các candidate nằm trong tầm
+đầu ra, hoặc đo sau khi đã bỏ trần `max_per_video`.
+
+Quyết định giữ D vẫn dựa trên nDCG/`zero_result_rate` và độ ổn định — không
+dựa trên chỉ số này.
+
+### Còn một cổng nữa chưa đụng tới
+
+`AvsConfig.max_per_video = 3`. Với dataset MỘT video, nó chặn cứng AVS ở 3 kết
+quả — khớp đúng `result_count` quan sát được (0,0,0,1,2,3,3,3). Biến môi trường
+`AIC_AVS_MAX_RESULTS_PER_VIDEO=20` có trong file env nhưng KHÔNG được code đọc.
+Giữ nguyên trong PR này để chỉ đổi một biến, nhưng đây là ràng buộc bó tiếp theo
+của AVS.
+
+Test: `tests/test_avs_grade_gate.py` (6 test), gồm case hồi quy "phương tiện
+cứu hộ" vs "xe cứu thương" — cùng nghĩa, gần như không chung token.
+
+---
+
+## EVAL-MULTIVIDEO-01 (PR-3)
+
+**Trạng thái: KIS khoẻ thật. TRAKE sụp ở Stage A — tầng chưa từng được đo.**
+
+### Đã dựng
+
+`scripts/build_distractor_export.py` — L21_V002/V003 chỉ có ảnh keyframe + CSV
+mapping (`n, pts_time, fps, frame_idx`), KHÔNG có scene manifest và KHÔNG có
+ASR như V001. Scene được suy từ chính lưới keyframe: mỗi keyframe mở một scene
+kéo tới keyframe kế tiếp. Ghi `model_name: csv_keyframe_grid:scene-fallback`
+để không ai đọc nhầm đó là ranh giới ngữ nghĩa do detector cắt.
+
+Kết quả: **765 scene / 3 video** (V001 217, V002 262, V003 286).
+
+`scripts/embed_export_keyframes.py` — **855 vector** trên cả 3 video.
+
+Bốn ràng buộc schema phát hiện khi dựng: `source_path` (repository đọc để phục
+vụ `/v1/media`), `width`/`height` phải > 0, `segmentation_provenance` có schema
+cố định, `transition_in/out` là enum không nhận `None`.
+
+**Bẫy đáng ghi:** repository đọc keyframe **lồng trong scene**, không đọc
+`keyframes.jsonl`. Cập nhật một file mà quên file kia thì vector nằm trên đĩa
+còn nhánh dense im lặng bỏ qua toàn bộ video mới.
+
+### Kết quả — và vì sao không dùng được
+
+| | 1 video | 3 video | Δ |
+|---|---|---|---|
+| KIS R@1 | 0.500 | 0.583 | +0.083 |
+| KIS `top1_pairwise_accuracy` | 0.545 | 0.636 | +0.091 |
+| KIS MRR | 0.720 | 0.762 | +0.042 |
+| QA MRR | 0.421 | 0.483 | +0.062 |
+| QA `joint_top1` | 0.333 | 0.333 | 0.000 |
+| TRAKE `correct_video_rate` | 1.000 | **0.875** | −0.125 |
+| TRAKE `mean_r_score` | 0.263 | 0.231 | −0.031 |
+| AVS `event_coverage` | 0.308 | 0.267 | −0.042 |
+
+Mọi chênh lệch đều là **đúng 1 query**: KIS R@1 +0.083 = 1/12; `top1_pairwise`
+6/11 -> 7/11; TRAKE 8/8 -> 7/8. Tất cả dưới ngưỡng 2 query. **Không có gì dịch
+chuyển thật.**
+
+Nguyên nhân: V002/V003 chưa có caption, nên chúng chỉ cạnh tranh ở
+`dense_visual`. Chín nhánh còn lại (`bm25_caption`, `bm25_ocr`, `bm25_asr`,
+`bm25_keyword`, `ocr_fuzzy`, `bm25_object`, ...) **không thể nhầm vì chúng
+không nhìn thấy video mới**. Fusion vì thế bị chi phối bởi các nhánh miễn
+nhiễm với distractor.
+
+**Không được đọc KIS tăng là tin tốt.** Thêm distractor mà điểm tăng thì hoặc
+là nhiễu, hoặc là chuẩn hoá điểm đổi theo pool — cả hai đều không phải cải
+thiện năng lực.
+
+### Tín hiệu thật duy nhất
+
+`TRAKE.correct_video_rate` rời khỏi 1.000 lần đầu tiên. Đây là chỗ duy nhất
+nhầm lẫn xuyên video biểu hiện được, và nó chỉ có thể xảy ra từ khi có video
+thứ hai — đúng lý do PR-3 tồn tại.
+
+### Giai đoạn 2 — distractor ĐẦY ĐỦ (548 keyframe đều có caption)
+
+| | 1 video | 3v thị giác | 3v đầy đủ | Δ |
+|---|---|---|---|---|
+| KIS R@1 | 0.500 | 0.583 | **0.500** | 0.000 |
+| KIS R@20 | 1.000 | 1.000 | **1.000** | 0.000 |
+| KIS MRR | 0.720 | 0.762 | **0.718** | −0.003 |
+| KIS `top1_pairwise` | 0.545 | 0.636 | **0.545** | 0.000 |
+| QA `joint_top1` | 0.333 | 0.333 | 0.333 | 0.000 |
+| QA `evidence_recall` | 0.833 | 0.833 | 0.833 | 0.000 |
+| QA `answer_accuracy` | 0.583 | 0.583 | 0.500 | −0.083 |
+| **TRAKE `correct_video_rate`** | **1.000** | 0.875 | **0.625** | **−0.375** |
+| TRAKE `mean_r_score` | 0.263 | 0.231 | 0.144 | −0.119 |
+| AVS `P@100` | 0.500 | 0.500 | 0.295 | −0.205 |
+| AVS nDCG@100 | 0.453 | 0.462 | 0.401 | −0.051 |
+
+### Kết luận 1 — KIS không suy chuyển, NHƯNG phép thử quá dễ
+
+> **ĐÍNH CHÍNH (PR-4B).** Kết luận "KIS khoẻ thật" dưới đây KHÔNG được dữ liệu
+> ủng hộ: V002/V003 chỉ có caption, nên 6/10 nhánh của KIS không thể trả về gì
+> ngoài V001. Xem mục PR-4A+PR-4B.
+
+KIS **không suy chuyển một chút nào**: R@1, R@5, R@20, `top1_pairwise` giống
+hệt; MRR lệch 0.003. Thêm 548 scene đối thủ có caption thật mà không mất gì.
+
+Đây là kết quả TÍCH CỰC và nó cũng nói rằng bài toán còn lại của KIS
+(`top1_pairwise = 0.545`) là bài toán phân biệt tinh, **không** phải bài toán
+nhiễu xuyên video.
+
+### Kết luận 2 — TRAKE sụp, và sụp ở tầng CHƯA TỪNG được đo
+
+Phân rã:
+
+| | 1 video | 3v đầy đủ |
+|---|---|---|
+| đúng video | 8/8 | **5/8** |
+| `mean_r` toàn bộ | 0.263 | 0.144 |
+| `mean_r` **chỉ trên video đúng** | 0.263 | **0.230** |
+
+Chọn frame gần như không tệ đi (0.263 -> 0.230). **Gần như toàn bộ mất mát nằm
+ở Stage A — chọn video.** Ba query hỏng: `TRAKE_E01`, `TRAKE_E02`, `TRAKE_H02`
+— hai trong đó là query DỄ.
+
+Điều này đảo ngược thứ tự ưu tiên của TRAKE. Mọi thí nghiệm TRAKE từ trước tới
+nay — cửa sổ chấm, DP vs beam, `gap_penalty`, `frame_refinement` — đều tối ưu
+Stage B/C, trong khi Stage A đúng 100% **do không có gì để nhầm**. Nó chưa bao
+giờ được thử thách, và giờ nó là nút thắt lớn nhất.
+
+`frame_selection_accuracy` đã được sửa để tính TRÊN các query đúng video; tính
+gộp thì nó là chỉ số "chọn video" trá hình.
+
+### Kết luận 3 — AVS mất nhiều nhất theo tỉ lệ
+
+`P@100` 0.500 -> 0.295, mất 41% giá trị. `zero_result_rate` vẫn 0.000, nên PR-2
+vẫn đứng vững; cái mất là độ chính xác khi có đối thủ thật.
+
+### Hai lỗi hạ tầng đã gặp và sửa
+
+**HTTP 429 — 50 RPM.** `concurrency=6` làm hỏng 233/545 keyframe. Hạ
+`concurrency` KHÔNG phải cách sửa: nó chặn số lệnh gọi ĐỒNG THỜI chứ không chặn
+TỐC ĐỘ. Đã thêm cổng tốc độ thật (`--rpm`, cấp khe theo `60/rpm`). Hệ quả cho
+kế hoạch: VLM rerank với `top_k=20 × 3 frame = 60 lệnh gọi/truy vấn` **vượt hạn
+mức 50 RPM chỉ với MỘT truy vấn** — thêm một lý do độc lập để không bật nó.
+
+**Caption keyframe và caption scene có schema KHÁC NHAU.** `caption_type` ở
+keyframe là enum `short|detailed|tags|crop` (không có `visual`), không nhận
+`evidence_keyframe_ids`; ở scene thì ngược lại. Dùng nhầm một dạng cho cả hai
+làm eval hỏng lúc NẠP — tức sau khi đã trả tiền cho toàn bộ 548 lệnh gọi VLM.
+Cache theo `sha256(ảnh+prompt+model)` cứu được lần dựng lại.
+
+---
+
+## PR-4A + PR-4B — Khoá phép đo, rồi sửa TRAKE Stage A
+
+### PR-4A — hai lỗi của chính công cụ đo
+
+`repeat_stability.py` nay báo cáo `mean/min/max/sd`, ranking fingerprint,
+**query nào đổi hạng**, và **nhánh nào hỏng**. Ngay khi bật, nó tự phơi ra hai
+vấn đề:
+
+**1. Chỉ số "nhánh hỏng" của tôi sai.** Nó đếm `disabled` là hỏng và báo động
+giả **40/40 lượt**. `disabled` là định tuyến CÓ CHỦ Ý — truy vấn không có manh
+mối chữ/lời nói thì OCR/ASR nhận trọng số 0 và nhánh không chạy (ROUTE-01,
+`allow_zero_modality`). Báo động giả kiểu này che mất hỏng thật.
+
+**2. Sau khi sửa, có hỏng THẬT:** `dense_visual` lỗi **1/40 lượt** ở chế độ
+`fpt`, **0/40** ở `local`. Đó là lệnh gọi dịch VI→EN thỉnh thoảng hỏng. Hệ
+thống hành xử đúng thiết kế (thà `failed` còn hơn lặng lẽ encode tiếng Việt),
+nhưng ~2.5% truy vấn mất nhánh mạnh nhất. Đáng cân nhắc retry riêng cho lệnh
+gọi dịch hoặc cache bền qua các lần chạy.
+
+`fpt` cũng cho **2 dấu vân tay** dù không metric nào dao động — thứ hạng đổi ở
+đâu đó mà chỉ số tổng không thấy. Đúng công dụng của fingerprint.
+
+Định nghĩa `local` đã siết lại: tắt MỌI thứ cần mạng, không chỉ
+`AIC_FPT_ENABLED` — vì container fail-fast nếu bật dịch mà không có provider.
+Ghi rõ: `local` KHÔNG đo cùng cấu hình với `fpt`; nó đo độ tất định của phần
+máy móc chạy tại chỗ.
+
+### PR-4B — `duplicate_penalty` phạt chính TRUE POSITIVE
+
+Chẩn đoán trực tiếp trên `rank_videos` cho ba query hỏng: video ĐÚNG thắng áp
+đảo ở `context` (0.892 / 0.844 / 0.924 so với 0.23–0.32) nhưng vẫn thua.
+
+Phân rã TRAKE_E01 (V002 1.398 vs V001 1.307):
+
+| thành phần | tác động |
+|---|---|
+| `ordering` V002 0.67 vs V001 0.33 | V002 **+0.204** |
+| `context` V001 0.892 vs V002 0.308 | V001 +0.234 |
+| `duplicate` V001 0.50 vs V002 0.25 | V001 **−0.125** |
+
+Cơ chế: sự kiện của một diễn biến CÓ THẬT thì tập trung gần nhau nên nhiều
+step trỏ về cùng scene và bị phạt; hit của video SAI thì rải rác ngẫu nhiên
+nên thoát. Hình phạt vốn nhắm "đoạn tóm tắt đầu bản tin" lại bắn vào đúng thứ
+nó phải bảo vệ.
+
+`ordering` còn bị tính HAI LẦN: Stage B đã có cổng cứng thứ tự
+(`sequence_search.py:87`), ở Stage A nó lại được tính như điểm mềm trên một
+proxy mong manh ("hit tốt nhất mỗi step").
+
+### Ablation
+
+| variant | `video_recall@1` | `mean_r_score` | `mean_r_on_correct` |
+|---|---|---|---|
+| A hiện tại | 0.625 | 0.144 | 0.230 |
+| **B `duplicate_penalty=0`** | **1.000** | **0.263** | 0.263 |
+| C `context_weight=1.5` | 1.000 | 0.263 | 0.263 |
+| D cả hai | 1.000 | 0.263 | 0.263 |
+
+Nghi ngờ rằng C chỉ thắng nhờ dữ liệu lệch (xem dưới) đã bị BÁC BỎ: chạy lại
+với chỉ 2 nhánh công bằng, C vẫn đạt 1.000. B và C không phân biệt được trên 8
+query. **Chọn B** vì nó GỠ BỎ một tác hại đã chứng minh, thay vì thêm một
+trọng số đã tinh chỉnh.
+
+Kết quả phụ của phép đo công bằng: tắt 8 nhánh lại CẢI THIỆN TRAKE
+(0.263 -> 0.287). Chúng đang thêm nhiễu cho task này.
+
+### Đính chính kết luận về KIS ở PR-3
+
+Bản trước ghi *"KIS khoẻ thật, không phải ảo giác một-video"*. **Không được dữ
+liệu ủng hộ.** L21_V002/V003 CHỈ có caption:
+
+| trường | V001 | V002 | V003 |
+|---|---|---|---|
+| captions | 216/217 | 262/262 | 286/286 |
+| keywords | 170/217 | **0** | **0** |
+| action_tags | 136/217 | **0** | **0** |
+| asr_segments | 210/217 | **0** | **0** |
+| ocr | 98/217 | **0** | **0** |
+| objects | 170/217 | **0** | **0** |
+
+Chỉ **2/10 nhánh có cạnh tranh thật**. Sáu nhánh còn lại về mặt cấu trúc không
+thể trả về gì ngoài V001. KIS giữ nguyên điểm một phần vì phần lớn nhánh của
+nó KHÔNG CÓ CÁCH NÀO NHẦM.
+
+Điều này làm kết luận TRAKE MẠNH HƠN: nó vẫn tụt 1.000 -> 0.625 dù V001 đang
+có lợi thế cấu trúc đó.
+
+Đã thêm `--disable-branch` để chạy phép đo công bằng.
+
+### Kết quả cuối trên 3 video
+
+| | 1 video | 3v trước | 3v sau PR-4B |
+|---|---|---|---|
+| TRAKE `mean_r_score` | 0.263 | 0.144 | **0.263** |
+| TRAKE `frame_selection_accuracy` | 0.328 | 0.180 | **0.328** |
+| AVS nDCG@100 | 0.453 | 0.401 | 0.428 |
+| AVS P@100 | 0.500 | 0.295 | 0.358 |
+| KIS R@1 / MRR | 0.500 / 0.720 | 0.500 / 0.718 | 0.500 / 0.718 |
+
+**TRAKE khôi phục chính xác về mức một-video.**
+
+AVS và QA cũng khác giữa hai lần chạy, nhưng KHÔNG được quy cho PR-4B:
+`duplicate_penalty` chỉ tồn tại trong `VideoRetrieverConfig` của TRAKE. Kiểm
+tra per-query cho thấy đúng 1 query đổi ở mỗi task (`VQA_M01`, `AVS_M03`) —
+đó là dao động giữa các lần chạy, không phải tác dụng của thay đổi. Nó cũng
+cho thấy AVS/QA trên đa video kém ổn định hơn mức đã đo trên một video, nên
+cần chạy repeat-stability lại cho hai task đó trước khi kết luận gì thêm.
+
+### Không làm được: holdout theo video
+
+Cả 40 gold query đều target L21_V001. Không có query nào cho V002/V003 nên
+không có gì để hold out. Muốn có thì phải viết gold mới — việc thủ công cần
+người xem video.
+
+---
+
+## PR-4C — Cân bằng dữ liệu distractor + hạ tầng chuẩn bị
+
+### Vấn đề
+
+Sau PR-3, L21_V002/V003 chỉ có caption. Trong 10 nhánh retrieval, **chỉ 2 có
+cạnh tranh thật**; sáu nhánh còn lại về mặt cấu trúc không thể trả về gì ngoài
+L21_V001. Mọi phép đo "hệ khoẻ khi có distractor" vì thế dễ hơn thực tế, và
+kết luận "KIS khoẻ" ở PR-3 đã phải rút lại.
+
+### Đã sinh
+
+`scripts/enrich_export_keyframes.py` — MỘT lệnh gọi VLM cho mỗi keyframe trả
+về caption + object + OCR + action, thay vì bốn lượt riêng (ảnh phải mã hoá
+base64 gửi lại mỗi lần, nên gộp là khác biệt lớn dưới trần 50 RPM).
+`keywords` KHÔNG gọi model — suy từ nhãn object đúng cách `offline/assemble.py`
+làm.
+
+Độ phủ scene sau khi enrich V002/V003 (544/548 thành công):
+
+| trường | V001 (trước) | V002 | V003 |
+|---|---|---|---|
+| keywords | 78% | 99% | 99% |
+| objects | 78% | 99% | 99% |
+| ocr | 45% | 80% | 78% |
+| asr | 97% | **0%** | **0%** |
+
+### Đổi một thiên lệch lấy một thiên lệch khác thì vô nghĩa
+
+Distractor giờ GIÀU HƠN video gốc ở object/OCR/keyword. Không giải quyết được
+gì — chỉ đảo chiều thiên lệch. Nên enrich lại V001 bằng CÙNG prompt.
+
+**Nhưng ghi đè là sai.** V001 được enrich bằng prompt tinh chỉnh riêng ở
+CAPTION-ENRICH-01, và một số gold query là dạng OCR ("bảng hiệu có chữ ...").
+Thay dữ liệu đã kiểm chứng bằng dữ liệu của prompt tổng quát có thể làm hỏng
+đúng những truy vấn đang dùng để đo — tức tự tạo ra một "suy giảm" không liên
+quan gì tới hệ thống.
+
+Nên script chuyển sang **HỢP NHẤT**: giữ nguyên object/OCR cũ, chỉ thêm cái
+mới chưa có. Kiểm chứng trên 5 keyframe: không mất gì, `ocr` thêm được
+`HTV9 HD`/`06:30:14`, object thêm biến thể chi tiết hơn.
+
+### ASR không cân bằng được
+
+V002/V003 không có audio. `bm25_asr` vĩnh viễn là nhánh chỉ-V001, nên mọi phép
+đo đa video phải tắt nó (`--disable-branch bm25_asr`). Đây là giới hạn của bộ
+dữ liệu, không phải lựa chọn thiết kế.
+
+### Hạ tầng cắt thời gian chạy
+
+**Cache dịch trên đĩa** (`storage/cache/query_translation`). Mỗi lần eval trước
+đây dịch lại cả 40 truy vấn dù nhiệt độ 0 nên kết quả tất định. Cũng che luôn
+lỗi dịch ~1/40 lượt đã đo ở PR-4A: lần chạy sau dùng bản dịch đã có thay vì
+tung xúc xắc lại.
+
+**Retry trong adapter dịch.** `FptClient` chỉ retry lỗi HTTP; "trả về chuỗi
+rỗng" nó coi là thành công — đó chính là cách `dense_visual` hỏng. Nay thử 3
+lần rồi mới bỏ cuộc.
+
+**`scripts/validate_gold.py`** — kiểm gold TRƯỚC khi chạy eval. Viết nó lại
+phát hiện một điều tưởng đã biết: **bốn task dùng bốn shape khác nhau**. AVS
+dùng `relevant_intervals` (kèm `relevance_grade`), KIS/VQA dùng
+`target_intervals`, VQA dùng `question_vi` chứ không `query_vi`. Bản đầu của
+validator giả định chung một tên và báo sai 8 lỗi trên file đang chạy tốt.
+
+**Tách chỉ số theo video** trong `eval_tasks`, tự bật khi gold có nhiều
+`target_video`. Cần cho holdout ngay khi có query của video mới.
+
+**`AIC_AVS_MAX_RESULTS_PER_VIDEO`** giờ được đọc thật (trước đây có trong env
+nhưng không code nào dùng, đang chặn cứng AVS ở 3 kết quả).
+
+**`correct_candidate_dropped_by_grade`** siết vào tầm đầu ra — bản cũ đếm cả
+candidate đúng-nhưng-thừa nên báo 0.875 cho chính cấu hình tốt nhất.
+
+Tài liệu: `docs/23_GOLD_QUERY_FORMAT.md`.
+
+---
+
+## PR-4C (kết) — Bàn cân đối xứng hoàn toàn, và baseline mới
+
+Người dùng cung cấp ASR đã phiên âm sẵn cho L21_V002/V003
+(`faster-whisper:large-v3`, 253 và 254 đoạn) nên không tốn lệnh gọi API nào.
+`scripts/ingest_asr.py` chiếu vào scene.
+
+### Độ phủ sau khi cân bằng
+
+| trường | V001 | V002 | V003 |
+|---|---|---|---|
+| captions / keywords / objects | 99–100% | 98–100% | 98–100% |
+| ocr | 83% | 79% | 78% |
+| **asr** | **97%** | **98%** | **98%** |
+| action_tags | 77% | 47% | 49% |
+
+`--disable-branch bm25_asr` không còn cần. Cả 10 nhánh đều có cạnh tranh thật.
+
+`action_tags` còn lệch vì V001 giữ cả nhãn cũ lẫn mới sau bước hợp nhất; nhánh
+`bm25_action` phần lớn vẫn trả `empty` nên chưa đáng cân tiếp.
+
+### Baseline: trước cân bằng -> sau cân bằng (cùng cap=3)
+
+| | trước | sau | Δ |
+|---|---|---|---|
+| KIS R@1 | 0.500 | **0.583** | +0.083 |
+| KIS R@5 | 0.917 | **1.000** | +0.083 |
+| KIS `top1_pairwise_accuracy` | 0.545 | **0.700** | +0.155 |
+| QA `answer_accuracy` | 0.583 | 0.417 | −0.167 |
+| QA `evidence_recall` | 0.833 | 0.750 | −0.083 |
+| TRAKE `video_recall@1` | 1.000 | 0.875 | −0.125 |
+| TRAKE `mean_r_on_correct_video` | 0.263 | 0.300 | +0.037 |
+| AVS nDCG@100 | 0.428 | 0.445 | +0.016 |
+
+**KIS đi lên, QA/TRAKE đi xuống.** Không mâu thuẫn: metadata giàu hơn giúp KIS
+phân biệt top-2 (đúng chỗ nó đang yếu), nhưng cũng làm distractor cạnh tranh
+được ở QA evidence và ở Stage A của TRAKE — đúng mục đích của việc cân bằng.
+
+### Ba lỗi hạ tầng trong đợt này
+
+**Tôi tự tạo ra một confound.** Wire `AIC_AVS_MAX_RESULTS_PER_VIDEO` (biến có
+trong env nhưng chưa code nào đọc) đã đổi `max_per_video` 3 -> 20 ngay ở lần
+chạy baseline kế tiếp, khiến `result_count` nhảy từ 3–9 lên 15–50. Lần chạy đó
+đổi HAI biến cùng lúc nên bảng AVS không đọc được.
+
+> **Nguyên tắc: wire một biến môi trường chưa từng được đọc là một THAY ĐỔI
+> HÀNH VI, không phải dọn dẹp.** Nó phải đi kèm ablation riêng.
+> `max_per_video` nay là biến của PR-5.
+
+**Hai lỗi schema chỉ lộ ra lúc NẠP**, sau khi đã ghi file:
+
+1. Đoạn ASR phải nằm TRONG khoảng scene, không chỉ giao nhau. V001 làm đúng:
+   giữ nguyên text, CẮT mốc theo biên scene — cùng câu xuất hiện ở S0002
+   [10.29,11.43], S0003 [11.43,13.70], S0004 [13.70,15.27].
+2. Id nguồn: file whisper dùng `L21_V002_A000000`, schema đòi `..._ASR000000`.
+
+Đây là lần thứ ba trong đợt một script ghi thành công rồi mới hỏng ở tầng
+validate (trước đó: schema caption keyframe vs scene). Đáng thêm một bước "nạp
+thử" ngay trong script ghi.
+
+### `P@100` không dùng để so đa video được
+
+`AVS.P@100` tụt 0.358 -> 0.136, nhưng đó là **hiện tượng số học**: gold chỉ nằm
+ở V001, mà `max_per_video=3` cho mỗi video 3 suất, nên với 3 video thì trần
+trên của precision đã là 0.333. Thêm video là tự động kéo P@100 xuống bất kể
+chất lượng.
+
+nDCG có tính vị trí nên không bị vậy (0.428 -> 0.445). **Dùng nDCG, không dùng
+P@100, khi so giữa các bộ có số video khác nhau.**
+
+---
+
+## BRANCH-TIMEOUT-01 — Nhánh mạnh nhất biến mất trong im lặng
+
+**Nguồn nhiễu lớn nhất của cả đợt, và nó KHÔNG phải thuật toán.**
+
+`dense_visual` ở trạng thái `timeout` tại **25–60% truy vấn**, thay đổi giữa
+các lần chạy cùng cấu hình (14/40 rồi 23/40). Đó là lý do hai lần chạy giống
+hệt nhau cho KIS MRR 0.753 và 0.653, và một truy vấn rơi từ hạng 1 xuống
+*không tìm thấy*.
+
+### Chẩn đoán — không phải cái tôi nghi
+
+Tôi nghi lệnh gọi dịch VI→EN. **Sai**: cache dịch có 68 mục và đang hoạt động.
+
+| | chạy riêng | chạy cùng 10 nhánh |
+|---|---|---|
+| `dense_visual` | ~200ms | 1.6–4.6s |
+| `ocr_fuzzy` | — | 1.3–3.9s |
+
+Hai nhánh bám sát nhau từng mili-giây (1643/1330, 3724/3666, 3609/3552) — dấu
+hiệu **tranh chấp CPU**. Cả hai đều nặng CPU: `dense_visual` encode CLIP rồi
+quét 855 vector, `ocr_fuzzy` khớp mờ trên 765 scene.
+
+Deadline 3000ms được chọn khi corpus có **217 scene**. Ở 765 scene thì quá chặt.
+
+### Sửa
+
+`AIC_BRANCH_TIMEOUT_MS`, mặc định **8000ms** (chọn theo max đo được 4.6s).
+Kết quả: **0/8 timeout**, trước là 3/6.
+
+Kèm một lỗi khác phát hiện lúc đọc code: `resolve_timeout_ms` dùng
+`override.timeout_ms` bất cứ khi nào request chạm tới nhánh — mà
+`BranchRuntimeOptions` mang default 3000. Nên chỉ cần request đổi `weight` của
+một nhánh là **vô tình ép nhánh đó về 3000ms**. Nay chỉ dùng override khi
+`timeout_ms` được đặt tường minh (`model_fields_set`).
+
+### Ảnh hưởng ngược
+
+Mọi số đo từ khi bật dịch VI→EN đều có một số lượng KHÔNG XÁC ĐỊNH truy vấn
+thiếu nhánh dense. Kết luận định tính vẫn đứng (chênh lệch lớn hơn nhiễu này
+nhiều), nhưng **con số cụ thể không đáng tin tới chữ số thứ hai**. Không kiểm
+ngược được các lần đo một-video vì `branches` chỉ mới ghi từ PR-4A.
+
+**`ocr_fuzzy` chậm ngang `dense_visual`** mà đóng góp của nó chưa từng đo
+riêng — ứng viên ablation rõ ràng.
+
+---
+
+## OCR-BACKFILL-01 — Chữ có thật, prompt mới là thứ hỏng
+
+150/765 scene (20%) không có OCR nào. Sáu truy vấn gold khai
+`required_modalities: ["ocr"]` rơi đúng vào phần thiếu, tức không thể ăn điểm
+dù hệ thống hoàn hảo.
+
+### Nguyên nhân
+
+Prompt enrich tổng quát bắt model **vừa đọc chữ vừa định vị bbox** trong một
+JSON. Ép hai việc cùng lúc thì nó bỏ hẳn phần chữ. Cùng ảnh, prompt chỉ đòi
+CHỮ thì tìm thấy ở **6/6** frame "không có chữ", gồm cả tiêu đề bản tin đầy đủ.
+
+Nên: **ưu tiên chữ, hy sinh bbox**. Điền khung toàn ảnh, ghi
+`model_name: "<model>:ocr-textonly"` để không ai đọc nhầm là toạ độ thật.
+Không nhánh nào đọc bbox (`bm25_ocr`/`ocr_fuzzy` chỉ dùng `text`).
+
+### Chọn model bằng đo, không theo catalog
+
+Catalog chỉ ghi một VLM, nhưng dò thực tế: `gemma-3-27b-it` và
+`gemma-4-31B-it` **đều nhận ảnh**; `GLM-5.2` và `gpt-oss-120b` thì không.
+Chọn `gemma-4-31B-it` vì đọc chính xác hơn trên cùng frame (`"HTV9 HD"` liền,
+`"nhiều lĩnh vực"` đúng chính tả thay vì `"nghiêu lĩnh vực"`). Lợi thêm: hạn
+mức RPM riêng, không đụng `Qwen2.5-VL` đang bận.
+
+### Kết quả
+
+| | trước | sau |
+|---|---|---|
+| độ phủ OCR (cả 3 video) | 84% / 80% / 79% | **100% / 100% / 100%** |
+| truy vấn không thể ăn điểm | 6/120 | **0/120** |
+
+### Ba phép kiểm chống bịa
+
+177/177 frame đều tìm thấy chữ — con số hoàn hảo là thứ phải nghi:
+
+1. **0/181 chuỗi OCR trùng nhau.** Model bịa thường lặp cùng một khuôn.
+2. **Bắt được chữ chạy bị cắt dở** (`"g thẳng leo thang giữa Israel..."`).
+   Model bịa sẽ viết câu hoàn chỉnh.
+3. **Đồng hồ tăng đơn điệu 65/65, 52/52, 59/61** qua các lệnh gọi ĐỘC LẬP.
+   Không cách nào bịa ra một chiếc đồng hồ nhất quán theo thứ tự frame.
+
+Đồng hồ trôi nhanh hơn thời lượng video (1763s so với 1217s) là tính chất của
+NGUỒN — bản tin đã dựng cắt nên đồng hồ chạy theo giờ phát sóng gốc.
+
+---
+
+## Bộ gold ba video — 120 truy vấn
+
+| | khớp TB | Easy/Medium/Hard | thiếu modality |
+|---|---|---|---|
+| V001 | 0.436 | 0.49 / 0.44 / 0.38 | 0 |
+| V002 | 0.349 | 0.47 / 0.31 / 0.28 | 0 |
+| V003 | 0.404 | 0.53 / 0.39 / 0.29 | 0 |
+
+Cả ba sạch, mỗi bộ 40 truy vấn (12 KIS / 12 VQA / 8 TRAKE / 8 AVS). Thang độ
+khó của V002/V003 **đơn điệu hơn V001** (V001 có Medium 0.44 và Hard 0.38 sát
+nhau nên nhãn ít ý nghĩa).
+
+**Holdout theo video giờ làm được lần đầu.** `eval_tasks` tự tách chỉ số theo
+`target_video` khi gold có nhiều video.
+
+Một cảnh báo khi đọc: chênh lệch khớp TB giữa các video **không** đo được độ
+khó của truy vấn — nó lẫn cả việc caption/OCR của video đó giàu hay nghèo chữ.
+
+---
+
 ## Việc tiếp theo
 
 **BM25-01 — concept coverage.** Đây là kết luận chung của cả hai thí nghiệm

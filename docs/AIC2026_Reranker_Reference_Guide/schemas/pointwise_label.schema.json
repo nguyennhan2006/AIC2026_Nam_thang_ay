@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AIC Reranker Pointwise Label",
+  "type": "object",
+  "required": [
+    "sample_id",
+    "query_id",
+    "video_id",
+    "candidate_id",
+    "query",
+    "candidate_text",
+    "relevance_grade",
+    "label_source",
+    "sample_weight"
+  ],
+  "properties": {
+    "sample_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "query_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "video_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "candidate_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "query": {
+      "type": "string",
+      "minLength": 1
+    },
+    "candidate_text": {
+      "type": "string",
+      "minLength": 1
+    },
+    "image_paths": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "relevance_grade": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 3
+    },
+    "label_source": {
+      "type": "string",
+      "enum": [
+        "gold",
+        "human",
+        "teacher_consensus",
+        "teacher_single",
+        "heuristic"
+      ]
+    },
+    "teacher_confidence": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 1
+    },
+    "sample_weight": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "maximum": 1
+    },
+    "matched_constraints": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "missing_constraints": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "contradicted_constraints": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "evidence_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "hard_negative_type": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "ambiguous": {
+      "type": "boolean"
+    },
+    "split": {
+      "type": "string",
+      "enum": [
+        "train",
+        "dev",
+        "test"
+      ]
+    }
+  },
+  "additionalProperties": false
+}

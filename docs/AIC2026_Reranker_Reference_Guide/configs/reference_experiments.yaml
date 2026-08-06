@@ -1,0 +1,51 @@
+reference_only: true
+
+common:
+  split_key: video_id
+  candidate_pool: union_all_enabled_retrievers
+  top_k_before_rerank: 100
+  seed: 42
+  save_per_query_results: true
+  save_raw_scores: true
+  save_manifest: true
+
+experiments:
+  E0:
+    reranker: none
+
+  E1_bge_zero_shot:
+    model: BAAI/bge-reranker-v2-m3
+    max_length: 512
+    batch_size: 16
+
+  E2_qwen_zero_shot:
+    model: Qwen/Qwen3-Reranker-0.6B
+    max_length: 1024
+    batch_size: 8
+    custom_instruction: true
+
+  E3_text_finetune:
+    framework: sentence_transformers_or_flagembedding
+    labels: pointwise_and_hard_negative
+    learning_rate: 2.0e-5
+    epochs: 2
+    max_length: 512
+    batch_size: 8
+    gradient_accumulation_steps: 2
+
+  E5_vl_zero_shot:
+    model: Qwen/Qwen3-VL-Reranker-2B
+    input_level: query_plus_3_keyframes
+    max_frames: 8
+    fps: 1.0
+    top_k_input: 20
+
+  E6_cascade:
+    stage_1:
+      model: best_text_reranker
+      top_k_input: 100
+      top_k_output: 20
+    stage_2:
+      model: Qwen/Qwen3-VL-Reranker-2B
+      top_k_input: 20
+      top_k_output: 20

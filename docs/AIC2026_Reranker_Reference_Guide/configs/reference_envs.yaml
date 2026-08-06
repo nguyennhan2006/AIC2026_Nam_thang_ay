@@ -1,0 +1,28 @@
+reference_only: true
+
+text_environment:
+  name: aic-rerank-text
+  python: "3.11"
+  packages:
+    torch: "install_for_target_cuda"
+    transformers: ">=4.51.0"
+    sentence-transformers: ">=5.4,<6"
+    datasets: "pin_after_smoke"
+    accelerate: "pin_after_smoke"
+    huggingface-hub: "pin_after_smoke"
+    FlagEmbedding: "optional_finetune_extra"
+
+multimodal_environment:
+  name: aic-rerank-vl
+  preferred_setup:
+    repository: "QwenLM/Qwen3-VL-Embedding"
+    command: "bash scripts/setup_environment.sh"
+    lock_policy: "keep_repository_uv_lock"
+  optional:
+    flash_attention_2: "enable_after_baseline_only"
+    bitsandbytes: "enable_after_full_precision_smoke_only"
+
+cache:
+  HF_HOME: "/workspace/hf_cache"
+  HF_HUB_CACHE: "/workspace/hf_cache/hub"
+  model_root: "/workspace/models"

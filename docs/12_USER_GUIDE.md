@@ -243,6 +243,25 @@ $env:AIC_FPT_RERANK_MODEL = "bge-reranker-v2-m3"   # bật rerank.text
 $env:AIC_FPT_LLM_MODEL = "Qwen3.6-27B"             # bật QA answer bằng LLM
 ```
 
+### Nạp cả hồ sơ từ file thay vì set từng biến
+
+Set tay 5–20 biến mỗi lần mở terminal là chỗ dễ quên nhất, và quên thì backend
+vẫn lên bình thường — chỉ là tắt hết FPT. Dùng **một** biến trỏ vào file:
+
+```powershell
+$env:AIC_ENV_FILE = ".env.fpt.local"
+python -m uvicorn online.api.app:app --port 8000
+```
+
+`Settings.from_env()` đọc file đó trước khi đọc phần còn lại. Hai điểm cố ý:
+
+- **Không tự dò `.env`.** File chứa key thật, nên việc nó có được nạp hay không
+  phải nhìn thấy trên dòng lệnh, chứ không phụ thuộc bạn đang `cd` ở đâu.
+- **Biến đã set trên dòng lệnh thắng file**, để còn chạy được ablation kiểu
+  `$env:AIC_ENABLE_EXPANSION = "false"` mà không phải sửa file.
+
+Trỏ sai đường dẫn thì báo lỗi ngay lúc khởi động, không im lặng bỏ qua.
+
 Xác nhận rerank: `GET /v1/search/capabilities` phải trả `"rerank":{"text":true,…}`.
 Xác nhận QA LLM: xem field `source` trong `qa[]` (`fpt_llm` thay vì `ocr_exact`
 …), hoặc `warnings` nếu key/model sai.
@@ -320,7 +339,9 @@ này trước khi nói là xong — nó đã bắt được ba lỗi thật mà 
 | `404 no scene matched the query` | Query không khớp field nào đã index | Dùng truy vấn khớp `examples/AIC2026_L21_V001_queries_4tasks.jsonl`, hoặc kiểm tra caption/OCR đã sinh chưa |
 | `422 task is required` | `POST /v1/search` bắt buộc có `task` trong body | Thêm `"task":"TEXTUAL_KIS"` hoặc gọi `/v1/search/kis` |
 | `422` khi set `search_options` | Field đó chưa có consumer thật, bị chặn ở `UNSUPPORTED` để không "cấu hình giả vờ có tác dụng" | Đọc `/v1/search/capabilities` trước khi set |
-| `.env` sửa mà không có tác dụng | Không có dotenv loader | Set `$env:` trực tiếp trong shell chạy lệnh |
+| `.env` sửa mà không có tác dụng | Trước đây không có loader nào cả — backend bỏ qua file, tắt hết FPT, không cảnh báo | Set `$env:AIC_ENV_FILE = ".env.fpt.local"` (§7), hoặc set `$env:` từng biến |
+| Khởi động lỗi `không nạp được text encoder ...` | Export có embedding thật nhưng `AIC_VISUAL_EMBEDDING_MODEL` trỏ vào repo HuggingFace mà máy này chặn SSL | Trỏ vào thư mục local: `storage/models/clip-vit-large-patch14`. **Lỗi này là cố ý** — trước đây nó bị nuốt, server vẫn lên và nhánh `dense_visual` chết âm thầm ở mọi request |
+| Điểm số đo được trông hợp lệ nhưng thấp bất thường | Một nhánh retrieval `failed`/`empty` mà vẫn trả HTTP 200 — hệ này hạ cấp chứ không sập | Đọc `branch_status` trong response, không tin mã 200. `dense_visual` phải là `success` |
 | `curl` trả `json_invalid` / `Unterminated string` | PowerShell 5.1 nuốt dấu nháy trong `-d '{...}'` | Ghi body ra file UTF-8 rồi `--data-binary "@file"` — xem §6 |
 | QA vẫn trả answer kiểu regex dù đã bật FPT | Thiếu `AIC_FPT_LLM_MODEL`, hoặc set nhầm 3 biến `QUERY/FAST/DEEP` chưa được wire | §7 |
 | `ssl.SSLCertVerificationError: Basic Constraints of CA cert not marked critical` | Python 3.13+/OpenSSL bật `VERIFY_X509_STRICT`; CA trên máy này không tuân thủ chi tiết RFC đó | Gọi qua `FptClient` (đã vá đúng một cờ này), đừng dùng `urllib.request.urlopen` trực tiếp |

@@ -1,0 +1,9 @@
+# Preferred approach:
+# Clone QwenLM/Qwen3-VL-Embedding and run:
+#   bash scripts/setup_environment.sh
+#
+# Keep the repository's uv.lock for reproducibility.
+#
+# Optional only after baseline smoke test:
+# flash-attn
+# bitsandbytes

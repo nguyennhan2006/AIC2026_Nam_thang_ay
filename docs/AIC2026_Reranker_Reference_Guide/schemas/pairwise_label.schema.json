@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AIC Reranker Pairwise Label",
+  "type": "object",
+  "required": [
+    "pair_id",
+    "query_id",
+    "video_id",
+    "query",
+    "candidate_a_id",
+    "candidate_b_id",
+    "winner",
+    "label_source",
+    "sample_weight"
+  ],
+  "properties": {
+    "pair_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "query_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "video_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "query": {
+      "type": "string",
+      "minLength": 1
+    },
+    "candidate_a_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "candidate_a_text": {
+      "type": "string",
+      "minLength": 1
+    },
+    "candidate_b_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "candidate_b_text": {
+      "type": "string",
+      "minLength": 1
+    },
+    "winner": {
+      "type": "string",
+      "enum": [
+        "A",
+        "B",
+        "tie"
+      ]
+    },
+    "grade_a": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 3
+    },
+    "grade_b": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 3
+    },
+    "label_source": {
+      "type": "string",
+      "enum": [
+        "gold",
+        "human",
+        "teacher_consensus",
+        "teacher_single",
+        "heuristic"
+      ]
+    },
+    "sample_weight": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "maximum": 1
+    },
+    "hard_negative_type": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "split": {
+      "type": "string",
+      "enum": [
+        "train",
+        "dev",
+        "test"
+      ]
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AIC Reranker Run Manifest",
+  "type": "object",
+  "required": [
+    "experiment_id",
+    "created_at",
+    "model_id",
+    "model_revision",
+    "dataset_version",
+    "split_key",
+    "seed",
+    "environment",
+    "hardware",
+    "config_path"
+  ],
+  "properties": {
+    "experiment_id": {
+      "type": "string"
+    },
+    "created_at": {
+      "type": "string"
+    },
+    "git_commit": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "model_id": {
+      "type": "string"
+    },
+    "model_revision": {
+      "type": "string"
+    },
+    "model_local_path": {
+      "type": "string"
+    },
+    "dataset_version": {
+      "type": "string"
+    },
+    "split_key": {
+      "type": "string"
+    },
+    "seed": {
+      "type": "integer"
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "hardware": {
+      "type": "object",
+      "required": [
+        "gpu_name"
+      ],
+      "properties": {
+        "gpu_name": {
+          "type": "string"
+        },
+        "gpu_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "vram_gb": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "cuda_version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": true
+    },
+    "config_path": {
+      "type": "string"
+    },
+    "metrics_path": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": true
+}
