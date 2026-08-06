@@ -190,6 +190,35 @@
   border-radius: var(--radius-nested);
 }
 .submission-preview-meta { font-size: var(--text-caption); color: var(--text-tertiary); }
+
+/* Dải bước của một chuỗi TRAKE. Một dòng nộp là `video_id, f1, ..., fn` và
+   điểm phụ thuộc cả n khoảnh khắc lẫn thứ tự, nên phải duyệt lại được từng
+   bước trước khi nộp. */
+.step-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+}
+.step-chip {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-1);
+  padding: 2px var(--space-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-pill, 999px);
+  background: var(--surface-app);
+  color: var(--text-secondary);
+  font-size: var(--text-caption);
+  cursor: pointer;
+}
+.step-chip:hover { border-color: var(--border-strong, var(--border-subtle)); }
+.step-chip.is-active {
+  border-color: var(--accent, #4c8dff);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+.step-chip-index { opacity: 0.65; }
 .csv-preview {
   max-height: 160px;
   padding: var(--space-3);

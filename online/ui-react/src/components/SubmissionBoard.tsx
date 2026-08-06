@@ -6,11 +6,13 @@ import { downloadCsv, submissionFilename } from "../exportCsv";
 import type {
   AvsResultItem,
   KisResultItem,
+  PlaybackWindow,
   QaResultItem,
   SearchHit,
   SubmissionBuildResponse,
   TaskType,
   TrakeResultItem,
+  TrakeStep,
 } from "../types";
 import { zoneForRank } from "../types";
 import { Badge, Button, EmptyState, IconButton, InlineError } from "../ui";
@@ -34,6 +36,11 @@ interface Row {
   sceneId: string | null;
   answer?: string;
   frameIds?: number[];
+  /** TRAKE: một dòng LÀ một chuỗi. Giữ đủ step để duyệt lại từng khoảnh khắc
+   *  trước khi nộp — bản cũ chỉ giữ `frame_ids[0]` nên người dùng không xem
+   *  được chuỗi, chỉ thấy đúng cảnh đầu. */
+  steps?: TrakeStep[];
+  playback?: PlaybackWindow | null;
 }
 
 function toRows(task: TaskType, kis: KisResultItem[], qa: QaResultItem[], trake: TrakeResultItem[]): Row[] {
@@ -54,6 +61,7 @@ function toRows(task: TaskType, kis: KisResultItem[], qa: QaResultItem[], trake:
     key: `${item.video_id}-${item.rank}`,
     videoId: item.video_id, frameIdx: item.frame_ids[0] ?? 0,
     sceneId: item.steps[0]?.scene_id ?? null, frameIds: item.frame_ids,
+    steps: item.steps, playback: item.playback ?? null,
   }));
 }
 
@@ -63,25 +71,47 @@ function toRows(task: TaskType, kis: KisResultItem[], qa: QaResultItem[], trake:
  * nên fps suy ra được tại chỗ — không cần thêm endpoint, và không phải giả
  * định 30fps (video khác fps sẽ tua sai chỗ).
  */
-/** Nguồn cho thẻ `<video>`: ưu tiên cửa sổ phát do backend tính (đã nới bối
- * cảnh và đã kiểm file tồn tại), rơi về `video_path` thô nếu chưa có.
- *
- * `#t=start,end` giới hạn đoạn phát; `/v1/media` hỗ trợ HTTP Range nên tua
- * được trong đoạn đó. */
-function playerSrc(hit: SearchHit, base: (path: string) => string): string | null {
-  if (hit.playback) {
-    const { media_path, start_sec, end_sec } = hit.playback;
-    return `${base(media_path)}#t=${start_sec.toFixed(3)},${end_sec.toFixed(3)}`;
-  }
-  return hit.video_path ? base(hit.video_path) : null;
-}
-
 function seekSecondsFor(hit: SearchHit, frameIdx: number): number {
   const frameSpan = hit.end_frame_exclusive - hit.start_frame;
   const secondSpan = hit.end_sec - hit.start_sec;
   if (frameSpan <= 0 || secondSpan <= 0) return hit.start_sec;
   const fps = frameSpan / secondSpan;
   return hit.start_sec + (frameIdx - hit.start_frame) / fps;
+}
+
+/** Dải bước của một chuỗi TRAKE — bấm để nhảy tới đúng khoảnh khắc đó.
+ *
+ * Không có nó thì không xem lại được chuỗi trước khi nộp: bảng chỉ hiện frame
+ * đầu, mà một dòng TRAKE là `video_id, f1, ..., fn` và điểm phụ thuộc CẢ n
+ * khoảnh khắc lẫn thứ tự của chúng.
+ */
+function StepStrip({
+  steps, active, onPick,
+}: {
+  steps: TrakeStep[];
+  active: number;
+  onPick: (index: number) => void;
+}) {
+  return (
+    <div className="step-strip" role="group" aria-label="Các bước trong chuỗi">
+      {steps.map((step, index) => (
+        <button
+          key={`${step.step}-${step.frame_idx}`}
+          type="button"
+          className={index === active ? "step-chip is-active" : "step-chip"}
+          onClick={() => onPick(index)}
+          title={`Bước ${step.step} · frame ${step.frame_idx}${
+            step.timestamp_sec != null ? ` · ${step.timestamp_sec.toFixed(2)}s` : ""
+          }`}
+        >
+          <span className="step-chip-index tabular">{step.step}</span>
+          <span className="step-chip-time tabular">
+            {step.timestamp_sec != null ? `${step.timestamp_sec.toFixed(1)}s` : `#${step.frame_idx}`}
+          </span>
+        </button>
+      ))}
+    </div>
+  );
 }
 
 export function SubmissionBoard({ apiConfig, task, kis, qa, trake, avs, results = [] }: SubmissionBoardProps) {
@@ -110,9 +140,28 @@ export function SubmissionBoard({ apiConfig, task, kis, qa, trake, avs, results 
 
   const selectedRow = rows.find((row) => row.key === selected) ?? null;
   const selectedHit = selectedRow?.sceneId ? hitByScene.get(selectedRow.sceneId) ?? null : null;
-  const seekTo = selectedRow && selectedHit ? seekSecondsFor(selectedHit, selectedRow.frameIdx) : null;
 
-  useEffect(() => setVideoError(false), [selectedHit?.video_path]);
+  // TRAKE: một dòng là một CHUỖI. `stepIndex` là khoảnh khắc đang xem trong
+  // chuỗi đó; các task khác luôn ở 0.
+  const [stepIndex, setStepIndex] = useState(0);
+  useEffect(() => setStepIndex(0), [selected]);
+  const chainSteps = selectedRow?.steps ?? null;
+  const activeStep: TrakeStep | null = chainSteps?.[stepIndex] ?? null;
+
+  // Nguồn phát: ưu tiên cửa sổ của cả chuỗi (backend trải từ frame đầu tới
+  // frame cuối), rồi tới cửa sổ của scene, cuối cùng là video thô.
+  const window: PlaybackWindow | null = selectedRow?.playback ?? selectedHit?.playback ?? null;
+  const videoSrc = window
+    ? `${mediaUrl(apiConfig, window.media_path)}#t=${window.start_sec.toFixed(3)},${window.end_sec.toFixed(3)}`
+    : selectedHit?.video_path
+      ? mediaUrl(apiConfig, selectedHit.video_path)
+      : null;
+
+  const seekTo =
+    activeStep?.timestamp_sec ??
+    (selectedRow && selectedHit ? seekSecondsFor(selectedHit, selectedRow.frameIdx) : null);
+
+  useEffect(() => setVideoError(false), [videoSrc]);
 
   // Đặt `currentTime` TRƯỚC khi metadata tải xong thì trình duyệt bỏ qua —
   // video vẫn nằm ở 0:00 dù đã tính đúng mốc giây. Phải thử ngay (khi video
@@ -127,7 +176,7 @@ export function SubmissionBoard({ apiConfig, task, kis, qa, trake, avs, results 
     if (element.readyState >= 1) apply();
     element.addEventListener("loadedmetadata", apply);
     return () => element.removeEventListener("loadedmetadata", apply);
-  }, [seekTo, selectedHit?.video_path]);
+  }, [seekTo, videoSrc]);
 
   function move(index: number, delta: number) {
     setRows((current) => {
@@ -267,25 +316,33 @@ export function SubmissionBoard({ apiConfig, task, kis, qa, trake, avs, results 
               title="Chọn một dòng để xem"
               description="Video sẽ tua thẳng tới đúng frame sẽ nộp."
             />
-          ) : selectedHit && playerSrc(selectedHit, (p) => mediaUrl(apiConfig, p)) && !videoError ? (
+          ) : videoSrc && !videoError ? (
             <>
-              <video
-                ref={videoRef}
-                src={playerSrc(selectedHit, (p) => mediaUrl(apiConfig, p)) ?? undefined}
-                controls
-                onError={() => setVideoError(true)}
-              />
+              <video ref={videoRef} src={videoSrc} controls onError={() => setVideoError(true)} />
+              {chainSteps && chainSteps.length > 1 && (
+                <StepStrip steps={chainSteps} active={stepIndex} onPick={setStepIndex} />
+              )}
               <p className="submission-preview-meta tabular">
-                {selectedRow.videoId} · frame {selectedRow.frameIdx}
+                {selectedRow.videoId}
+                {activeStep
+                  ? ` · bước ${activeStep.step}/${chainSteps?.length ?? 1} · frame ${activeStep.frame_idx}`
+                  : ` · frame ${selectedRow.frameIdx}`}
                 {seekTo != null && ` · ${seekTo.toFixed(2)}s`}
-                {selectedHit.playback &&
-                  ` · đoạn ${selectedHit.playback.start_sec.toFixed(1)}–${selectedHit.playback.end_sec.toFixed(1)}s`}
+                {window && ` · đoạn ${window.start_sec.toFixed(1)}–${window.end_sec.toFixed(1)}s`}
               </p>
             </>
-          ) : selectedHit?.best_keyframe_path ? (
+          ) : activeStep?.image_path ?? selectedHit?.best_keyframe_path ? (
             <>
-              <img src={mediaUrl(apiConfig, selectedHit.best_keyframe_path)} alt={`frame ${selectedRow.frameIdx}`} />
-              <p className="submission-preview-meta">Không phát được video — hiện keyframe thay thế.</p>
+              <img
+                src={mediaUrl(apiConfig, (activeStep?.image_path ?? selectedHit?.best_keyframe_path)!)}
+                alt={`frame ${activeStep?.frame_idx ?? selectedRow.frameIdx}`}
+              />
+              {chainSteps && chainSteps.length > 1 && (
+                <StepStrip steps={chainSteps} active={stepIndex} onPick={setStepIndex} />
+              )}
+              <p className="submission-preview-meta">
+                Chưa có video nguồn — duyệt chuỗi bằng khung hình.
+              </p>
             </>
           ) : (
             <EmptyState
