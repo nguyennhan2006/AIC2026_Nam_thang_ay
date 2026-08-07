@@ -357,6 +357,7 @@ async def build_container(settings: Settings) -> AppContainer:
         # phân biệt `người`/`đang` với `thợ lặn`/`rùa biển`.
         avs_idf=CorpusIdf.from_scenes(await repository.all()),
         playback_pad_sec=settings.playback_pad_sec,
+        trake_engine=settings.trake_engine,
         media_root=settings.data_root,
         weight_recommender=weight_recommender,
         evidence_selector=evidence_selector,

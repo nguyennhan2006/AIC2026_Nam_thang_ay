@@ -9,7 +9,7 @@ Baseline hiện tại (4 task, metric đã sửa, cap AVS = 20):
 |---|---|---|
 | KIS | R@1 / R@20 / MRR | 0.583 / **1.000** / 0.725 |
 | QA | evidence R@1 / R@20 / answer / joint | 0.583 / 0.861 / 0.583 / 0.417 |
-| TRAKE | video@1 / mean R-score / complete_chain | 0.542 / 0.183 / **0.000** |
+| TRAKE | video@1 / mean R-score / complete_chain | **0.833** / **0.254** / **0.000** |
 | AVS | nDCG@100 / event_coverage | 0.598 / 0.841 |
 
 Ký hiệu mức: 🔴 chặn đường · 🟠 mất điểm đo được · 🟡 rủi ro chưa hiện · ⚪ nợ kỹ thuật
@@ -31,6 +31,7 @@ Ký hiệu mức: 🔴 chặn đường · 🟠 mất điểm đo được · �
 | `AIC_ENABLE_QUERY_TRANSLATION` | `true` | cải thiện lớn nhất từng đo |
 | `AIC_ENABLE_KEYWORD_EXTRACTION` | `false` | DROP, đo lại sau khi sửa scoring |
 | `KisConfig` (trọng số) | mặc định | WEIGHT-01: mọi biến thể overfit V001 |
+| `AIC_TRAKE_ENGINE` | `sequences` | video@1 0.833 vs 0.542 của `processor` |
 
 Hai dòng đầu và dòng VLM **mới được sửa 2026-08-06** — trước đó cấu hình server
 khác hẳn cấu hình được đo.
@@ -184,7 +185,44 @@ toàn cảnh.
 
 ## B. Tầng retrieval và chấm điểm
 
-### 🔴 B1 — TRAKE Stage A: chọn sai video ở 2/3 số truy vấn holdout
+### 🟢 B1 — TRAKE Stage A: `TrakeProcessor` KÉM HƠN thứ nó thay thế
+
+Người dùng phát hiện tab "Lưới ảnh" và tab "Sequences" cho kết quả khác nhau.
+Hai tab dùng hai bộ máy: `sequences` từ `link_event_hits` (đường cũ) và `trake`
+từ `TrakeProcessor` (PR-07, "video-first"). Bộ chấm **chỉ chấm
+`response.trake`**, nên đường cũ chưa bao giờ được đo.
+
+Thêm `--trake-source` để chấm cả hai bằng đúng một bộ chấm:
+
+| | `TrakeProcessor` | `link_event_hits` |
+|---|---|---|
+| video_recall@1 | 0.542 | **0.833** |
+| video_recall@3 | 0.833 | **1.000** |
+| gold_video_missing | 0.167 | **0.000** |
+| mean R-score | 0.183 | **0.254** |
+
+Và không phải khớp riêng một video — trên hai video holdout, đường cũ gấp đôi:
+
+| video | video@1 | mean R |
+|---|---|---|
+| V001 | 1.000 → 1.000 | 0.287 → 0.281 |
+| V002 | 0.375 → **0.750** | 0.179 → **0.306** |
+| V003 | 0.250 → **0.750** | 0.081 → **0.175** |
+
+Theo từng truy vấn: đường cũ tốt hơn ở 9, kém hơn ở 4, hoà 11.
+
+`TrakeProcessor` được viết ĐỂ thay `link_event_hits` với lý do đúng (sai video
+là 0 điểm nên phải khoá video trước). Nhưng nó kém hơn, và điều đó ẩn suốt vì
+bộ chấm chỉ nhìn một bên.
+
+**Đã đổi mặc định sang `link_event_hits`** (`AIC_TRAKE_ENGINE=sequences`).
+`processor` vẫn giữ được để quay lại khi Stage A được sửa — ý tưởng của nó vẫn
+đúng, chỉ là hiện chưa chạy tốt.
+
+**Nghiên cứu tiếp:** `complete_chain_rate` vẫn 0.000 ở CẢ HAI đường, nên nút
+thắt chọn frame trong chuỗi chưa được gỡ. Đó mới là phần còn lại của B1.
+
+### 🔴 B1b — chọn frame trong chuỗi (phần chưa gỡ)
 
 ```
 video@1   0.542 tổng   —   1.000 V001, 0.375 V002, 0.250 V003

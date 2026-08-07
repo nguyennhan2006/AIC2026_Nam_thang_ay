@@ -191,6 +191,7 @@ class Settings:
     ocr_overlay_max_words: int = 0
     branch_timeout_ms: int = 8000
     playback_pad_sec: float = 5.0
+    trake_engine: str = "sequences"
     # Dense visual local (PR-13) — text tower phải cùng model với vector ảnh
     # đã sinh (`scripts/embed_keyframes_local.py`), nếu không hai không gian
     # embedding lệch nhau và cosine similarity vô nghĩa. Chỉ thật sự nạp model
@@ -309,6 +310,7 @@ class Settings:
             ocr_overlay_max_words=int(os.getenv("AIC_OCR_OVERLAY_MAX_WORDS", "0")),
             branch_timeout_ms=_env_int("AIC_BRANCH_TIMEOUT_MS", 8000),
             playback_pad_sec=float(os.getenv("AIC_PLAYBACK_PAD_SEC", "5.0")),
+            trake_engine=os.getenv("AIC_TRAKE_ENGINE", "sequences").lower(),
             visual_embedding_model=os.getenv("AIC_VISUAL_EMBEDDING_MODEL", "openai/clip-vit-large-patch14"),
             visual_embedding_model_revision=os.getenv("AIC_VISUAL_EMBEDDING_MODEL_REVISION") or None,
             **_fpt_settings_kwargs(),

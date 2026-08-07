@@ -628,8 +628,16 @@ async def evaluate(
             # chọn frame. `response.trake` được TrakeProcessor sinh theo thứ tự
             # video đã xếp hạng, nên thứ tự video xuất hiện lần đầu chính là
             # bảng xếp hạng Stage A.
+            # `--trake-source` cho phép chấm ĐƯỜNG CŨ (`link_event_hits`) bằng
+            # đúng bộ chấm này. Hai đường bất đồng từ hạng 3 trở đi — đường cũ
+            # đề xuất chuỗi chặt ở video KHÁC, còn `TrakeProcessor` bám một
+            # video rồi sinh chuỗi trải hàng nghìn frame. Trước đây chỉ đường
+            # mới được đo, nên không ai biết bên nào đúng hơn.
+            rows = (
+                response.sequences if args.trake_source == "sequences" else response.trake
+            )
             video_order: list[str] = []
-            for row in response.trake:
+            for row in rows:
                 if row.video_id not in video_order:
                     video_order.append(row.video_id)
             gold_rank = (
@@ -640,7 +648,7 @@ async def evaluate(
             record["video_order"] = video_order[:5]
             trake_video_ranks.append(gold_rank)
 
-            best = response.trake[0] if response.trake else None
+            best = rows[0] if rows else None
             if best is None or best.video_id != item.video_id:
                 trake_r_scores.append(0.0)
                 record["r_score"] = 0.0
@@ -965,6 +973,11 @@ async def _main() -> None:
                         help="beam (mac dinh) hoac dp — quy hoach dong chinh xac, cung ham muc tieu")
     parser.add_argument("--trake-missing-penalty", type=float, default=None,
                         help="Ghi đè missing_step_penalty (mặc định 0.5)")
+    parser.add_argument(
+        "--trake-source", choices=("trake", "sequences"), default="trake",
+        help="chấm TrakeProcessor (mặc định) hay link_event_hits — hai đường "
+             "bất đồng từ hạng 3 và trước đây chỉ đường đầu được đo",
+    )
     parser.add_argument(
         "--pipeline", choices=("legacy", "container"), default="legacy",
         help="container = dựng qua online/api/container.py, tức đúng pipeline server "

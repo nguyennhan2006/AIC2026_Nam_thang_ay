@@ -41,6 +41,7 @@ from online.services.rules import RuleConfig, apply_bonus_penalty
 from online.services.thresholding import apply_thresholds
 from online.services.temporal import link_event_hits
 from online.services.trake import TrakeProcessor, trake_processor_for_request
+from online.services.trake.from_sequences import to_trake_results
 
 
 class SearchService:
@@ -63,6 +64,7 @@ class SearchService:
         avs_config=None,
         avs_idf=None,
         playback_pad_sec: float = DEFAULT_PAD_SEC,
+        trake_engine: str = "sequences",
         media_root=None,
         branch_timeout_ms: int | None = None,
         evidence_select_top_n: int = 10,
@@ -99,6 +101,7 @@ class SearchService:
         # Nới cửa sổ phát mỗi phía. Scene p50 chỉ 4.1s — xem đúng 4 giây
         # không đủ để người chấm hiểu bối cảnh.
         self.playback_pad_sec = playback_pad_sec
+        self.trake_engine = trake_engine
         self.media_root = media_root
         self._last_avs_diagnostics: dict = {}
         self.planner = planner or RuleBasedQueryPlanner()
@@ -366,14 +369,27 @@ class SearchService:
             trake_processor = trake_processor_for_request(
                 self.trake_processor, plan.search_options.temporal
             )
-            trake = trake_processor.run(
+            processor_trake = trake_processor.run(
                 [event.text for event in plan.events],
                 event_hit_lists,
                 documents,
                 limit=request.top_k,
             )
-            await _attach_playback(self.repository, trake, self.playback_pad_sec, self.media_root)
             sequences = link_event_hits(event_hit_lists, limit=request.top_k)
+            # Đường CŨ (`link_event_hits`) đo ra TỐT HƠN đường đã thay thế nó:
+            # video_recall@1 0.833 so với 0.542, và gấp đôi trên hai video
+            # holdout. Bảng số đầy đủ ở `trake/from_sequences.py`.
+            #
+            # Sai lầm ẩn được lâu vì bộ chấm chỉ chấm `response.trake`; đường
+            # cũ vẫn chạy và vẫn nằm trong `response.sequences` nhưng chưa bao
+            # giờ ai chấm nó. `AIC_TRAKE_ENGINE=processor` để quay lại khi
+            # `TrakeProcessor` được sửa — ý tưởng của nó vẫn đúng.
+            trake = (
+                processor_trake
+                if self.trake_engine == "processor"
+                else to_trake_results(sequences, expected_steps=len(plan.events))
+            )
+            await _attach_playback(self.repository, trake, self.playback_pad_sec, self.media_root)
             warnings = _status_warnings(statuses)
             if not trake:
                 if not any(event_hit_lists):
