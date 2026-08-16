@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { LayoutGrid, ListChecks, Upload } from "lucide-react";
+import { LayoutGrid, ListChecks, SlidersHorizontal, Upload } from "lucide-react";
 import { ApiError, health as fetchHealth, search, searchStream, unifiedSearch } from "./api";
 import { AppFooter } from "./app/AppFooter";
 import { AppShell } from "./app/AppShell";
@@ -7,6 +7,8 @@ import { LeftRail } from "./app/LeftRail";
 import type { AppPage } from "./app/TopNavigation";
 import { TopNavigation } from "./app/TopNavigation";
 import { CompareLab } from "./components/CompareLab";
+import type { TunerRow } from "./components/FrameTuner";
+import { FrameTuner } from "./components/FrameTuner";
 import { HealthDrawer } from "./components/HealthDrawer";
 import { QueryStudio } from "./components/QueryStudio";
 import { ResultsExplorer } from "./components/ResultsExplorer";
@@ -21,7 +23,7 @@ import type { HealthResponse, SearchOptions, SearchResponse, StreamEvent, TaskTy
 import { PanelBody, PanelHeader, Surface, Tabs } from "./ui";
 import type { TabItem } from "./ui";
 
-type ResultTab = "results" | "task" | "submission";
+type ResultTab = "results" | "task" | "submission" | "tuner";
 
 /** Demo mode (`?demo=1`): tự chạy MỘT search THẬT lên backend ngay khi mở, để
  * người xem thấy giao diện ở trạng thái có dữ liệu mà không phải gõ gì.
@@ -78,10 +80,20 @@ function App() {
 
   const apiConfig = useMemo(() => ({ base: apiBase, token: apiToken }), [apiBase, apiToken]);
 
-  const selectedHit = useMemo(
-    () => result?.results.find((hit) => hit.candidate_id === selectedCandidateId) ?? null,
-    [result, selectedCandidateId]
-  );
+  // Phải tìm trong CẢ `sequences`, không chỉ `results`: endpoint TRAKE trả
+  // `results: []` (đo được: 0 phần tử) và toàn bộ candidate nằm trong
+  // `sequences[].scenes`. Bản cũ chỉ tra `results` nên với TRAKE `selectedHit`
+  // luôn là null, và panel xem không bao giờ theo được thẻ vừa bấm.
+  const selectedHit = useMemo(() => {
+    if (!selectedCandidateId) return null;
+    const direct = result?.results.find((hit) => hit.candidate_id === selectedCandidateId);
+    if (direct) return direct;
+    for (const sequence of result?.sequences ?? []) {
+      const scene = sequence.scenes.find((hit) => hit.candidate_id === selectedCandidateId);
+      if (scene) return scene;
+    }
+    return null;
+  }, [result, selectedCandidateId]);
 
   function persistApiBase(value: string) {
     setApiBase(value);
@@ -215,10 +227,38 @@ function App() {
           ? result?.trake.length
           : result?.avs.length;
 
+  // Dòng nạp sẵn cho tab chỉnh frame. TRAKE tách MỖI BƯỚC thành một dòng —
+  // người chấm soát từng khoảnh khắc, không soát cả chuỗi một lượt.
+  const tunerSeed = useMemo<TunerRow[]>(() => {
+    if (!result) return [];
+    if (task === "TEXTUAL_KIS") {
+      return result.kis.map((item, index) => ({
+        id: `kis-${index}`, videoId: item.video_id,
+        originalFrame: item.frame_idx, frame: item.frame_idx,
+      }));
+    }
+    if (task === "QA") {
+      return result.qa.map((item, index) => ({
+        id: `qa-${index}`, videoId: item.video_id,
+        originalFrame: item.frame_idx, frame: item.frame_idx, answer: item.answer,
+      }));
+    }
+    if (task === "TRAKE") {
+      return result.trake.flatMap((item, chain) =>
+        item.frame_ids.map((frame, step) => ({
+          id: `trake-${chain}-${step}`, videoId: item.video_id,
+          originalFrame: frame, frame, chain: chain + 1, step: step + 1,
+        }))
+      );
+    }
+    return [];
+  }, [result, task]);
+
   const resultTabs: TabItem<ResultTab>[] = [
     { value: "results", label: "Lưới ảnh", count: result?.results.length, icon: <LayoutGrid size={13} /> },
     { value: "task", label: TASK_TAB_LABEL[task], count: taskItemCount, icon: <ListChecks size={13} /> },
     { value: "submission", label: "Submission", icon: <Upload size={13} /> },
+    { value: "tuner", label: "Chỉnh frame", count: tunerSeed.length || undefined, icon: <SlidersHorizontal size={13} /> },
   ];
 
   return (
@@ -293,6 +333,10 @@ function App() {
                     apiConfig={apiConfig}
                     selectedCandidateId={selectedCandidateId}
                     onSelect={setSelectedCandidateId}
+                    onSelectSequenceStep={(sequenceIndex, stepIndex) => {
+                      setSelectedSequenceIndex(sequenceIndex);
+                      setActiveStepIndex(stepIndex);
+                    }}
                     pristine={!hasSearched}
                     topK={topK}
                     perVideoCapSet={appliedOptions.fusion?.max_results_per_video != null}
@@ -316,6 +360,10 @@ function App() {
                   />
                 )}
                 {resultTab === "task" && task === "AVS" && <AvsWorkspace items={result?.avs ?? []} />}
+
+                {resultTab === "tuner" && (
+                  <FrameTuner apiConfig={apiConfig} task={task} seedRows={tunerSeed} />
+                )}
 
                 {resultTab === "submission" && (
                   <PanelBody>

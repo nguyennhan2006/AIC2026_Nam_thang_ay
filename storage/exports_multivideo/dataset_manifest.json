@@ -1,0 +1,64 @@
+{
+  "schema_version": "1.0.0",
+  "dataset_id": "multivideo-3",
+  "build_id": "20260808T025927Z",
+  "pipeline_version": "aic-v1.0.0",
+  "video_count": 3,
+  "scene_count": 765,
+  "keyframe_count": 855,
+  "clip_count": 0,
+  "event_count": 476,
+  "models": [
+    {
+      "task": "asr",
+      "model_name": "faster-whisper:large-v3",
+      "revision": "l21-input-v1",
+      "config_checksum": null
+    },
+    {
+      "task": "caption",
+      "model_name": "Qwen2.5-VL-7B-Instruct",
+      "revision": "fpt-enrich-v1",
+      "config_checksum": null
+    },
+    {
+      "task": "embedding",
+      "model_name": "openai/clip-vit-large-patch14",
+      "revision": "clip-vit-l14-v1",
+      "config_checksum": null
+    },
+    {
+      "task": "keyframe",
+      "model_name": "ffmpeg-scene-representative",
+      "revision": "l21-input-v1",
+      "config_checksum": null
+    },
+    {
+      "task": "object",
+      "model_name": "Qwen2.5-VL-7B-Instruct",
+      "revision": "fpt-enrich-v1",
+      "config_checksum": null
+    },
+    {
+      "task": "ocr",
+      "model_name": "Qwen2.5-VL-7B-Instruct",
+      "revision": "fpt-enrich-v1",
+      "config_checksum": null
+    },
+    {
+      "task": "scene",
+      "model_name": "transnetv2_pytorch",
+      "revision": "l21-input-v1",
+      "config_checksum": null
+    }
+  ],
+  "indexes": [],
+  "export_checksums": {
+    "videos.jsonl": "sha256:f16628d7e278e8728c2d2d44234a57cc0bb8c476d76a89ffd65df25239847434",
+    "scenes.jsonl": "sha256:5733030fc84fda2abbcb540968e145c55d07d59744d2410c03f74cb36ba6f644",
+    "keyframes.jsonl": "sha256:05fc8e0ab02772220e62bc772f80028eb825aab394b366442e0f7df1df27bf90",
+    "clips.jsonl": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "events.jsonl": "sha256:cbf646b68bf7fc26af8410eb239f1a11afe10ab33c7bf48995e5bb70d9a717bb"
+  },
+  "created_at": "2026-08-06T08:49:23.865513Z"
+}

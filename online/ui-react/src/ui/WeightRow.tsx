@@ -34,7 +34,11 @@ export function WeightRow({
   title,
   badge,
   min = 0,
-  max = 1,
+  // Thanh trượt tới 5, ô số tới 10 (trần thật của API). Tách có chủ đích:
+  // mọi bản chấm dựng sẵn nằm trong 0–5, để thanh trượt 0–10 sẽ dồn vùng hay
+  // dùng nhất (0–1) vào một phần mười chiều dài và gần như không kéo chính xác
+  // được. Ai cần >5 thì gõ thẳng vào ô số.
+  max = 5,
   step = 0.01,
   tone,
 }: WeightRowProps) {

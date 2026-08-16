@@ -263,6 +263,11 @@ class SearchCapabilitiesTests(unittest.TestCase):
 
         class FakeSearchService:
             rule_config = None
+            # `/v1/search/capabilities` báo `default_weight` lấy từ đây
+            # (AIC_BRANCH_WEIGHTS mức triển khai). Route đọc thẳng thuộc tính
+            # chứ không `getattr(..., {})` — nuốt bằng getattr đúng là cách
+            # `_boxes` từng làm chết `bm25_ocr` trong im lặng.
+            branch_weights: dict[str, float] = {}
 
         service = FakeSearchService()
         service.retrievers = retrievers

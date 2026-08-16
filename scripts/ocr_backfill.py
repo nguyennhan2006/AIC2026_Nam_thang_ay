@@ -248,7 +248,7 @@ async def main_async(args: argparse.Namespace) -> None:
     # trong file mà `bm25_ocr` không thấy.
     scenes = [
         json.loads(line)
-        for line in scenes_path.read_text(encoding="utf-8").splitlines()
+        for line in scenes_path.read_text(encoding="utf-8").splitlines()    
         if line.strip()
     ]
     synced = 0

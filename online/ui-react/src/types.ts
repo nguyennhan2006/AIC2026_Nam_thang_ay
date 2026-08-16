@@ -436,3 +436,28 @@ export function zoneForRank(rank: number): string {
   const match = RANKING_ZONES.find((zone) => rank >= zone.low && rank <= zone.high);
   return match?.name ?? "beyond_100";
 }
+
+/** Metadata mức video, từ `GET /v1/videos`.
+ *
+ * `fps` phải lấy từ đây chứ không được giả định: V003 chạy 25 fps trong khi
+ * V001/V002 chạy 30. `media_available=false` nghĩa là video CÓ trong dataset
+ * nhưng thiếu file mp4 trên đĩa — khác hẳn "không có video này".
+ */
+export interface VideoMeta {
+  video_id: string;
+  media_path: string;
+  fps: number;
+  frame_count: number;
+  duration_sec: number;
+  width: number | null;
+  height: number | null;
+  media_available: boolean;
+}
+
+/** Một keyframe của video, từ `GET /v1/videos/{id}/frames`. */
+export interface VideoFrame {
+  frame_idx: number;
+  image_path: string;
+  timestamp_sec: number;
+  scene_id: string;
+}

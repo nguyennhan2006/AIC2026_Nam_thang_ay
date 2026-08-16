@@ -93,4 +93,78 @@ async def build_frame_vector_rows(
     return rows, True
 
 
-__all__ = ["build_frame_vector_rows"]
+
+
+async def build_frame_vector_rows_by_index(
+    repository: JsonlSceneRepository,
+    data_root: Path,
+    *,
+    embedding_names: list[str] | None = None,
+) -> dict[str, list[tuple[str, str, list[float], dict[str, Any]]]]:
+    """Như `build_frame_vector_rows` nhưng TÁCH theo `embedding_name`.
+
+    Một keyframe có thể mang nhiều `embedding_refs` (CLIP + Jina + SigLIP…).
+    Gộp chúng vào một vector store là sai về bản chất: mỗi model có không gian
+    riêng, cosine giữa hai không gian khác nhau chỉ là một con số vô nghĩa —
+    và không có gì báo lỗi vì phép nhân vẫn chạy.
+
+    Trả `{embedding_name: rows}`; caller dựng MỘT vector store và MỘT text
+    encoder cho mỗi tên.
+
+    `embedding_names=None` -> lấy mọi tên gặp trong export.
+    """
+
+    scenes = await repository.all()
+    if not any(frame.embedding_names for scene in scenes for frame in scene.keyframes):
+        return {}
+
+    wanted = set(embedding_names) if embedding_names else None
+    keyframes_path = repository.path.with_name("keyframes.jsonl")
+    raw_by_key: dict[tuple[str, int], dict[str, Any]] = {}
+    with keyframes_path.open(encoding="utf-8") as handle:
+        for line in handle:
+            if not line.strip():
+                continue
+            raw = json.loads(line)
+            raw_by_key[(str(raw["video_id"]), int(raw["frame_idx"]))] = raw
+
+    out: dict[str, list[tuple[str, str, list[float], dict[str, Any]]]] = {}
+    for scene in scenes:
+        for frame in scene.keyframes:
+            raw = raw_by_key.get((frame.video_id, frame.frame_idx))
+            if raw is None:
+                continue
+            payload = {
+                "entity_type": "keyframe",
+                "keyframe_id": frame.keyframe_id,
+                "scene_id": scene.scene_id,
+                "video_id": scene.video_id,
+                "event_id": scene.event_id,
+                "frame_idx": frame.frame_idx,
+                "timestamp_sec": frame.timestamp_sec,
+                "image_path": frame.image_path,
+                "start_frame": scene.start_frame,
+                "end_frame": scene.end_frame_exclusive - 1,
+                "start_sec": scene.start_sec,
+                "end_sec": scene.end_sec,
+                "has_ocr": bool(frame.ocr_texts),
+                "has_asr": bool(scene.asr_texts),
+            }
+            for reference in raw.get("embedding_refs", []):
+                name = str(reference.get("embedding_name") or "")
+                if not name or (wanted is not None and name not in wanted):
+                    continue
+                vector: list[float] | None = None
+                for location in reference.get("storage_locations", []):
+                    if location.get("backend") == "file" and location.get("vector_uri"):
+                        vector = _read_vector_file(data_root / str(location["vector_uri"]))
+                        break
+                if vector is None:
+                    continue
+                out.setdefault(name, []).append(
+                    (frame.keyframe_id, scene.video_id, vector, dict(payload))
+                )
+    return out
+
+
+__all__ = ["build_frame_vector_rows", "build_frame_vector_rows_by_index"]

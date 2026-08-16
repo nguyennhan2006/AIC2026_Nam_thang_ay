@@ -15,9 +15,16 @@ ROUTE-01 cho thấy OCR/ASR có giá trị thật trong corpus này, nhưng tr�
 vào document dense thì không tách được gain đến từ semantic caption hay từ
 lower-third bản tin. Thêm sau, ở một thí nghiệm riêng.
 
-E5 yêu cầu prefix bất đối xứng: `query: ` cho truy vấn, `passage: ` cho tài
-liệu. Bỏ prefix là mất phần lớn chất lượng — đây là lỗi im lặng, model vẫn
-chạy và vẫn trả số.
+Hai encoder, chọn bằng `--encoder`. Cả hai đều bất đối xứng query-vs-passage,
+chỉ khác cách khai, và bỏ qua phần bất đối xứng là mất phần lớn chất lượng —
+lỗi im lặng, model vẫn chạy và vẫn trả số:
+
+    e5       prefix chuỗi `query: ` / `passage: `
+    jina_v3  LoRA adapter `retrieval.query` / `retrieval.passage`
+
+Manifest ghi `encoder_kind` để phía online chặn được ca dùng nhầm họ. Chốt đó
+KHÔNG thừa: cả hai model đều ra vector 1024 chiều nên `assert_dimension` cho
+qua sạch.
 
 Chạy::
 
@@ -25,6 +32,12 @@ Chạy::
         --metadata storage/exports_l21/scenes.jsonl \\
         --model storage/models/multilingual-e5-large \\
         --out storage/indexes_l21/caption_dense
+
+    python -m scripts.build_caption_dense_index \\
+        --encoder jina_v3 \\
+        --model jinaai/jina-embeddings-v3 \\
+        --model-id jinaai/jina-embeddings-v3 \\
+        --out storage/indexes_multivideo/caption_dense_jina
 """
 
 from __future__ import annotations
@@ -36,62 +49,23 @@ import json
 from pathlib import Path
 
 import numpy as np
-import torch
-from transformers import AutoModel, AutoTokenizer
 
 from online.adapters.json_metadata import JsonlSceneRepository
-from online.domain.models import SceneDocument
 
-DOCUMENT_SCHEMA = "caption_dense_v1"
-QUERY_PREFIX = "query: "
-PASSAGE_PREFIX = "passage: "
-
-
-def build_document_text(scene: SceneDocument) -> str:
-    """Một chuỗi text tìm kiếm được cho mỗi scene.
-
-    Thứ tự cố ý: caption trước (mang nhiều ngữ nghĩa nhất), rồi tới tag. Không
-    lặp field để giả trọng số — trọng số là việc của tầng fusion.
-    """
-
-    parts: list[str] = []
-    if scene.captions:
-        parts.append(" ".join(scene.captions))
-    for values in (scene.object_labels, scene.action_tags, scene.keywords):
-        if values:
-            parts.append(", ".join(dict.fromkeys(values)))
-    return " | ".join(part for part in parts if part.strip())
-
-
-def mean_pool(hidden: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
-    expanded = mask.unsqueeze(-1).float()
-    return (hidden * expanded).sum(1) / expanded.sum(1).clamp(min=1e-9)
-
-
-class E5Encoder:
-    """Encoder E5 chạy local, luôn L2-normalize để cosine = dot product."""
-
-    def __init__(self, model_path: str, device: str = "cpu", max_length: int = 320) -> None:
-        self.tokenizer = AutoTokenizer.from_pretrained(model_path)
-        self.model = AutoModel.from_pretrained(model_path).to(device).eval()
-        self.device = device
-        self.max_length = max_length
-        self.dim = int(self.model.config.hidden_size)
-
-    @torch.no_grad()
-    def encode(self, texts: list[str], batch_size: int = 8) -> np.ndarray:
-        vectors: list[np.ndarray] = []
-        for start in range(0, len(texts), batch_size):
-            batch = self.tokenizer(
-                texts[start : start + batch_size],
-                padding=True, truncation=True, max_length=self.max_length,
-                return_tensors="pt",
-            ).to(self.device)
-            hidden = self.model(**batch).last_hidden_state
-            pooled = mean_pool(hidden, batch["attention_mask"])
-            pooled = torch.nn.functional.normalize(pooled, dim=-1)
-            vectors.append(pooled.cpu().numpy().astype("float32"))
-        return np.vstack(vectors) if vectors else np.zeros((0, self.dim), dtype="float32")
+# Định nghĩa CHUNG với nhánh online. Nhân đôi encoder/prefix/schema ở đây là
+# đường ngắn nhất tới lệch pooling giữa index và truy vấn — lỗi im lặng, model
+# vẫn chạy và vẫn trả số. Re-export để script cũ import từ đây vẫn chạy.
+from online.adapters.dense_text import (  # noqa: F401  (re-export có chủ đích)
+    DOCUMENT_SCHEMA,
+    ENCODER_KINDS,
+    PASSAGE_PREFIX,
+    QUERY_PREFIX,
+    E5Encoder,
+    JinaV3Encoder,
+    build_document_text,
+    build_text_encoder,
+    prefixes_for,
+)
 
 
 async def main_async(args: argparse.Namespace) -> None:
@@ -103,9 +77,15 @@ async def main_async(args: argparse.Namespace) -> None:
     if not usable:
         raise SystemExit("không scene nào có caption/tag — chạy enrichment trước")
 
-    encoder = E5Encoder(args.model, device=args.device)
-    print(f"encode {len(usable)} document (dim={encoder.dim}) …")
-    matrix = encoder.encode([PASSAGE_PREFIX + text for _sid, text in usable], args.batch_size)
+    # `for_passages=True`: phía dựng index luôn là passage side. Container dựng
+    # cùng encoder với `for_passages=False`. Một factory duy nhất giữ hai phía
+    # không bao giờ lệch cơ chế bất đối xứng.
+    encoder = build_text_encoder(
+        args.encoder, str(args.model), device=args.device, for_passages=True
+    )
+    query_prefix, passage_prefix = prefixes_for(args.encoder)
+    print(f"encode {len(usable)} document ({args.encoder}, dim={encoder.dim}) …")
+    matrix = encoder.encode([passage_prefix + text for _sid, text in usable], args.batch_size)
 
     args.out.mkdir(parents=True, exist_ok=True)
     np.save(args.out / "embeddings.npy", matrix)
@@ -117,14 +97,23 @@ async def main_async(args: argparse.Namespace) -> None:
         "model_id": args.model_id,
         "model_path": str(args.model),
         "document_schema": DOCUMENT_SCHEMA,
-        "query_prefix": QUERY_PREFIX,
-        "passage_prefix": PASSAGE_PREFIX,
+        # Chốt chống lệch họ encoder ở phía online. Xem
+        # CaptionDenseRetriever.assert_encoder_kind — e5 và jina_v3 cùng 1024
+        # chiều nên chốt theo chiều không bắt được ca này.
+        "encoder_kind": args.encoder,
+        "query_prefix": query_prefix,
+        "passage_prefix": passage_prefix,
+        # Jina bất đối xứng bằng LoRA adapter chứ không bằng prefix; ghi lại để
+        # đọc manifest là biết index dựng ở phía nào.
+        "encoder_task": getattr(encoder, "task", None),
         "pooling": "mean",
         "normalized": True,
         "embedding_dim": int(matrix.shape[1]),
         "scene_count": int(matrix.shape[0]),
         "max_length": encoder.max_length,
-        "metadata_source": str(args.metadata),
+        # `as_posix()` để thông báo lệch-corpus của CaptionDenseRetriever đọc
+        # được trên mọi nền (Windows lưu `\\` làm chuỗi trong JSON rất khó đọc).
+        "metadata_source": Path(args.metadata).as_posix(),
         "index_fingerprint": fingerprint,
     }
     (args.out / "manifest.json").write_text(
@@ -136,11 +125,19 @@ async def main_async(args: argparse.Namespace) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Build caption dense index (DENSE-TEXT-01)")
-    parser.add_argument("--metadata", type=Path, default=Path("storage/exports_l21/scenes.jsonl"))
+    # Mặc định trỏ corpus ĐANG PHỤC VỤ (3 video). Index dựng cho một export
+    # khác vẫn nạp được và vẫn trả điểm hợp lệ, chỉ là không bao giờ đề xuất
+    # nổi scene của video không có trong index — `CaptionDenseRetriever
+    # .assert_covers` chặn ca đó lúc khởi động.
+    parser.add_argument("--metadata", type=Path,
+                        default=Path("storage/exports_multivideo/scenes.jsonl"))
     parser.add_argument("--model", type=Path, default=Path("storage/models/multilingual-e5-large"))
     parser.add_argument("--model-id", default="intfloat/multilingual-e5-large")
-    parser.add_argument("--out", type=Path, default=Path("storage/indexes_l21/caption_dense"))
-    parser.add_argument("--device", default="cpu")
+    parser.add_argument("--encoder", choices=ENCODER_KINDS, default="e5",
+                        help="e5 (prefix chuỗi) | jina_v3 (LoRA adapter theo task)")
+    parser.add_argument("--out", type=Path,
+                        default=Path("storage/indexes_multivideo/caption_dense"))
+    parser.add_argument("--device", default="cpu", help="cpu | cuda — E5-large trên CPU vẫn chạy được")
     parser.add_argument("--batch-size", type=int, default=8)
     args = parser.parse_args()
     asyncio.run(main_async(args))

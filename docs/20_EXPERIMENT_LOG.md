@@ -1799,3 +1799,422 @@ tầng online, KHÔNG phải trích lại dữ liệu.
 **Ba thí nghiệm ranking đã chạy đều DROP.** Điểm chung: mỗi lần số liệu tổng
 lại chỉ về một chỗ khác với chỗ giả thuyết chỉ. Đó là lý do quy trình bắt
 buộc error analysis trước khi quyết giữ/bỏ.
+
+---
+
+## 2026-08-09 — QA: TOP_N (KEEP) và cổng IDF verifier (DROP)
+
+Bối cảnh: QA có evidence `R@20 = 0.889` nhưng `joint_top1` chỉ 0.417 — **tìm
+đúng chỗ, trả lời sai**. Chẩn đoán ra hai nguyên nhân độc lập.
+
+### QA-TOPN-01 — `AIC_FPT_QA_TOP_N` 5 → 10 · **KEEP**
+
+Nguyên nhân: LLM chỉ đọc `llm_top_n` evidence pack đầu. Scene đúng nằm ở hạng
+6–10 thì đáp án do rule-based sinh, và rule-based hay trả danh từ chung.
+
+|  | R@1 | ans_acc | joint | MRR |
+|---|---:|---:|---:|---:|
+| TOP_N=5 | 0.583 | 0.611 | 0.417 | 0.652 |
+| TOP_N=10 | **0.611** | **0.667** | **0.472** | **0.706** |
+
+Theo video (holdout = V003): `0.333 / 0.333 / 0.583` → `0.333 / 0.500 / 0.583`.
+Tăng trên tune, **holdout giữ nguyên** → KEEP.
+
+Chi phí: gấp đôi số lệnh gọi LLM của QA.
+
+### QA-VERIFY-IDF-01 — cổng IDF cho verifier · **DROP**
+
+Lỗ hổng có thật: `verify_answer` trả `SUPPORTED` chỉ vì chuỗi đáp án xuất hiện
+đâu đó trong evidence. Quan sát được: hỏi *"người đàn ông được phỏng vấn tên là
+gì"*, cả **20/20** dòng trả về danh từ chung (`"người"`, `"áo sơ mi"`) và **tất
+cả** đều `SUPPORTED`, vì mọi caption tiếng Việt đều chứa chữ "người".
+
+IDF trên chính corpus tách bạch được hai loại (`phrase_score`, 765 tài liệu):
+
+```
+rac:  nguoi 1.40 · nguoi dan ong 2.01 · ao so mi 2.63 · nha bao 2.74
+that: tuong voi 3.22 · trai tim 3.81 · duong phu xuan 4.29 · han quoc 6.14
+```
+
+Cài hạ cấp `SUPPORTED` → `INSUFFICIENT` (trọng số 1.0 → 0.25) cho đáp án dưới
+ngưỡng. Kết quả:
+
+|  | R@1 | joint | V001 | V002 | **V003\*** |
+|---|---:|---:|---:|---:|---:|
+| tắt | 0.611 | 0.472 | 0.333 | 0.500 | **0.583** |
+| ≥2.8 | 0.583 | 0.444 | 0.333 | 0.500 | **0.500** |
+| ≥3.2 | **0.639** | 0.472 | 0.417 | 0.500 | **0.500** |
+
+`≥3.2` có `R@1` đẹp nhất bảng — và đó chính là cái bẫy. **Toàn bộ phần tăng nằm
+ở video tune, holdout tụt ở CẢ HAI ngưỡng.** Thêm nữa `2.8` còn kém hơn tắt, tức
+không đơn điệu → phần lớn là nhiễu chứ không phải tín hiệu.
+
+Giả thuyết về cơ chế (chưa kiểm chứng): `joint_score` gắn frame với answer, nên
+hạ điểm một dòng vì answer chung chung cũng hạ luôn **frame đúng** của dòng đó.
+Muốn theo tiếp phải tách hai thành phần trước.
+
+Giữ code, mặc định `AIC_QA_MIN_ANSWER_IDF=0.0` (tắt), để không ai thử lại mà
+không biết đã đo.
+
+> **Bài học lặp lại lần thứ tư:** số tổng chỉ về một chỗ, holdout chỉ về chỗ
+> khác. Nếu chỉ nhìn `R@1 = 0.639` thì đã promote một thay đổi làm hỏng holdout.
+
+---
+
+## 2026-08-09 — TRAKE Phase A + TRK-C07 · **KHÔNG PROMOTE GÌ**, nhưng loại được cả một họ phương pháp
+
+Chạy theo [docs/31](31_TRAKE_EXPERIMENT_PLAN.md). Ba kết quả, đều âm, đều đáng ghi.
+
+### Sửa nền trước: số chẩn đoán cũ đo sai bộ nhánh
+
+`scripts/diagnose_trake_stage_b.py` mặc định dùng `build_service` của `eval_kis`,
+mà nó dựng hệ **khác** production: có `bm25_ocr` + `ocr_fuzzy` (đã tắt cả hai) và
+thiếu `bm25_object`/`bm25_action`/`color_search`. Đã thêm `--pipeline container`.
+
+| | số cũ (sai) | số đúng |
+|---|---:|---:|
+| `gold_region_recall@100` | 0.718 | **0.773** |
+| truy vấn đủ mọi bước | 6/24 | **9/24** |
+
+### TRK-C07 — `candidate_limit` 100 → 300/500 · **DROP**
+
+| `candidate_limit` | trần (đủ mọi bước) | `mean_r` | `frame_sel` | `chain` |
+|---:|---:|---:|---:|---:|
+| 100 | 9/24 | **0.254** | **0.361** | 0.000 |
+| 300 | 14/24 | 0.221 | 0.299 | 0.000 |
+| 500 | **18/24** | 0.231 | 0.313 | 0.000 |
+
+Trần gấp đôi, điểm **giảm**, `complete_chain_rate` vẫn đúng 0.000. Solver chưa
+với tới cả 9/24 nó vốn có → thêm ứng viên chỉ là thêm nhiễu.
+
+Kết quả này **bác bỏ chính lập luận** đã dùng để xếp Phase C lên trước Phase A.
+
+### TRK-A02/A03 — DP kiểu DANTE · **DROP**, và đây là phát hiện quan trọng nhất
+
+Cài `online/services/temporal_dp.py`: DP tối ưu toàn cục, tách biến để chạy
+O(N·M) thay vì O(N·M²). Xác minh cờ có tác dụng thật (đếm lời gọi: DP=1, beam=0).
+
+**Ở CÙNG λ=0.002, DP và beam cho kết quả GIỐNG HỆT NHAU từng số**, kể cả theo
+từng video:
+
+```
+                         vid@1   mean_r   frame_sel
+beam lam=0.002           0.833    0.254      0.361
+DP   lam=0.002           0.833    0.254      0.361     <- khong lech mot chu so
+```
+
+Nghĩa là **beam với `beam_size=100` đã tìm ra tối ưu toàn cục**. Không có gì để
+DP giành lại.
+
+> **Hệ quả cho kế hoạch:** cả họ phương pháp "thay thuật toán ghép chuỗi"
+> (T1 DANTE, phần lớn T3) **không thể giúp** — không phải vì cài sai, mà vì
+> thuật toán hiện tại đã cực đại hoá đúng hàm mục tiêu đó rồi. Muốn TRAKE khá
+> lên phải đổi **cái được chấm**, không phải **cách đi tìm**.
+
+### Quét λ — tune và holdout mâu thuẫn, không promote
+
+| λ | vid@1 | mean_r | V001 | V002 | **V003\*** |
+|---:|---:|---:|---:|---:|---:|
+| 0 | 0.792 | 0.201 | 0.338 | 0.183 | 0.081 |
+| 0.0005 | **0.875** | **0.296** | 0.344 | **0.431** | 0.113 |
+| 0.001 | 0.833 | 0.260 | 0.344 | 0.356 | 0.081 |
+| **0.002** (hiện tại) | 0.833 | 0.254 | 0.281 | 0.306 | **0.175** |
+| 0.003 | 0.792 | 0.223 | 0.281 | 0.212 | **0.175** |
+
+λ=0.0005 đẹp nhất trên tổng (+0.042 `mean_r`) nhưng **holdout tụt** 0.175 → 0.113.
+Holdout thích λ≥0.002, tune thích λ=0.0005 — mâu thuẫn trực tiếp. Giữ 0.002.
+
+λ=0 kém hẳn ở cả hai solver → **phạt khoảng cách có ích thật**. Giả thuyết ban đầu
+của tôi ("phạt 0.002 × p50 10s = 0.02, bằng nửa điểm scene nên đang lấn át") là
+**sai**.
+
+### Còn lại gì
+
+Beam đã tối ưu, pool lớn hơn không giúp, λ đã ở chỗ tốt cho holdout. Ba hướng
+còn lại đều nhắm vào **điểm số**, không vào thuật toán:
+
+1. **Phase D — fusion.** Điểm mỗi scene hiện là RRF, vứt bỏ độ chắc chắn của nhánh.
+   Solver tối ưu trên một hàm mục tiêu nhiễu thì vẫn ra chuỗi nhiễu.
+2. **Phase C — chất lượng candidate** (không phải số lượng: `TRK-C07` đã bác).
+3. **Phase B — tinh chỉnh frame**, trần ≤20% (docs/31 §1.5).
+
+Giữ `temporal_dp.py` (mặc định `AIC_TRAKE_SOLVER=beam`) làm đối chứng: bất kỳ ai
+nghi beam đang cắt tỉa mất nghiệm đều chạy lại được trong một lệnh.
+
+---
+
+## 2026-08-09 — TRAKE Phase D: fusion chuẩn hoá điểm · **KEEP**, cải thiện lớn nhất từ trước tới nay
+
+Cài bốn method mới trong `online/services/fusion.py` đọc `raw_score` thay vì suy
+từ rank. `AIC_FUSION_METHOD` + `AIC_FUSION_METHOD_QA`.
+
+### Kết quả quét
+
+| method | KIS R@1 | KIS MRR | TRK v@1 | TRK r | AVS nDCG | ev_cov | QA joint |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| `rrf` (BASE) | 0.583 | 0.731 | 0.833 | 0.254 | 0.558 | 0.793 | **0.472** |
+| `norm_sum` | 0.611 | 0.767 | 1.000 | 0.315 | **0.606** | 0.871 | 0.389 |
+| **`norm_max`** | **0.750** | **0.852** | **1.000** | **0.354** | 0.565 | **0.884** | 0.389 |
+| `margin_sum` | 0.583 | 0.750 | 0.917 | 0.281 | 0.514 | 0.812 | — |
+| `entropy_sum` | 0.611 | 0.748 | 0.792 | 0.237 | 0.510 | 0.803 | — |
+
+Hai biến thể có hệ số "độ tự tin" (`margin`/`entropy`) đều **kém hơn** bản chỉ
+chuẩn hoá. Chuẩn hoá là thứ có ích; nhân thêm hệ số tự tin thì hại.
+
+### Cấu hình chốt: `norm_max` cho KIS/TRAKE/AVS, `rrf` cho QA
+
+QA đi ngược — cả hai `norm_*` đều làm `joint_top1` tụt 0.472 → 0.389. Cơ chế hợp
+lý chứ không phải trùng hợp: KIS/TRAKE hỏi *"khung hình nào ĐÚNG nhất"* nên một
+nhánh rất chắc chắn phải thắng; QA hỏi *"scene nào là BẰNG CHỨNG tốt"* nên đồng
+thuận nhiều nhánh đáng tin hơn, mà RRF vốn thưởng cho đồng thuận. Nên tách method
+theo task (`SearchService._fusion_method_for`).
+
+| | tổng | | **holdout V003\*** | |
+|---|---:|---:|---:|---:|
+| | trước | sau | trước | sau |
+| KIS R@1 | 0.583 | **0.750** | 0.583 | **0.750** |
+| KIS MRR | 0.731 | **0.852** | | |
+| TRAKE video@1 | 0.833 | **1.000** | | |
+| TRAKE mean_r | 0.254 | **0.354** | 0.175 | **0.381** |
+| AVS nDCG | 0.558 | 0.565 | 0.499 | **0.517** |
+| AVS event_cov | 0.793 | **0.884** | | |
+| QA joint | 0.472 | 0.472 | 0.583 | 0.583 |
+
+**Không một chỉ số nào tụt**, holdout xác nhận cả bốn task.
+
+### Cơ chế: ĐẬP ĐUÔI — và tôi đã giải thích sai lúc đầu
+
+Giả thuyết ban đầu của tôi: "nhánh chắc chắn thắng nhánh đoán mò". Test đầu tiên
+viết theo giả thuyết đó **thất bại**, và nó đúng — ba nhánh cùng xếp một candidate
+hạng 1 thì `norm_max` vẫn chọn phía đồng thuận, đúng như nó nên làm.
+
+Cơ chế thật đơn giản hơn nhiều:
+
+```
+ti le dong gop hang-1 so voi hang-100 CUA CUNG MOT NHANH
+  RRF (k=60)     1/61 so voi 1/160   ->  2.62x
+  min-max        1.00 so voi ~0.00   ->  vo han
+```
+
+RRF cho candidate hạng 100 tận **38%** số phiếu của hạng 1. Bảy nhánh × 100
+candidate = 700 lá phiếu gần bằng nhau, tín hiệu thật chìm trong đó. Chuẩn hoá
+đưa đuôi về ~0.
+
+`tests/test_fusion_score_methods.py` khoá lại đúng tính chất này (`phiếu ở đuôi
+không lật được phiếu ở đỉnh`), kèm ghi chú về giả thuyết đã bị bác.
+
+### Khoá phụ cho `norm_max`
+
+`norm_max` làm MỌI candidate hạng 1 của MỌI nhánh cùng được `weight × 1.0` → hoà.
+Đo trên 8 truy vấn KIS thật: **3/8 có hoà ở đỉnh**, và thứ hạng khi đó bị quyết
+bằng `scene_id`, tức bảng chữ cái. Thêm tổng làm khoá phụ (cùng đỉnh thì candidate
+được nhiều nhánh ủng hộ đứng trước). Đo lại: **không đổi một chỉ số nào**, nên đây
+là cải thiện độ bền thuần tuý.
+
+### Cập nhật bức tranh TRAKE
+
+`mean_r` 0.254 → 0.354, trần retrieval 0.773. Phase A đã chứng minh solver tối ưu
+rồi, nên phần tăng này đến hoàn toàn từ **điểm đầu vào tốt hơn** — đúng dự đoán ở
+cuối mục Phase A.
+
+---
+
+## 2026-08-13 — DENSE-TEXT-02: cắm `caption_dense` vào container · **DROP mặc định**
+
+Bối cảnh: 6/8 nhánh retrieval là so khớp từ, nhánh ngữ nghĩa duy nhất là
+`dense_visual` (CLIP trên **ảnh**). Không có nhánh nào hiểu "cùng nghĩa, khác
+từ" ở phía văn bản. DENSE-TEXT-01 (04/08) đã đo E5 nhưng bằng harness riêng
+trên Stage B của TRAKE, corpus 1 video — **không so được với bất kỳ baseline
+nào đã chốt**, vì nhánh chưa nằm trong container.
+
+### Đã cắm
+
+`AIC_CAPTION_DENSE_INDEX` (rỗng = tắt, cùng quy ước `AIC_DENSE_INDEXES`).
+Index dựng cho corpus đang phục vụ: **765/765 scene, dim 1024**, fingerprint
+`d1e82b5cd06c2f63`.
+
+Ba chốt fail-fast, vì cả ba ca đều **vẫn chạy được** nếu để lọt (nhánh trả đủ
+candidate, `branch_status` báo `success`, chỉ kết quả là vô nghĩa):
+`assert_covers` (index dựng từ export khác — index cũ `indexes_l21` chỉ có 216
+scene của V001), `assert_dimension`, và `warmup()`. Con số biện minh cho chốt
+thứ ba: **nạp E5 mất 15.5s**, gần gấp đôi `AIC_BRANCH_TIMEOUT_MS=8000` — không
+warmup thì truy vấn đầu mỗi tiến trình chắc chắn timeout trong im lặng.
+
+Sau warmup, encode một truy vấn **132 ms**; trong lần đo thật nhánh chạy
+`success 36/36`, p50 378 ms. Không nhánh nào timeout.
+
+### Số đo — 36 truy vấn KIS, cấu hình tái lập đúng `D_FINAL_tiebreak`
+
+| trọng số | R@1 | R@5 | MRR | pairwise | V001 | V002 | **V003\*** |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 0 (baseline) | **0.750** | 1.000 | **0.852** | **0.844** | 0.833 | 0.667 | 0.750 |
+| 0.25 | 0.722 | 1.000 | 0.840 | 0.812 | 0.750 | 0.667 | 0.750 |
+| 0.5 | 0.722 | 1.000 | 0.840 | 0.812 | 0.750 | 0.667 | 0.750 |
+| 1.0 | 0.667 | 0.972 | 0.806 | 0.750 | 0.750 | 0.583 | 0.667 |
+
+**Đơn điệu**: càng nhiều `caption_dense` càng tệ, và cực trị là tắt hẳn. Không
+có ngưỡng nào thắng baseline. Holdout V003 cùng chiều. → **DROP**, giữ mặc định
+`AIC_CAPTION_DENSE_INDEX=` rỗng.
+
+### Phát hiện phụ, đáng giá hơn kết quả chính: `norm_max` biến trọng số thành công tắc
+
+0.5 và 0.25 cho kết quả **trùng đến từng chữ số** (34/36 truy vấn cùng hạng
+gold). Không phải trùng hợp — đó là hệ quả trực tiếp của `norm_max`:
+
+```
+contribution = weight × normalized      normalized ∈ [0, 1]
+totals[key]  = MAX qua các nhánh
+```
+
+Nhánh có `weight < 1.0` **không bao giờ đặt được max** cho candidate mà một
+nhánh weight-1.0 cũng chấm mạnh. Nó chỉ còn hai đường ảnh hưởng: candidate nào
+*chỉ mình nó* tìm ra (xếp dưới hết), và khoá phụ `sums`. Hạ 0.5 xuống 0.25 chia
+đều mọi đóng góp nên **thứ tự không đổi**.
+
+Điều này giải thích luôn một chỗ docs/30 §3.4 quy sai nguyên nhân:
+`color_search` (modality weight 0.4) "đóng góp bằng 0" **không phải vì RRF pha
+loãng** — fusion đã là `norm_max` từ 09/08 — mà vì 0.4 < 1.0 nên nó không bao
+giờ thắng max. Cùng cơ chế áp cho mọi bucket dưới 1.0: OBJECT 0.5, ACTION 0.5,
+COLOR 0.4, EVENT 0.3.
+
+⚠️ Hệ quả cho mọi sweep trọng số sau này: **quét dưới 1.0 gần như vô nghĩa**.
+Muốn biết một nhánh có giá trị hay không phải quét ≥ 1.0, hoặc hạ trọng số của
+các nhánh khác xuống.
+
+Còn một dấu vết nhỏ: ở 0.25 — mức gần như bất động — R@1 vẫn 0.722 chứ không
+phải 0.750. Chênh đúng 1 truy vấn, và đường duy nhất còn lại là khoá phụ `sums`
+lật một cặp đang hoà ở đỉnh. Khớp với ghi chép Phase D: 3/8 truy vấn KIS có hoà
+ở đỉnh.
+
+### Vì sao KHÔNG kết luận "E5 vô dụng"
+
+Bộ gold này **không đo được thứ nhánh đó sinh ra để giải**. Gold KIS viết bằng
+đúng từ vựng của caption (docs/33 §5), nên nó đo "khớp từ có sẵn" chứ không đo
+"diễn đạt khác nhưng cùng nghĩa".
+
+Phép thử 4 cặp paraphrase tự viết, không gold, chỉ đo *hai cách hỏi có ra cùng
+kết quả không* — overlap top-5 trung bình **BM25 2.0/5 vs caption_dense 3.75/5**.
+Ca rõ nhất: *"cán bộ phát biểu trong cuộc họp"* vs *"một người đang trình bày
+tại hội nghị"* — BM25 **0/5** (còn nhảy sang video khác), dense 4/5 và cùng
+top-1. Nhưng phép thử này không đo đúng/sai: một nhánh luôn trả về cùng một
+scene SAI cũng đạt điểm tuyệt đối.
+
+Kết luận đúng mức: **DROP trên gold hiện tại; câu hỏi thật vẫn chưa được đo.**
+Muốn quyết dứt điểm phải có bộ paraphrase (sinh k biến thể cho mỗi truy vấn
+gold, đo `rank_std` + `paraphrase_dropout` + ΔR@20) — đó mới là thước đo khớp
+với mục đích của nhánh này.
+
+Giữ nguyên code, index và test; mặc định tắt nên không ai trả giá cho nó.
+
+---
+
+## 2026-08-16 — Hai model jina · **KHÔNG PROMOTE GÌ**, nhưng lộ ra một lỗ hổng trong hạ tầng đo
+
+Xuất phát từ một câu hỏi đơn giản ("thử jina xem sao"), kết thúc ở chỗ khác hẳn:
+phát hiện rằng **mọi số `dense_visual` từng ghi trong tài liệu này đều đo một
+CLIP không dịch**, tức không phải cấu hình đang phục vụ.
+
+Ba thí nghiệm, không cái nào promote. Cái thứ ba mới là cái đáng nhớ.
+
+### DENSE-TEXT-03 — `jina-embeddings-v3` thay E5 ở `caption_dense` · **DROP**
+
+Harness `scripts/run_dense_text_01.py`, corpus `exports_multivideo` (765 scene),
+gold `examples/gold_all3.jsonl` (24 truy vấn TRAKE, 110 bước), fusion `rrf`.
+
+| variant | R@20 | R@50 | R@100 | median | đủ mọi event |
+|---|---:|---:|---:|---:|---:|
+| A baseline | 55 | 67 | 79 | 8 | 6/24 |
+| C baseline + **E5** | 61 | 75 | 86 | 5.0 | 11/24 |
+| C baseline + **jina-v3** | 63 | 73 | 87 | 6 | 11/24 |
+| D baseline + **cả hai** | 67 | 76 | 89 | 5 | 11/24 |
+| **control: baseline + E5 ×2** | 65 | 77 | 87 | 4 | 10/24 |
+
+Hoà. `đủ mọi event` bằng nhau 11/24; các R@K lệch 1–2 trên 110 bước.
+
+Variant D trông như thắng (R@20 61→67) cho tới khi chạy control **`e5 ×2`** —
+cùng một index cắm hai lần, thêm 0 thông tin — đã lấy được R@20=65. Trừ control
+ra, đóng góp thật của jina là R@20 +2, R@50 −1, median xấu hơn. Nhiễu.
+
+**Phát hiện phụ đáng giá hơn kết quả chính:** control `e5 ×2` hơn variant C tới
+4 điểm R@20 mà không thêm model nào. Dưới `rrf`, nhân đôi một nhánh ≈ nhân đôi
+trọng số của nó. Gợi ý `caption_dense` đang bị đánh trọng số thấp hơn mức tối
+ưu — nhưng ⚠️ xem lại mục 13/08: dưới `norm_max` (cấu hình chốt) thì trọng số
+< 1.0 gần như là công tắc, nên kết luận này KHÔNG chuyển thẳng sang được. Phải
+đo lại dưới `norm_max` trước khi tin.
+
+### VISUAL-01 — `jina-clip-v2` thay CLIP ở `dense_visual` · **KHÔNG KẾT LUẬN ĐƯỢC**
+
+`scripts/run_visual_clip_ab.py`, cùng corpus/gold/harness. Đã embed lại 855
+keyframe bằng jina-clip-v2 (`scripts/embed_export_keyframes.py --kind jina`);
+export mang **cả hai** bộ vector song song nên đổi qua lại chỉ là đổi
+`embedding_name`.
+
+| variant | `rrf` R@20 | `rrf` đủ | **`norm_max` R@20** | **`norm_max` R@50** | **`norm_max` R@100** | **`norm_max` median** | **`norm_max` đủ** |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| A baseline (CLIP) | 55 | 6/24 | 52 | 69 | 79 | 10 | 6/24 |
+| B chỉ CLIP | 15 | 0/24 | **13** | 27 | 40 | 28.0 | **0/24** |
+| C chỉ jina-clip-v2 | 66 | 9/24 | **67** | 77 | 86 | 4.5 | **9/24** |
+| D baseline thay jina | 57 | 8/24 | 63 | 72 | 84 | 6.0 | 7/24 |
+| E baseline + cả hai | 61 | 9/24 | 61 | 72 | 83 | 7 | 6/24 |
+
+Dưới `norm_max`, E (thêm) **kém hơn** D (thay) — khớp với cơ chế đã ghi 13/08:
+lấy `max` nên thêm nhánh không cộng dồn được gì.
+
+⚠️ **Vì sao KHÔNG kết luận được, dù chênh lệch rất lớn.** Variant B đo CLIP
+**không dịch**. Production bọc text tower bằng `TranslatingTextEncoder`
+(VI→EN qua LLM, [container.py:238](../online/api/container.py#L238)), và
+`AIC_ENABLE_QUERY_TRANSLATION=true` được [docs/27](27_SYSTEM_ISSUES.md) xếp là
+"cải thiện lớn nhất từng đo". Phép so có ý nghĩa là jina so với **CLIP + dịch** —
+chưa đo, vì máy dev không có credential FPT.
+
+Cái *đo được* là mức hỏng của CLIP khi không dịch (10 câu khác nghĩa hẳn nhau,
+cosine GIỮA CÁC CÂU, thấp = phân biệt được):
+
+| model | tiếng Việt | tiếng Anh | khớp vi↔en cùng nghĩa |
+|---|---:|---:|---:|
+| CLIP ViT-L/14 | **0.912** (max 0.969) | 0.448 | 0.421 |
+| jina-clip-v2 | 0.260 | 0.262 | 0.820 |
+
+Một câu tiếng Việt gần một câu tiếng Việt **vô quan** hơn là gần bản dịch tiếng
+Anh của chính nó (0.912 so với 0.421). Trên tiếng Anh CLIP bình thường — hỏng vì
+NGÔN NGỮ, không phải anisotropy (E5 cũng mean 0.824 mà vẫn tốt; xem
+[docs/33 §2.1](33_RETRIEVAL_TECHNIQUES.md)).
+
+Điều này biến một câu khẳng định định tính đã có trong docs/33 thành số, và cho
+jina-clip-v2 một lý lẽ độc lập với chuyện thắng/thua: nó **bỏ được lời gọi LLM
+khỏi đường request**, cùng mục tiêu mà [docs/32](32_ROUTE2_INPUT_GAP.md) đặt ra
+bằng cách index sẵn caption EN.
+
+### Lỗ hổng hạ tầng đo — phát hiện quan trọng nhất của đợt này
+
+`scripts/eval_kis.py::build_service` **không** bọc `TranslatingTextEncoder`; chỉ
+`--pipeline container` mới đi qua nó. Cảnh báo đã nằm sẵn trong code từ trước
+([eval_kis.py:313](../scripts/eval_kis.py#L313),
+[eval_tasks.py:414](../scripts/eval_tasks.py#L414)) — nhưng hệ quả chưa từng
+được ghi ra: **mọi ablation nhánh `dense_visual` trong tài liệu này đều đo một
+CLIP chạy dưới sức**. Bao gồm cả bảng "A baseline" của chính mục này.
+
+Thêm một chỗ lệch nữa, cùng loại: `build_service` dựng `SearchService` không
+truyền `fusion_method`, nên nó luôn dùng mặc định `rrf` của class — trong khi
+cấu hình chốt là `norm_max` từ 09/08. `run_visual_clip_ab.py` nay có
+`--fusion-method` (mặc định `norm_max`); `run_dense_text_01.py` thì CHƯA, nên
+bảng DENSE-TEXT-03 ở trên là số `rrf`.
+
+Cả hai lệch này đều thuộc đúng một họ với những lỗi đã ghi ở mục 09/08 và 13/08:
+**harness dựng một pipeline thứ hai, lệch dần khỏi pipeline thật, và vẫn in ra
+số trông hoàn toàn hợp lệ.**
+
+### Việc tiếp theo, theo thứ tự
+
+1. **Đo `dense_visual` ở cấu hình thật.** Bọc `TranslatingTextEncoder` trong
+   `build_service`, hoặc chuyển hẳn các ablation sang `--pipeline container`.
+   Cho tới lúc đó, mọi số nhánh visual đã ghi đều phải đọc kèm dấu sao.
+2. **Chạy lại VISUAL-01 với CLIP + dịch** (cần credential FPT). Đây mới là phép
+   so quyết định việc có thay CLIP hay không.
+3. Truyền `fusion_method` vào `run_dense_text_01.py` rồi đo lại DENSE-TEXT-03
+   dưới `norm_max`.
+4. Nếu (2) cho jina thắng: cân nhắc giấy phép **CC-BY-NC-4.0** của jina-clip-v2
+   trước khi chốt.
+
+Không thay đổi mặc định nào. `AIC_CAPTION_DENSE_ENCODER=e5`,
+`AIC_VISUAL_EMBEDDING_MODEL=openai/clip-vit-large-patch14` giữ nguyên.

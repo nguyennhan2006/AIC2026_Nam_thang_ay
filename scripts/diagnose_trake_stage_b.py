@@ -46,15 +46,35 @@ from scripts.eval_kis import build_service
 from scripts.eval_tasks import WindowPolicy, load_fps, load_gold, resolve_step_window
 
 
-async def collect(metadata: Path, gold_path: Path, policy: WindowPolicy) -> list[dict]:
+async def collect(
+    metadata: Path,
+    gold_path: Path,
+    policy: WindowPolicy,
+    *,
+    pipeline: str = "container",
+    candidate_limit: int | None = None,
+) -> list[dict]:
     repository = await JsonlSceneRepository.load(metadata)
     scenes = await repository.all()
     fps = load_fps(metadata)
     gold = [item for item in load_gold(gold_path) if item.task == TaskType.TRAKE]
-    service = await build_service(
-        "fusion", repository, backend="local", use_rules=False,
-        use_expansion=False, use_query_prep=False, candidate_limit=100,
-    )
+    if pipeline == "container":
+        # ĐÚNG bộ nhánh server chạy. Bản cũ mặc định dùng `build_service`, mà
+        # nó dựng một hệ KHÁC: có `bm25_ocr` + `ocr_fuzzy` (production đã TẮT cả
+        # hai vì đo được là gây hại) và thiếu hẳn `bm25_object`/`bm25_action`/
+        # `color_search`. Số đo ra vì thế không nói về hệ đang chạy — đã suýt
+        # dùng nó để xếp lại thứ tự cả một kế hoạch thí nghiệm.
+        from online.api.container import build_container
+        from online.config import Settings
+
+        service = (await build_container(Settings.from_env())).search_service
+    else:
+        service = await build_service(
+            "fusion", repository, backend="local", use_rules=False,
+            use_expansion=False, use_query_prep=False, candidate_limit=100,
+        )
+    if candidate_limit is not None:
+        service.candidate_limit = candidate_limit
 
     rows: list[dict] = []
     for item in gold:
@@ -131,12 +151,24 @@ async def _main() -> None:
     parser.add_argument("--window-max-sec", type=float, default=7.0)
     parser.add_argument("--window-ratio", type=float, default=0.5)
     parser.add_argument("--out", type=Path, default=None)
+    parser.add_argument(
+        "--pipeline", choices=("container", "legacy"), default="container",
+        help="container = dung online/api/container.py, tuc dung bo nhanh server chay. "
+             "legacy = build_service cua eval_kis (bo nhanh KHAC, chi de doi chung).",
+    )
+    parser.add_argument(
+        "--candidate-limit", type=int, default=None,
+        help="Ghi de so candidate moi buoc (TRK-C07).",
+    )
     args = parser.parse_args()
 
     policy = WindowPolicy(
         min_sec=args.window_min_sec, max_sec=args.window_max_sec, ratio=args.window_ratio
     )
-    rows = await collect(args.metadata, args.gold, policy)
+    rows = await collect(
+        args.metadata, args.gold, policy,
+        pipeline=args.pipeline, candidate_limit=args.candidate_limit,
+    )
     report(rows)
     if args.out:
         args.out.parent.mkdir(parents=True, exist_ok=True)

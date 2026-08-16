@@ -74,6 +74,17 @@ class FrameEvidence(StrictModel):
 
     captions: list[str] = Field(default_factory=list)
     ocr_texts: list[str] = Field(default_factory=list)
+    # bbox của TỪNG chuỗi trong `ocr_texts`, cùng thứ tự và cùng độ dài.
+    # `None` cho chuỗi không biết vị trí (phần bù OCR bằng prompt text-only).
+    #
+    # Trường này tồn tại vì bộ lọc lớp phủ (`AIC_OCR_OVERLAY_DF`) cần vị trí,
+    # mà trước đây nó đi tìm `keyframe.ocr_instances` — thuộc tính CHỈ có trên
+    # canonical Keyframe, không có trên projection này. `getattr` trả `[]`, rồi
+    # `zip(texts, [])` cho ra rỗng, nên bộ lọc xoá SẠCH text OCR của cả 765
+    # scene thay vì bỏ riêng phần lớp phủ. Đo được lúc phát hiện:
+    #   có lọc  ->   0/765 scene còn chữ OCR (nhánh bm25_ocr chết hẳn)
+    #   ko lọc  -> 674/765 scene, 12490 từ
+    ocr_boxes: list[dict[str, float] | None] = Field(default_factory=list)
     object_labels: list[str] = Field(default_factory=list)
     action_tags: list[str] = Field(default_factory=list)
     dominant_colors: list[str] = Field(default_factory=list)

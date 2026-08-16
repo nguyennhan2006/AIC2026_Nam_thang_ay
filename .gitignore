@@ -65,9 +65,24 @@ storage/indexes_l21/
 storage/models/
 storage/cache/
 storage/processed/keyframes/L21_V001/
+storage/processed/keyframes/L21_V002/
+storage/processed/keyframes/L21_V003/
 storage/processed/embeddings/
 storage/processed/clip_embeddings/
 storage/raw/videos/L21_V001.mp4
+
+# Ảnh keyframe + vector của V002/V003 (238MB + 428MB) sinh lại được bằng
+# ffmpeg + scripts/embed_export_keyframes.py, xem README_BRANCH.md. Ngược lại
+# `storage/exports_multivideo/*.jsonl` thì GIỮ track: đó là caption/OCR do VLM
+# sinh trên Kaggle, đắt để làm lại mà chỉ 15MB.
+storage/indexes_multivideo/
+storage/exports_l21_enriched/
+storage/exports_l21_repaired/
+
+# Bản sao lưu thủ công trước mỗi lần backfill — dựng lại được từ git, không
+# commit 27MB jsonl trùng lặp.
+*.bak
+*.bak_*
 
 # ---- Dữ liệu đầu vào thô (giải nén được lại từ archive gốc, 200MB+) ----
 # input/L21_V001.mp4 trùng khít storage/raw/videos/L21_V001.mp4; các file gold

@@ -36,10 +36,38 @@ class HashingTextEncoder:
         return [item / norm for item in vector] if norm else vector
 
 
-class LocalClipTextEncoder:
-    """CLIP text tower chạy tại chỗ (CPU), cùng không gian embedding với vector
-    ảnh do `scripts/embed_keyframes_local.py` sinh — bắt buộc để dense_visual
-    local so khớp được query text với keyframe, thay vì hash trên caption.
+# Ba họ model có API text tower KHÁC NHAU. Không trừu tượng hoá được bằng một
+# lời gọi duy nhất, nên khai báo tường minh thay vì thử-và-bắt-lỗi lần lượt —
+# thử lần lượt sẽ nuốt mất lỗi thật (sai đường dẫn, thiếu trust_remote_code) và
+# biến nó thành "không họ nào khớp".
+#
+#   clip    CLIPModel.get_text_features(**processor(text=...))
+#   siglip  SiglipModel.get_text_features(...)  — padding="max_length" BẮT BUỘC
+#   jina    AutoModel(trust_remote_code=True).encode_text([...])
+_ENCODER_KINDS = ("clip", "siglip", "jina")
+
+
+def infer_encoder_kind(model_path: str) -> str:
+    """Đoán họ model từ đường dẫn/tên repo. Không đoán được -> `clip`.
+
+    Chỉ là mặc định tiện tay; `AIC_DENSE_INDEXES` luôn khai báo được tường minh
+    khi tên thư mục không nói lên điều gì.
+    """
+
+    lowered = model_path.replace("\\", "/").casefold()
+    if "jina" in lowered:
+        return "jina"
+    if "siglip" in lowered:
+        return "siglip"
+    return "clip"
+
+
+class LocalTextEncoder:
+    """Text tower chạy tại chỗ, CÙNG không gian embedding với vector ảnh.
+
+    Hỗ trợ ba họ (`clip`/`siglip`/`jina`) để chạy nhiều index song song. Mỗi
+    index phải dùng ĐÚNG model đã sinh vector ảnh của nó — trộn hai model là
+    cosine vô nghĩa, và không có gì báo lỗi vì phép nhân vẫn ra số.
 
     `torch`/`transformers` chỉ import lúc gọi `encode()` lần đầu (không phải
     ở module import) — nhiều test dựng container mà không bao giờ gọi tới
@@ -64,9 +92,20 @@ class LocalClipTextEncoder:
          bao giờ để lại meta tensor.
     """
 
-    def __init__(self, model_path: str, *, revision: str | None = None) -> None:
+    def __init__(
+        self,
+        model_path: str,
+        *,
+        revision: str | None = None,
+        kind: str | None = None,
+    ) -> None:
         self.model_path = model_path
         self.revision = revision
+        self.kind = (kind or infer_encoder_kind(model_path)).casefold()
+        if self.kind not in _ENCODER_KINDS:
+            raise ValueError(
+                f"kind={self.kind!r} không hợp lệ; chọn một trong {_ENCODER_KINDS}"
+            )
         self._model = None
         self._processor = None
         self._lock = threading.Lock()
@@ -77,12 +116,33 @@ class LocalClipTextEncoder:
         with self._lock:
             if self._model is not None:
                 return self._model, self._processor
-            from transformers import CLIPModel, CLIPProcessor
-
             # Dựng vào biến cục bộ trước: nếu bị huỷ/lỗi giữa chừng thì
             # `self._model` vẫn None và lần sau nạp lại từ đầu.
-            model = CLIPModel.from_pretrained(self.model_path, revision=self.revision).to("cpu").eval()
-            processor = CLIPProcessor.from_pretrained(self.model_path, revision=self.revision)
+            if self.kind == "jina":
+                from transformers import AutoModel
+
+                model = AutoModel.from_pretrained(
+                    self.model_path, revision=self.revision, trust_remote_code=True
+                ).to("cpu").eval()
+                processor = None
+            elif self.kind == "siglip":
+                from transformers import AutoProcessor, SiglipModel
+
+                model = SiglipModel.from_pretrained(
+                    self.model_path, revision=self.revision
+                ).to("cpu").eval()
+                processor = AutoProcessor.from_pretrained(
+                    self.model_path, revision=self.revision
+                )
+            else:
+                from transformers import CLIPModel, CLIPProcessor
+
+                model = CLIPModel.from_pretrained(
+                    self.model_path, revision=self.revision
+                ).to("cpu").eval()
+                processor = CLIPProcessor.from_pretrained(
+                    self.model_path, revision=self.revision
+                )
             self._model, self._processor = model, processor
         return self._model, self._processor
 
@@ -101,11 +161,30 @@ class LocalClipTextEncoder:
         import torch
 
         model, processor = self._load()
-        inputs = processor(text=[text], return_tensors="pt", padding=True, truncation=True)
         with torch.inference_mode():
+            if self.kind == "jina":
+                # Jina tự lo tokenise; trả sẵn numpy đã chuẩn hoá.
+                raw = model.encode_text([text])[0]
+                return [float(value) for value in raw]
+            if self.kind == "siglip":
+                # SigLIP huấn luyện với chuỗi độ dài CỐ ĐỊNH; dùng
+                # `padding=True` như CLIP sẽ cho vector lệch.
+                inputs = processor(
+                    text=[text], return_tensors="pt",
+                    padding="max_length", truncation=True,
+                )
+            else:
+                inputs = processor(
+                    text=[text], return_tensors="pt", padding=True, truncation=True
+                )
             vector = model.get_text_features(**inputs)[0]
             vector = vector / vector.norm(p=2)
         return vector.detach().cpu().float().tolist()
+
+
+# Tên cũ, giữ để không phải sửa mọi chỗ đang gọi. `LocalTextEncoder` mặc định
+# suy ra họ `clip` từ đường dẫn nên hành vi y hệt bản trước.
+LocalClipTextEncoder = LocalTextEncoder
 
 
 class RemoteTextEncoder:

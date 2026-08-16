@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from array import array
 from collections import Counter
 import math
 import re
@@ -38,26 +39,29 @@ _CORNER_X = 0.74
 
 
 def _boxes(item) -> list[dict | None]:
-    """bbox của từng chuỗi OCR, cùng thứ tự với `ocr_texts`.
+    """bbox của từng chuỗi OCR, cùng thứ tự và CÙNG ĐỘ DÀI với `ocr_texts`.
 
     `None` cho chuỗi có bbox khung-toàn-ảnh: đó là phần bù bằng prompt
     text-only, không biết vị trí nên không lọc theo vị trí được. Chúng được xử
     lý ở tầng dữ liệu (`scripts/ocr_backfill.py --crop-overlay`) thay vì ở đây.
+
+    Hàm này từng đọc `keyframe.ocr_instances` — thuộc tính chỉ tồn tại trên
+    canonical `Keyframe`, KHÔNG có trên `FrameEvidence` mà online thật sự dùng.
+    `getattr(..., [])` nuốt gọn sai lầm đó, `zip(texts, [], strict=False)` trả
+    rỗng, và bộ lọc lớp phủ xoá sạch OCR của toàn bộ 765 scene trong im lặng.
+    Nay đọc `FrameEvidence.ocr_boxes` — trường được dựng song song với
+    `ocr_texts` ngay trong projection.
     """
 
-    out: list[dict | None] = []
+    boxes: list[dict | None] = []
     for keyframe in getattr(item, "keyframes", []) or []:
-        for instance in getattr(keyframe, "ocr_instances", []) or []:
-            box = getattr(instance, "bbox", None)
-            if box is None:
-                out.append(None)
-                continue
-            full = (
-                box.x1 <= 0.001 and box.y1 <= 0.001
-                and box.x2 >= 0.999 and box.y2 >= 0.999
-            )
-            out.append(None if full else {"x1": box.x1, "y1": box.y1, "x2": box.x2, "y2": box.y2})
-    return out
+        texts = getattr(keyframe, "ocr_texts", None) or []
+        frame_boxes = getattr(keyframe, "ocr_boxes", None) or []
+        # Nguồn nào thiếu bbox thì đệm `None` cho ĐỦ số chuỗi. Trả về danh sách
+        # ngắn hơn sẽ bị `zip` cắt cụt và làm rơi chữ thật — đúng lỗi cũ.
+        boxes.extend(frame_boxes[: len(texts)])
+        boxes.extend([None] * max(0, len(texts) - len(frame_boxes)))
+    return boxes
 
 
 def _in_overlay_band(box: dict) -> bool:
@@ -119,7 +123,11 @@ def _strip_overlay(documents, field: str, df_threshold: float, max_words: int = 
         counts = per_video.get(item.video_id, Counter())
         total = max(totals.get(item.video_id, 1), 1)
         kept = []
-        for text, box in zip(item.ocr_texts, _boxes(item), strict=False):
+        # `strict=True`: hai danh sách PHẢI cùng độ dài. Bản cũ dùng
+        # `strict=False` nên khi `_boxes` trả rỗng, vòng lặp không chạy lần nào
+        # và mọi scene ra chuỗi rỗng — hỏng toàn phần mà không một dấu hiệu nào.
+        # Thà nổ ngay còn hơn im lặng giết một nhánh retrieval.
+        for text, box in zip(item.ocr_texts, _boxes(item), strict=True):
             cleaned = " ".join(text.split())
             if box is not None and _in_overlay_band(box):
                 continue
@@ -135,6 +143,25 @@ def _strip_overlay(documents, field: str, df_threshold: float, max_words: int = 
 
 
 class BM25Index:
+    """BM25 Okapi trên inverted index.
+
+    Công thức không đổi (`k1=1.5`, `b=0.75`, cùng `idf`); chỉ đổi cách duyệt.
+    Bản trước quét MỌI tài liệu ở MỌI truy vấn và dựng lại `Counter(tokens)`
+    cho từng tài liệu mỗi lần — tức bảng tần suất từ, thứ hoàn toàn tĩnh, được
+    tính lại từ đầu ở mỗi lượt tìm. Đo được 4.3 µs/tài liệu:
+
+        765 tài liệu   x 5 nhánh BM25 ->  0.02 s
+        250 000        x 5 nhánh      ->  5.4 s   (`AIC_BRANCH_TIMEOUT_MS`=8000)
+
+    Cộng thêm fusion là chạm trần thời gian, và nhánh quá hạn trả rỗng trong im
+    lặng. Postings tính sẵn lúc dựng đưa chi phí về theo SỐ TÀI LIỆU CÓ CHỨA từ
+    khoá của truy vấn, không theo kích thước corpus.
+
+    Dùng `array` của stdlib chứ không phải list[int]: ~10 triệu mục postings ở
+    quy mô 250k scene là 80 MB dạng array so với ~360 MB dạng list, và numpy
+    không phải core dependency nên không dùng được ở đây.
+    """
+
     def __init__(
         self,
         documents: list[SceneDocument],
@@ -156,42 +183,69 @@ class BM25Index:
         texts = [item.field_text(field) for item in documents]
         if drop_overlay_df is not None:
             texts = _strip_overlay(documents, field, drop_overlay_df, overlay_max_words)
-        self.tokens = [tokenize(text) for text in texts]
-        self.lengths = [len(item) for item in self.tokens]
+
+        self.lengths = array("i")
+        # token -> (chỉ số tài liệu tăng dần, tần suất trong tài liệu đó).
+        self._postings: dict[str, tuple[array, array]] = {}
+        document_frequency: Counter[str] = Counter()
+        for index, text in enumerate(texts):
+            tokens = tokenize(text)
+            self.lengths.append(len(tokens))
+            for token, frequency in Counter(tokens).items():
+                document_frequency[token] += 1
+                posting = self._postings.get(token)
+                if posting is None:
+                    posting = (array("i"), array("i"))
+                    self._postings[token] = posting
+                posting[0].append(index)
+                posting[1].append(frequency)
         self.avg_length = sum(self.lengths) / max(len(self.lengths), 1)
-        frequencies: Counter[str] = Counter()
-        for tokens in self.tokens:
-            frequencies.update(set(tokens))
         count = len(documents)
         self.idf = {
             token: math.log(1 + (count - frequency + 0.5) / (frequency + 0.5))
-            for token, frequency in frequencies.items()
+            for token, frequency in document_frequency.items()
         }
 
     def search(self, query: str, limit: int) -> list[tuple[SceneDocument, float]]:
         query_tokens = tokenize(query)
-        scored: list[tuple[SceneDocument, float]] = []
-        for document, tokens, length in zip(
-            self.documents, self.tokens, self.lengths, strict=True
-        ):
-            tf = Counter(tokens)
-            score = 0.0
-            for token in query_tokens:
-                frequency = tf[token]
-                if not frequency:
-                    continue
+        # Vòng ngoài là TỪ KHOÁ TRUY VẤN, vòng trong là tài liệu chứa nó — đảo
+        # lại so với bản cũ. Với một tài liệu bất kỳ, các số hạng vẫn được cộng
+        # đúng thứ tự từ khoá của truy vấn, nên tổng khớp từng bit với bản cũ.
+        #
+        # `query_tokens` giữ nguyên trùng lặp, KHÔNG khử về tập hợp: bản cũ tra
+        # `tf[token]` một lần cho mỗi lần từ đó xuất hiện trong truy vấn, nên
+        # `"cá cá"` cộng điểm hai lần. Khử trùng ở đây sẽ lặng lẽ đổi điểm.
+        scores: dict[int, float] = {}
+        for token in query_tokens:
+            posting = self._postings.get(token)
+            if posting is None:
+                continue
+            idf = self.idf.get(token, 0.0)
+            # Biểu thức giữ NGUYÊN VĂN của bản cũ, không gom hằng số ra ngoài
+            # vòng lặp: `k1*(1-b) + (k1*b/avg)*len` bằng nhau về đại số nhưng
+            # làm tròn khác `k1*(1-b + b*len/avg)`, và điểm lệch ở chữ số thứ
+            # 16 vẫn đủ đảo thứ hạng hai ứng viên sát nhau. Vài phép nhân này
+            # không phải chỗ tốn thời gian — vòng lặp mới là.
+            for index, frequency in zip(posting[0], posting[1], strict=True):
                 denominator = frequency + self.k1 * (
-                    1 - self.b + self.b * length / max(self.avg_length, 1e-9)
+                    1 - self.b + self.b * self.lengths[index] / max(self.avg_length, 1e-9)
                 )
-                score += self.idf.get(token, 0.0) * frequency * (self.k1 + 1) / denominator
-            if score > 0:
-                if self.coverage is not None and not self.coverage.is_noop:
-                    # Coverage nhân theo điểm BM25 chứ không cộng hằng số: hai
-                    # đại lượng này khác thang đo, cộng thẳng sẽ để coverage
-                    # lấn át ở query mà BM25 vốn cho điểm thấp.
-                    result = compute_coverage(query, document.field_text(self.field), self.idf)
-                    score *= max(0.0, 1.0 + result.adjustment(self.coverage))
-                scored.append((document, score))
+                scores[index] = (
+                    scores.get(index, 0.0) + idf * frequency * (self.k1 + 1) / denominator
+                )
+
+        scored: list[tuple[SceneDocument, float]] = []
+        for index, score in scores.items():
+            if score <= 0:
+                continue
+            document = self.documents[index]
+            if self.coverage is not None and not self.coverage.is_noop:
+                # Coverage nhân theo điểm BM25 chứ không cộng hằng số: hai
+                # đại lượng này khác thang đo, cộng thẳng sẽ để coverage
+                # lấn át ở query mà BM25 vốn cho điểm thấp.
+                result = compute_coverage(query, document.field_text(self.field), self.idf)
+                score *= max(0.0, 1.0 + result.adjustment(self.coverage))
+            scored.append((document, score))
         scored.sort(key=lambda item: (-item[1], _document_id(item[0])))
         return scored[:limit]
 

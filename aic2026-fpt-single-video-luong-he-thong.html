@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AIC 2026 — Luồng bản test FPT API trên một video (L21_V001)</title>
+<style>
+  :root {
+    --bg:#f7f7f3; --surface:#fff; --surface-2:#efefe9; --ink:#151513;
+    --body:#44443f; --muted:#85857d; --line:#cecec5; --line-soft:#e5e5dd;
+    --shadow:0 10px 32px rgba(20,20,18,.11); --accent:#2563eb;
+    --a:#2563eb; --a-soft:rgba(37,99,235,.09); --a-zone:rgba(37,99,235,.035);
+    --b:#0d9488; --b-soft:rgba(13,148,136,.09); --b-zone:rgba(13,148,136,.035);
+    --c:#16a34a; --c-soft:rgba(22,163,74,.09); --c-zone:rgba(22,163,74,.035);
+    --d:#6366f1; --d-soft:rgba(99,102,241,.10); --d-zone:rgba(99,102,241,.04);
+    --e:#d97706; --e-soft:rgba(217,119,6,.10); --e-zone:rgba(217,119,6,.04);
+    --f:#e11d48; --f-soft:rgba(225,29,72,.08); --f-zone:rgba(225,29,72,.035);
+    --g:#64748b; --g-soft:rgba(100,116,139,.09); --g-zone:rgba(100,116,139,.04);
+    --warn:#b45309; --warn-soft:#fef3c7; --ok:#15803d; --ok-soft:#dcfce7;
+    --bad:#b91c1c; --bad-soft:#fee2e2;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+    --mono:ui-monospace,"Cascadia Code","SFMono-Regular",Consolas,monospace;
+  }
+  html.dark {
+    --bg:#141413; --surface:#20201e; --surface-2:#2a2a27; --ink:#faf9f5;
+    --body:#d0d0c8; --muted:#919189; --line:#41413d; --line-soft:#2c2c29;
+    --shadow:0 12px 36px rgba(0,0,0,.35);
+    --a:#60a5fa; --a-soft:rgba(96,165,250,.13); --a-zone:rgba(96,165,250,.05);
+    --b:#2dd4bf; --b-soft:rgba(45,212,191,.12); --b-zone:rgba(45,212,191,.05);
+    --c:#4ade80; --c-soft:rgba(74,222,128,.12); --c-zone:rgba(74,222,128,.05);
+    --d:#818cf8; --d-soft:rgba(129,140,248,.14); --d-zone:rgba(129,140,248,.055);
+    --e:#fbbf24; --e-soft:rgba(251,191,36,.12); --e-zone:rgba(251,191,36,.05);
+    --f:#fb7185; --f-soft:rgba(251,113,133,.12); --f-zone:rgba(251,113,133,.05);
+    --g:#94a3b8; --g-soft:rgba(148,163,184,.12); --g-zone:rgba(148,163,184,.05);
+    --warn:#fbbf24; --warn-soft:rgba(251,191,36,.15); --ok:#86efac; --ok-soft:rgba(74,222,128,.13);
+    --bad:#f87171; --bad-soft:rgba(248,113,113,.15);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{display:flex;flex-direction:column;overflow:hidden;background:var(--bg);color:var(--body);font-family:var(--sans);-webkit-font-smoothing:antialiased}
+  button,input{font:inherit}
+
+  .topbar{flex:none;display:grid;grid-template-columns:minmax(300px,1fr) auto;gap:12px;padding:10px 16px;border-bottom:1px solid var(--line-soft);background:var(--bg)}
+  .brand h1{font-size:16px;line-height:1.25;color:var(--ink);letter-spacing:-.01em}
+  .brand .sub{margin-top:3px;font:10.5px/1.4 var(--mono);color:var(--muted)}
+  .toolbar{display:flex;align-items:center;justify-content:flex-end;gap:9px;flex-wrap:wrap}
+  .toolgroup{display:flex;align-items:center;gap:5px;padding-left:8px;border-left:1px solid var(--line-soft)}
+  .toolgroup:first-child{border-left:0;padding-left:0}
+  .tool-label{font:9.5px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-right:2px}
+  .chip,.icon-btn{border:1px solid var(--line);background:transparent;color:var(--muted);cursor:pointer;transition:.15s;border-radius:999px;font:10.5px/1 var(--mono);padding:6px 10px;white-space:nowrap}
+  .chip:hover,.icon-btn:hover{border-color:var(--muted);color:var(--ink)}
+  .chip.on{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+  .chip.bad.on{background:var(--bad);border-color:var(--bad);color:#fff}
+  .icon-btn{border-radius:7px}
+  .chip:focus-visible,.icon-btn:focus-visible,.search:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .search{width:190px;border:1px solid var(--line);border-radius:7px;background:var(--surface);color:var(--ink);font:10.5px/1 var(--mono);padding:7px 9px;outline:none}
+  .search:focus{border-color:var(--accent);box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 20%,transparent)}
+
+  .stage{position:relative;flex:1;min-height:0;overflow:hidden}
+  .stage svg{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:grab;touch-action:none}
+  .stage.grabbing svg{cursor:grabbing}
+  .hint{position:absolute;left:15px;top:10px;pointer-events:none;font:10px/1.4 var(--mono);color:var(--muted)}
+
+  .zone rect{stroke-width:1.2;stroke-dasharray:6 5;rx:18}
+  .zone .zt{font:700 13px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase}
+  .zone .zs{font:10px/1 var(--mono);fill:var(--muted)}
+  .zA rect{fill:var(--a-zone);stroke:var(--a)} .zA .zt{fill:var(--a)}
+  .zB rect{fill:var(--c-zone);stroke:var(--c)} .zB .zt{fill:var(--c)}
+  .zC rect{fill:var(--d-zone);stroke:var(--d)} .zC .zt{fill:var(--d)}
+  .zD rect{fill:var(--b-zone);stroke:var(--b)} .zD .zt{fill:var(--b)}
+  .zE rect{fill:var(--e-zone);stroke:var(--e)} .zE .zt{fill:var(--e)}
+  .zF rect{fill:var(--f-zone);stroke:var(--f)} .zF .zt{fill:var(--f)}
+  .zG rect{fill:var(--g-zone);stroke:var(--g)} .zG .zt{fill:var(--g)}
+
+  .node{cursor:pointer;transition:opacity .18s}
+  .node .box{stroke-width:1.55;rx:12;transition:stroke .15s,fill .15s,stroke-dasharray .15s}
+  .node .title{font:700 13.5px/1 var(--sans);fill:var(--ink);pointer-events:none}
+  .node .line{font:9.6px/1 var(--mono);fill:var(--body);pointer-events:none}
+  .node .fileline{font:9px/1 var(--mono);font-style:italic;fill:var(--muted);pointer-events:none}
+  .node .tagbox{fill:color-mix(in srgb,var(--accent) 13%,var(--surface));stroke:var(--accent);stroke-width:1;rx:9}
+  .node .tag{font:700 7.6px/1 var(--mono);letter-spacing:.04em;fill:var(--accent);text-anchor:middle;pointer-events:none}
+  .node.zA .box{fill:var(--a-soft);stroke:var(--a)} .node.zB .box{fill:var(--c-soft);stroke:var(--c)}
+  .node.zC .box{fill:var(--d-soft);stroke:var(--d)} .node.zD .box{fill:var(--b-soft);stroke:var(--b)}
+  .node.zE .box{fill:var(--e-soft);stroke:var(--e)} .node.zF .box{fill:var(--f-soft);stroke:var(--f)}
+  .node.zG .box{fill:var(--g-soft);stroke:var(--g)}
+  .node:hover .box,.node.sel .box{stroke:var(--accent)!important;stroke-width:2.5}
+
+  /* Ba trạng thái mang nghĩa, dùng lặp lại nên có chú giải riêng */
+  .node.status-fpt .box{stroke:var(--ok)!important;stroke-width:2.4;fill:var(--ok-soft)}
+  .node.status-fpt .tagbox{stroke:var(--ok);fill:var(--ok-soft)} .node.status-fpt .tag{fill:var(--ok)}
+  .node.status-gap .box{stroke:var(--warn)!important;stroke-dasharray:6 4}
+  .node.status-gap .tagbox{stroke:var(--warn);fill:var(--warn-soft)} .node.status-gap .tag{fill:var(--warn)}
+  .node.status-bug .box{stroke:var(--bad)!important;stroke-width:2.2;stroke-dasharray:3 3;fill:var(--bad-soft)}
+  .node.status-bug .tagbox{stroke:var(--bad);fill:var(--bad-soft)} .node.status-bug .tag{fill:var(--bad)}
+  .node.search-dim{opacity:.15}.node.search-hit .box{stroke:var(--accent)!important;stroke-width:2.8}
+
+  .edge{stroke:var(--muted);stroke-width:1.5;fill:none;marker-end:url(#arrow);transition:opacity .18s,stroke .18s}
+  .edge.dash{stroke-dasharray:5 4}
+  .elabel{font:9.5px/1 var(--mono);fill:var(--muted)}
+  .stage.flowing .edge,.stage.flowing .elabel{opacity:.1}
+  .stage.flowing .node{opacity:.2}
+  .stage.flowing .zone{opacity:.45}
+  .stage.flowing .edge.lit{opacity:1;stroke:var(--accent);marker-end:url(#arrowActive);stroke-dasharray:7 5;animation:march .9s linear infinite}
+  .stage.flowing .elabel.lit{opacity:1;fill:var(--accent)}
+  .stage.flowing .node.lit{opacity:1}
+  @keyframes march{to{stroke-dashoffset:-12}}
+  @media (prefers-reduced-motion:reduce){.stage.flowing .edge.lit{animation:none}}
+
+  .card{position:absolute;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow)}
+  .leftstack{position:absolute;left:15px;bottom:14px;display:flex;flex-direction:column;gap:8px;max-width:340px}
+  #flowCard{display:none;position:static;padding:11px 14px}
+  #flowCard .fname{font:700 11px/1.3 var(--mono);color:var(--ink);letter-spacing:.04em;text-transform:uppercase;margin-bottom:6px}
+  #flowCard ol{margin:0;padding-left:17px}
+  #flowCard li{font:10.5px/1.5 var(--sans);color:var(--body);margin:3px 0}
+  #legend{position:static;padding:9px 12px;display:flex;flex-wrap:wrap;gap:5px 12px}
+  #legend .li{display:inline-flex;align-items:center;gap:5px;font:9.6px/1 var(--mono);color:var(--muted)}
+  #legend .sw{width:15px;height:9px;border-radius:2px;border:1.4px solid transparent;display:inline-block}
+  #legend .sw.fpt{background:var(--ok-soft);border-color:var(--ok)}
+  #legend .sw.gap{background:var(--warn-soft);border-color:var(--warn);border-style:dashed}
+  #legend .sw.bug{background:var(--bad-soft);border-color:var(--bad);border-style:dashed}
+
+  #detail{display:none;right:15px;top:12px;width:430px;max-height:calc(100% - 78px);overflow:auto;padding:14px 16px}
+  #detail h3{color:var(--ink);font-size:16px;padding-right:25px;font-family:var(--mono)}
+  #detail .meta{margin:3px 0 10px;font:10px/1.45 var(--mono);color:var(--muted)}
+  #detail .close{position:absolute;right:10px;top:8px;border:0;background:transparent;color:var(--muted);font-size:19px;line-height:1;cursor:pointer}
+  #detail .close:hover{color:var(--ink)}
+  #detail .section{margin-top:12px;padding-top:11px;border-top:1px solid var(--line-soft)}
+  #detail .section:first-child{margin-top:0;padding-top:0;border-top:0}
+  #detail h4{font:700 9.6px/1 var(--mono);letter-spacing:.09em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+  #detail ul{margin:0;padding-left:16px}
+  #detail li{font:11.5px/1.55 var(--sans);color:var(--body);margin:3px 0}
+  #detail p{font:11.5px/1.6 var(--sans);color:var(--body)}
+  #detail code{font:10.5px/1.4 var(--mono);background:var(--surface-2);border:1px solid var(--line-soft);border-radius:3px;padding:.5px 4px;color:var(--ink)}
+  #detail pre{background:var(--surface-2);border:1px solid var(--line-soft);border-radius:7px;padding:10px 11px;overflow-x:auto;font:10px/1.6 var(--mono);color:var(--ink);margin-top:6px}
+  #detail pre .c{color:var(--muted)} #detail pre .r{color:var(--bad)} #detail pre .g{color:var(--ok)}
+  .status-pill{display:inline-block;font:700 8.6px/1 var(--mono);letter-spacing:.07em;padding:4px 7px;border-radius:5px;margin-right:7px;vertical-align:middle}
+  .status-pill.ok{background:var(--ok-soft);color:var(--ok)}
+  .status-pill.fpt{background:var(--ok-soft);color:var(--ok)}
+  .status-pill.gap{background:var(--warn-soft);color:var(--warn)}
+  .status-pill.bug{background:var(--bad-soft);color:var(--bad)}
+  .fileref{font:9.6px/1.4 var(--mono);color:var(--muted)}
+  #detail table{border-collapse:collapse;width:100%;margin-top:6px}
+  #detail th,#detail td{text-align:left;padding:5px 7px;border-bottom:1px solid var(--line-soft);font:10.2px/1.45 var(--mono);vertical-align:top}
+  #detail th{color:var(--muted);font-weight:700;letter-spacing:.05em;text-transform:uppercase;font-size:8.8px}
+  #detail td.y{color:var(--ok)} #detail td.n{color:var(--muted)}
+
+  .ctrl{position:absolute;right:15px;bottom:14px;display:flex;align-items:center;gap:4px;background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:4px;box-shadow:var(--shadow)}
+  .ctrl button{border:0;background:transparent;color:var(--muted);cursor:pointer;font:11px/1 var(--mono);padding:6px 9px;border-radius:6px}
+  .ctrl button:hover{background:var(--surface-2);color:var(--ink)}
+  #zoomPct{font:10px/1 var(--mono);color:var(--muted);min-width:38px;text-align:center}
+
+  @media (max-width:900px){#detail{width:calc(100% - 30px)}.leftstack{display:none}}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <h1>AIC 2026 — Luồng bản test FPT API trên một video (<code style="font-family:var(--mono)">L21_V001</code>)</h1>
+    <div class="sub">Mọi node = code thật hôm nay · viền xanh = gọi FPT thật · viền đỏ đứt = hỏng trong cấu hình hiện tại · viền vàng đứt = có code, chưa nối</div>
+  </div>
+  <div class="toolbar">
+    <div class="toolgroup" id="flowChips">
+      <span class="tool-label">Luồng</span>
+      <button class="chip on" data-flow="all">Toàn cảnh</button>
+      <button class="chip" data-flow="offline">Offline</button>
+      <button class="chip" data-flow="enrich">Làm giàu query</button>
+      <button class="chip" data-flow="kis">KIS</button>
+      <button class="chip" data-flow="qa">QA</button>
+      <button class="chip" data-flow="fpt">Đường FPT</button>
+      <button class="chip" data-flow="dormant">Chưa kích hoạt</button>
+      <button class="chip bad" data-flow="bugs">Lỗi</button>
+    </div>
+    <div class="toolgroup">
+      <input id="searchBox" class="search" type="search" placeholder="Tìm file / biến env…" aria-label="Tìm file hoặc biến môi trường">
+      <button class="icon-btn" id="modelBtn">Model FPT</button>
+      <button class="icon-btn" id="runbookBtn">Runbook</button>
+      <button class="icon-btn" id="helpBtn">Hướng dẫn</button>
+      <button class="icon-btn" id="themeToggle">Sáng / tối</button>
+    </div>
+  </div>
+</header>
+
+<main class="stage" id="stage">
+<svg id="svg" role="img" aria-label="Sơ đồ luồng hệ thống AIC 2026 cho bản test FPT API trên một video, chỉ rõ ba điểm gọi FPT thật và bảy điểm hỏng">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.3" markerHeight="6.3" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--muted)"/></marker>
+    <marker id="arrowActive" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.3" markerHeight="6.3" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--accent)"/></marker>
+  </defs>
+  <g id="world">
+    <!-- zones -->
+    <g class="zone zA"><rect x="30" y="40" width="340" height="980"/><text class="zt" x="50" y="74">A · Offline — đã đóng băng</text><text class="zs" x="50" y="94">chạy xong 2026-08-03 · storage/packs/</text></g>
+    <g class="zone zB"><rect x="425" y="40" width="340" height="630"/><text class="zt" x="445" y="74">B · Export &amp; index</text><text class="zs" x="445" y="94">offline/assemble.py · datasection/exporter.py</text></g>
+    <g class="zone zC"><rect x="820" y="40" width="340" height="805"/><text class="zt" x="840" y="74">C · Cấu hình &amp; bootstrap</text><text class="zs" x="840" y="94">online/config.py · api/container.py</text></g>
+    <g class="zone zD"><rect x="1215" y="40" width="340" height="805"/><text class="zt" x="1235" y="74">D · Làm giàu truy vấn</text><text class="zs" x="1235" y="94">100% rule — không một lần gọi model</text></g>
+    <g class="zone zE"><rect x="1610" y="40" width="340" height="1155"/><text class="zt" x="1630" y="74">E · Retrieval — 10 nhánh</text><text class="zs" x="1630" y="94">song song · deadline 3000 ms mỗi nhánh</text></g>
+    <g class="zone zF"><rect x="2005" y="40" width="340" height="1330"/><text class="zt" x="2025" y="74">F · Fusion → rerank → task</text><text class="zs" x="2025" y="94">online/services/*.py · api/routes.py</text></g>
+    <g class="zone zG"><rect x="2400" y="40" width="340" height="1330"/><text class="zt" x="2420" y="74">G · Chưa kích hoạt &amp; cấu hình sai</text><text class="zs" x="2420" y="94">biến env khai báo nhưng không ai đọc</text></g>
+
+    <!-- within-zone chain edges -->
+    <path class="edge" id="e1" d="M200,290 L200,315"/>
+    <path class="edge" id="e2" d="M200,465 L200,490"/>
+    <path class="edge" id="e3" d="M200,640 L200,665"/>
+    <path class="edge" id="e4" d="M200,815 L200,840"/>
+
+    <path class="edge" id="e5" d="M595,290 L595,315"/>
+    <path class="edge dash" id="e6" d="M595,465 L595,490"/>
+
+    <path class="edge" id="e7" d="M990,290 L990,315"/>
+    <path class="edge" id="e8" d="M990,465 L990,490"/>
+    <path class="edge" id="e9" d="M990,640 L990,665"/>
+
+    <path class="edge" id="e10" d="M1385,290 L1385,315"/>
+    <path class="edge" id="e11" d="M1385,465 L1385,490"/>
+    <path class="edge dash" id="e12" d="M1385,640 L1385,665"/>
+
+    <path class="edge" id="e13" d="M1780,290 L1780,315"/>
+    <path class="edge" id="e14" d="M1780,465 L1780,490"/>
+    <path class="edge" id="e15" d="M1780,640 L1780,665"/>
+    <path class="edge" id="e16" d="M1780,815 L1780,840"/>
+    <path class="edge dash" id="e17" d="M1780,990 L1780,1015"/>
+
+    <path class="edge" id="e18" d="M2175,290 L2175,315"/>
+    <path class="edge" id="e19" d="M2175,465 L2175,490"/>
+    <path class="edge" id="e20" d="M2175,640 L2175,665"/>
+    <path class="edge dash" id="e21" d="M2175,815 L2175,840"/>
+    <path class="edge" id="e22" d="M2175,990 L2175,1015"/>
+    <path class="edge" id="e23" d="M2175,1165 L2175,1190"/>
+
+    <!-- cross-zone edges -->
+    <path class="edge" id="e30" d="M350,915 L397,915 L397,215 L445,215"/>
+    <path class="edge" id="e31" d="M745,390 L840,390"/>
+    <path class="edge" id="e32" d="M1140,390 L1187,390 L1187,215 L1235,215"/>
+    <path class="edge" id="e33" d="M1535,390 L1577,390 L1577,215 L1630,215"/>
+    <path class="edge" id="e34" d="M1930,565 L1977,565 L1977,215 L2025,215"/>
+
+    <!-- edge labels -->
+    <text class="elabel" data-e="e30" transform="rotate(-90 391 570)" x="391" y="570" text-anchor="middle">8 stage pack → assemble</text>
+    <text class="elabel" data-e="e31" x="792" y="381" text-anchor="middle">217 scene</text>
+    <text class="elabel" data-e="e32" transform="rotate(-90 1181 305)" x="1181" y="305" text-anchor="middle">container dựng 1 lần</text>
+    <text class="elabel" data-e="e33" transform="rotate(-90 1571 305)" x="1571" y="305" text-anchor="middle">QueryPlan → 10 nhánh</text>
+    <text class="elabel" data-e="e34" transform="rotate(-90 1971 395)" x="1971" y="395" text-anchor="middle">10 danh sách candidate</text>
+
+    <!-- Zone A nodes -->
+    <g class="node zA" data-k="A1"><rect class="box" x="50" y="140" width="300" height="150"/><text class="title" x="70" y="170">Probe video + cắt scene</text><text class="fileline" x="70" y="188"></text><text class="line l1" x="70" y="206"></text><text class="line l2" x="70" y="224"></text><text class="line l3" x="70" y="242"></text><rect class="tagbox" x="270" y="150" width="70" height="18"/><text class="tag" x="305" y="163"></text></g>
+    <g class="node zA" data-k="A2"><rect class="box" x="50" y="315" width="300" height="150"/><text class="title" x="70" y="345">Trích 307 keyframe</text><text class="fileline" x="70" y="363"></text><text class="line l1" x="70" y="381"></text><text class="line l2" x="70" y="399"></text><text class="line l3" x="70" y="417"></text><rect class="tagbox" x="270" y="325" width="70" height="18"/><text class="tag" x="305" y="338"></text></g>
+    <g class="node zA status-fpt" data-k="A3"><rect class="box" x="50" y="490" width="300" height="150"/><text class="title" x="70" y="520">Enrich caption / OCR / object</text><text class="fileline" x="70" y="538"></text><text class="line l1" x="70" y="556"></text><text class="line l2" x="70" y="574"></text><text class="line l3" x="70" y="592"></text><rect class="tagbox" x="270" y="500" width="70" height="18"/><text class="tag" x="305" y="513"></text></g>
+    <g class="node zA" data-k="A4"><rect class="box" x="50" y="665" width="300" height="150"/><text class="title" x="70" y="695">ASR toàn video</text><text class="fileline" x="70" y="713"></text><text class="line l1" x="70" y="731"></text><text class="line l2" x="70" y="749"></text><text class="line l3" x="70" y="767"></text><rect class="tagbox" x="270" y="675" width="70" height="18"/><text class="tag" x="305" y="688"></text></g>
+    <g class="node zA" data-k="A5"><rect class="box" x="50" y="840" width="300" height="150"/><text class="title" x="70" y="870">Embed keyframe bằng CLIP</text><text class="fileline" x="70" y="888"></text><text class="line l1" x="70" y="906"></text><text class="line l2" x="70" y="924"></text><text class="line l3" x="70" y="942"></text><rect class="tagbox" x="270" y="850" width="70" height="18"/><text class="tag" x="305" y="863"></text></g>
+
+    <!-- Zone B nodes -->
+    <g class="node zB status-bug" data-k="B1"><rect class="box" x="445" y="140" width="300" height="150"/><text class="title" x="465" y="170">offline assemble</text><text class="fileline" x="465" y="188"></text><text class="line l1" x="465" y="206"></text><text class="line l2" x="465" y="224"></text><text class="line l3" x="465" y="242"></text><rect class="tagbox" x="665" y="150" width="70" height="18"/><text class="tag" x="700" y="163"></text></g>
+    <g class="node zB" data-k="B2"><rect class="box" x="445" y="315" width="300" height="150"/><text class="title" x="465" y="345">exports_l21_enriched/</text><text class="fileline" x="465" y="363"></text><text class="line l1" x="465" y="381"></text><text class="line l2" x="465" y="399"></text><text class="line l3" x="465" y="417"></text><rect class="tagbox" x="665" y="325" width="70" height="18"/><text class="tag" x="700" y="338"></text></g>
+    <g class="node zB status-gap" data-k="B3"><rect class="box" x="445" y="490" width="300" height="150"/><text class="title" x="465" y="520">Index caption dense (e5)</text><text class="fileline" x="465" y="538"></text><text class="line l1" x="465" y="556"></text><text class="line l2" x="465" y="574"></text><text class="line l3" x="465" y="592"></text><rect class="tagbox" x="665" y="500" width="70" height="18"/><text class="tag" x="700" y="513"></text></g>
+
+    <!-- Zone C nodes -->
+    <g class="node zC status-bug" data-k="C1"><rect class="box" x="840" y="140" width="300" height="150"/><text class="title" x="860" y="170">Settings.from_env()</text><text class="fileline" x="860" y="188"></text><text class="line l1" x="860" y="206"></text><text class="line l2" x="860" y="224"></text><text class="line l3" x="860" y="242"></text><rect class="tagbox" x="1060" y="150" width="70" height="18"/><text class="tag" x="1095" y="163"></text></g>
+    <g class="node zC" data-k="C2"><rect class="box" x="840" y="315" width="300" height="150"/><text class="title" x="860" y="345">build_container()</text><text class="fileline" x="860" y="363"></text><text class="line l1" x="860" y="381"></text><text class="line l2" x="860" y="399"></text><text class="line l3" x="860" y="417"></text><rect class="tagbox" x="1060" y="325" width="70" height="18"/><text class="tag" x="1095" y="338"></text></g>
+    <g class="node zC status-bug" data-k="C3"><rect class="box" x="840" y="490" width="300" height="150"/><text class="title" x="860" y="520">Warmup CLIP text tower</text><text class="fileline" x="860" y="538"></text><text class="line l1" x="860" y="556"></text><text class="line l2" x="860" y="574"></text><text class="line l3" x="860" y="592"></text><rect class="tagbox" x="1060" y="500" width="70" height="18"/><text class="tag" x="1095" y="513"></text></g>
+    <g class="node zC" data-k="C4"><rect class="box" x="840" y="665" width="300" height="150"/><text class="title" x="860" y="695">Gate capabilities → 422</text><text class="fileline" x="860" y="713"></text><text class="line l1" x="860" y="731"></text><text class="line l2" x="860" y="749"></text><text class="line l3" x="860" y="767"></text><rect class="tagbox" x="1060" y="675" width="70" height="18"/><text class="tag" x="1095" y="688"></text></g>
+
+    <!-- Zone D nodes -->
+    <g class="node zD" data-k="D1"><rect class="box" x="1235" y="140" width="300" height="150"/><text class="title" x="1255" y="170">RuleBasedQueryPlanner</text><text class="fileline" x="1255" y="188"></text><text class="line l1" x="1255" y="206"></text><text class="line l2" x="1255" y="224"></text><text class="line l3" x="1255" y="242"></text><rect class="tagbox" x="1455" y="150" width="70" height="18"/><text class="tag" x="1490" y="163"></text></g>
+    <g class="node zD" data-k="D2"><rect class="box" x="1235" y="315" width="300" height="150"/><text class="title" x="1255" y="345">PreparedQueryPlanner</text><text class="fileline" x="1255" y="363"></text><text class="line l1" x="1255" y="381"></text><text class="line l2" x="1255" y="399"></text><text class="line l3" x="1255" y="417"></text><rect class="tagbox" x="1455" y="325" width="70" height="18"/><text class="tag" x="1490" y="338"></text></g>
+    <g class="node zD" data-k="D3"><rect class="box" x="1235" y="490" width="300" height="150"/><text class="title" x="1255" y="520">Ràng buộc phủ định</text><text class="fileline" x="1255" y="538"></text><text class="line l1" x="1255" y="556"></text><text class="line l2" x="1255" y="574"></text><text class="line l3" x="1255" y="592"></text><rect class="tagbox" x="1455" y="500" width="70" height="18"/><text class="tag" x="1490" y="513"></text></g>
+    <g class="node zD status-bug" data-k="D4"><rect class="box" x="1235" y="665" width="300" height="150"/><text class="title" x="1255" y="695">Mở rộng VI→EN</text><text class="fileline" x="1255" y="713"></text><text class="line l1" x="1255" y="731"></text><text class="line l2" x="1255" y="749"></text><text class="line l3" x="1255" y="767"></text><rect class="tagbox" x="1455" y="675" width="70" height="18"/><text class="tag" x="1490" y="688"></text></g>
+
+    <!-- Zone E nodes -->
+    <g class="node zE" data-k="E1"><rect class="box" x="1630" y="140" width="300" height="150"/><text class="title" x="1650" y="170">dense_visual</text><text class="fileline" x="1650" y="188"></text><text class="line l1" x="1650" y="206"></text><text class="line l2" x="1650" y="224"></text><text class="line l3" x="1650" y="242"></text><rect class="tagbox" x="1850" y="150" width="70" height="18"/><text class="tag" x="1885" y="163"></text></g>
+    <g class="node zE" data-k="E2"><rect class="box" x="1630" y="315" width="300" height="150"/><text class="title" x="1650" y="345">BM25 caption/ocr/asr/keyword</text><text class="fileline" x="1650" y="363"></text><text class="line l1" x="1650" y="381"></text><text class="line l2" x="1650" y="399"></text><text class="line l3" x="1650" y="417"></text><rect class="tagbox" x="1850" y="325" width="70" height="18"/><text class="tag" x="1885" y="338"></text></g>
+    <g class="node zE" data-k="E3"><rect class="box" x="1630" y="490" width="300" height="150"/><text class="title" x="1650" y="520">BM25 object / action</text><text class="fileline" x="1650" y="538"></text><text class="line l1" x="1650" y="556"></text><text class="line l2" x="1650" y="574"></text><text class="line l3" x="1650" y="592"></text><rect class="tagbox" x="1850" y="500" width="70" height="18"/><text class="tag" x="1885" y="513"></text></g>
+    <g class="node zE" data-k="E4"><rect class="box" x="1630" y="665" width="300" height="150"/><text class="title" x="1650" y="695">ocr_fuzzy</text><text class="fileline" x="1650" y="713"></text><text class="line l1" x="1650" y="731"></text><text class="line l2" x="1650" y="749"></text><text class="line l3" x="1650" y="767"></text><rect class="tagbox" x="1850" y="675" width="70" height="18"/><text class="tag" x="1885" y="688"></text></g>
+    <g class="node zE" data-k="E5"><rect class="box" x="1630" y="840" width="300" height="150"/><text class="title" x="1650" y="870">event_search</text><text class="fileline" x="1650" y="888"></text><text class="line l1" x="1650" y="906"></text><text class="line l2" x="1650" y="924"></text><text class="line l3" x="1650" y="942"></text><rect class="tagbox" x="1850" y="850" width="70" height="18"/><text class="tag" x="1885" y="863"></text></g>
+    <g class="node zE status-bug" data-k="E6"><rect class="box" x="1630" y="1015" width="300" height="150"/><text class="title" x="1650" y="1045">color_search</text><text class="fileline" x="1650" y="1063"></text><text class="line l1" x="1650" y="1081"></text><text class="line l2" x="1650" y="1099"></text><text class="line l3" x="1650" y="1117"></text><rect class="tagbox" x="1850" y="1025" width="70" height="18"/><text class="tag" x="1885" y="1038"></text></g>
+
+    <!-- Zone F nodes -->
+    <g class="node zF" data-k="F1"><rect class="box" x="2025" y="140" width="300" height="150"/><text class="title" x="2045" y="170">Chuẩn hoá → ngưỡng → RRF</text><text class="fileline" x="2045" y="188"></text><text class="line l1" x="2045" y="206"></text><text class="line l2" x="2045" y="224"></text><text class="line l3" x="2045" y="242"></text><rect class="tagbox" x="2255" y="150" width="70" height="18"/><text class="tag" x="2290" y="163"></text></g>
+    <g class="node zF" data-k="F2"><rect class="box" x="2025" y="315" width="300" height="150"/><text class="title" x="2045" y="345">Dedup + bonus/penalty</text><text class="fileline" x="2045" y="363"></text><text class="line l1" x="2045" y="381"></text><text class="line l2" x="2045" y="399"></text><text class="line l3" x="2045" y="417"></text><rect class="tagbox" x="2255" y="325" width="70" height="18"/><text class="tag" x="2290" y="338"></text></g>
+    <g class="node zF status-fpt" data-k="F3"><rect class="box" x="2025" y="490" width="300" height="150"/><text class="title" x="2045" y="520">Text rerank qua FPT</text><text class="fileline" x="2045" y="538"></text><text class="line l1" x="2045" y="556"></text><text class="line l2" x="2045" y="574"></text><text class="line l3" x="2045" y="592"></text><rect class="tagbox" x="2255" y="500" width="70" height="18"/><text class="tag" x="2290" y="513"></text></g>
+    <g class="node zF status-bug" data-k="F4"><rect class="box" x="2025" y="665" width="300" height="150"/><text class="title" x="2045" y="695">VLM rerank</text><text class="fileline" x="2045" y="713"></text><text class="line l1" x="2045" y="731"></text><text class="line l2" x="2045" y="749"></text><text class="line l3" x="2045" y="767"></text><rect class="tagbox" x="2255" y="675" width="70" height="18"/><text class="tag" x="2290" y="688"></text></g>
+    <g class="node zF" data-k="F5"><rect class="box" x="2025" y="840" width="300" height="150"/><text class="title" x="2045" y="870">Bốn task processor</text><text class="fileline" x="2045" y="888"></text><text class="line l1" x="2045" y="906"></text><text class="line l2" x="2045" y="924"></text><text class="line l3" x="2045" y="942"></text><rect class="tagbox" x="2255" y="850" width="70" height="18"/><text class="tag" x="2290" y="863"></text></g>
+    <g class="node zF status-fpt" data-k="F6"><rect class="box" x="2025" y="1015" width="300" height="150"/><text class="title" x="2045" y="1045">QA answer qua FPT LLM</text><text class="fileline" x="2045" y="1063"></text><text class="line l1" x="2045" y="1081"></text><text class="line l2" x="2045" y="1099"></text><text class="line l3" x="2045" y="1117"></text><rect class="tagbox" x="2255" y="1025" width="70" height="18"/><text class="tag" x="2290" y="1038"></text></g>
+    <g class="node zF" data-k="F7"><rect class="box" x="2025" y="1190" width="300" height="150"/><text class="title" x="2045" y="1220">Evidence · warnings · trace</text><text class="fileline" x="2045" y="1238"></text><text class="line l1" x="2045" y="1256"></text><text class="line l2" x="2045" y="1274"></text><text class="line l3" x="2045" y="1292"></text><rect class="tagbox" x="2255" y="1200" width="70" height="18"/><text class="tag" x="2290" y="1213"></text></g>
+
+    <!-- Zone G nodes -->
+    <g class="node zG status-gap" data-k="G1"><rect class="box" x="2420" y="140" width="300" height="150"/><text class="title" x="2440" y="170">LLM hiểu truy vấn</text><text class="fileline" x="2440" y="188"></text><text class="line l1" x="2440" y="206"></text><text class="line l2" x="2440" y="224"></text><text class="line l3" x="2440" y="242"></text><rect class="tagbox" x="2650" y="150" width="70" height="18"/><text class="tag" x="2685" y="163"></text></g>
+    <g class="node zG status-gap" data-k="G2"><rect class="box" x="2420" y="315" width="300" height="150"/><text class="title" x="2440" y="345">Dịch VI→EN cho dense</text><text class="fileline" x="2440" y="363"></text><text class="line l1" x="2440" y="381"></text><text class="line l2" x="2440" y="399"></text><text class="line l3" x="2440" y="417"></text><rect class="tagbox" x="2650" y="325" width="70" height="18"/><text class="tag" x="2685" y="338"></text></g>
+    <g class="node zG status-gap" data-k="G3"><rect class="box" x="2420" y="490" width="300" height="150"/><text class="title" x="2440" y="520">QA verifier</text><text class="fileline" x="2440" y="538"></text><text class="line l1" x="2440" y="556"></text><text class="line l2" x="2440" y="574"></text><text class="line l3" x="2440" y="592"></text><rect class="tagbox" x="2650" y="500" width="70" height="18"/><text class="tag" x="2685" y="513"></text></g>
+    <g class="node zG status-gap" data-k="G4"><rect class="box" x="2420" y="665" width="300" height="150"/><text class="title" x="2440" y="695">Text embedding FPT</text><text class="fileline" x="2440" y="713"></text><text class="line l1" x="2440" y="731"></text><text class="line l2" x="2440" y="749"></text><text class="line l3" x="2440" y="767"></text><rect class="tagbox" x="2650" y="675" width="70" height="18"/><text class="tag" x="2685" y="688"></text></g>
+    <g class="node zG status-gap" data-k="G5"><rect class="box" x="2420" y="840" width="300" height="150"/><text class="title" x="2440" y="870">ASR qua FPT</text><text class="fileline" x="2440" y="888"></text><text class="line l1" x="2440" y="906"></text><text class="line l2" x="2440" y="924"></text><text class="line l3" x="2440" y="942"></text><rect class="tagbox" x="2650" y="850" width="70" height="18"/><text class="tag" x="2685" y="863"></text></g>
+    <g class="node zG status-bug" data-k="G6"><rect class="box" x="2420" y="1015" width="300" height="150"/><text class="title" x="2440" y="1045">AIC_OFFLINE_PROVIDER=fpt</text><text class="fileline" x="2440" y="1063"></text><text class="line l1" x="2440" y="1081"></text><text class="line l2" x="2440" y="1099"></text><text class="line l3" x="2440" y="1117"></text><rect class="tagbox" x="2650" y="1025" width="70" height="18"/><text class="tag" x="2685" y="1038"></text></g>
+    <g class="node zG status-bug" data-k="G7"><rect class="box" x="2420" y="1190" width="300" height="150"/><text class="title" x="2440" y="1220">AIC_METADATA_JSONL sai</text><text class="fileline" x="2440" y="1238"></text><text class="line l1" x="2440" y="1256"></text><text class="line l2" x="2440" y="1274"></text><text class="line l3" x="2440" y="1292"></text><rect class="tagbox" x="2650" y="1200" width="70" height="18"/><text class="tag" x="2685" y="1213"></text></g>
+  </g>
+</svg>
+
+<div class="hint">lăn chuột: zoom · kéo nền: pan · bấm node: chi tiết + cách sửa · chọn "Lỗi" để xem 7 chỗ hỏng</div>
+
+<div class="leftstack">
+  <section class="card" id="flowCard"><div class="fname" id="flowName"></div><ol id="flowSteps"></ol></section>
+  <section class="card" id="legend">
+    <span class="li"><span class="sw fpt"></span>gọi FPT thật</span>
+    <span class="li"><span class="sw gap"></span>có code, chưa nối</span>
+    <span class="li"><span class="sw bug"></span>hỏng trong cấu hình này</span>
+    <span class="li">viền đặc màu zone = chạy local, bình thường</span>
+  </section>
+</div>
+
+<aside class="card" id="detail">
+  <button class="close" id="detailClose" aria-label="Đóng">×</button>
+  <h3 id="detailTitle">Cách đọc sơ đồ</h3>
+  <div class="meta" id="detailMeta">Mọi kết luận kiểm chứng bằng cách chạy thật — nạp .env.fpt.local vào Settings.from_env(), đọc export và model_info.json — không đọc tài liệu.</div>
+  <div id="detailBody">
+    <div class="section"><h4>Ba màu mang nghĩa</h4>
+      <ul>
+        <li><b>Xanh lá đặc</b> — đúng ba nơi FPT API thật sự được gọi: enrich keyframe (offline), text rerank, QA answer.</li>
+        <li><b>Đỏ đứt</b> — có code nhưng cấu hình hiện tại làm nó sai hoặc chết. Bấm vào để xem bằng chứng và cách sửa.</li>
+        <li><b>Vàng đứt</b> — biến env đã khai báo trong <code>.env.fpt.local</code> nhưng không dòng code nào đọc.</li>
+      </ul>
+    </div>
+    <div class="section"><h4>Khác với hai file cùng bộ</h4>
+      <p><code>aic2026-tong-quan.html</code> so ba profile ở mức kiến trúc. <code>aic2026-luong-thuc-thi.html</code> vẽ code chung. File này chỉ một câu hỏi: <b>chạy bản test FPT trên L21_V001 thì thật sự có gì chạy, và cái gì sẽ hỏng trong im lặng.</b></p>
+    </div>
+    <div class="section"><h4>Bắt đầu từ đâu</h4>
+      <p>Bấm <b>Lỗi</b> trên thanh công cụ → 7 node đỏ. Sửa theo thứ tự G7 → C3 → F4 → C1 rồi mới tới phần còn lại. Nút <b>Runbook</b> có khối env đã sửa sẵn.</p>
+    </div>
+  </div>
+</aside>
+
+<div class="ctrl"><button id="zoomOut">−</button><span id="zoomPct">100%</span><button id="zoomIn">+</button><button id="zoomFit">Vừa màn hình</button></div>
+</main>
+
+<script>
+const NODES = {
+  A1:{title:'Probe video + cắt scene',zone:'A · offline đã đóng băng',tag:'LOCAL',file:'ffprobe + transnetv2_pytorch → storage/packs/{video,scene}',
+    lines:['video_manifest 1 dòng · scene_manifest 336 shot','model_info.json ghi rõ nguồn: ffprobe / transnetv2','nguồn: storage/raw/videos/L21_V001.mp4'],
+    detail:['Toàn bộ tầng A đã chạy xong ngày 2026-08-03 và không cần chạy lại trừ khi đổi prompt enrich.','Đây là lý do bản test một video không phải trả tiền FPT lại từ đầu mỗi lần thử cấu hình online.']},
+  A2:{title:'Trích 307 keyframe',zone:'A · offline đã đóng băng',tag:'LOCAL',file:'ffmpeg-scene-representative → storage/packs/keyframe',
+    lines:['keyframe_manifest.jsonl mang frame_idx THẬT','ảnh nằm ở storage/processed/keyframes/L21_V001/','307 ảnh — cơ sở cho cả embed lẫn enrich'],
+    detail:['frame_idx thật (không phải số thứ tự) là điều kiện để submission trỏ đúng khung hình.','Nếu /v1/media không serve được ảnh, kiểm tra đúng thư mục này trước.']},
+  A3:{title:'Enrich caption / OCR / object',zone:'A · offline đã đóng băng',tag:'FPT',status:'fpt',
+    file:'scripts/enrich_keyframes_fpt.py --env-file .env.fpt.local',
+    lines:['Qwen2.5-VL-7B-Instruct · 1 call cho mỗi keyframe','sinh 305 caption · 117 ocr · 228 object pack row','cache sha256(ảnh+prompt+model): 307 file đã có'],
+    detail:['Đây là nơi FPT đóng góp nhiều nhất và là nơi DUY NHẤT model VLM được dùng.','Prompt yêu cầu caption <b>tiếng Việt</b> — hệ quả của việc này là FIND-06 ở node "Mở rộng VI→EN".','2/307 keyframe lỗi parse JSON (dấu ngoặc kép lồng chưa escape), ghi ở storage/packs/fpt_enrich_failures.jsonl. Tỉ lệ chấp nhận được.','<b>Settings.fpt_vlm_model không có consumer nào trong online/</b> — biến này chỉ phục vụ script offline.']},
+  A4:{title:'ASR toàn video',zone:'A · offline đã đóng băng',tag:'LOCAL',file:'faster-whisper:large-v3 — CHẠY LOCAL, không qua FPT',
+    lines:['264 đoạn ASR, cắt lại theo biên scene','storage/packs/asr/model_info.json ghi faster-whisper','AIC_FPT_ASR_MODEL hoàn toàn không được dùng'],
+    detail:['File env khai báo whisper-large-v3-turbo qua FPT, nhưng dữ liệu ASR đã có sẵn từ model local.','Không cần bật lại ASR qua FPT — giữ biến đó chỉ gây hiểu nhầm khi đọc cấu hình.']},
+  A5:{title:'Embed keyframe bằng CLIP',zone:'A · offline đã đóng băng',tag:'LOCAL',file:'scripts/embed_keyframes_local.py (CPU)',
+    lines:['openai/clip-vit-large-patch14 nạp từ storage/models/','vector inline + embedding_refs trong pack','FPT KHÔNG có visual embedding chung không gian'],
+    detail:['Kiểm chứng: build_frame_vector_rows trả <code>frame rows: 307, has_real_embeddings: True</code>.','Vì có embedding thật nên container BẮT BUỘC dựng LocalClipTextEncoder — dẫn thẳng tới rủi ro ở node "Warmup CLIP text tower".','Weights tải sẵn bằng curl vì máy này lỗi SSL khi transformers gọi HF Hub.']},
+
+  B1:{title:'offline assemble',zone:'B · export & index',tag:'CHẾT',status:'bug',file:'python -m offline assemble --packs storage/packs',
+    lines:['gộp 8 pack → scene / keyframe / clip / event','sinh keyword từ object; ghi quarantine.jsonl','AIC_OFFLINE_PROVIDER=fpt làm lệnh này chết ngay'],
+    find:'FIND-05',
+    detail:['Đã chạy thật: <code class="r">ValueError: AIC_OFFLINE_PROVIDER must be mock or remote</code>.','offline/config.py:49 chỉ nhận hai giá trị. Enrichment FPT KHÔNG đi qua provider interface — nó là script riêng đọc thẳng FptClient.','Cũng giết scripts/preflight.py.'],
+    fix:'Đặt <code>AIC_OFFLINE_PROVIDER=mock</code>.'},
+  B2:{title:'exports_l21_enriched/',zone:'B · export & index',tag:'DATA',file:'scenes.jsonl · events.jsonl · videos.jsonl · dataset_manifest.json',
+    lines:['217 scene · caption 216 · asr 210 · ocr 98','object 170 · action 136 · color_names 0','đây là export ĐÚNG để trỏ AIC_METADATA_JSONL'],
+    detail:['Ba export cùng tồn tại và rất dễ nhầm: <code>exports/</code> là fixture demo 3 scene, <code>exports_l21/</code> là bản trước khi sửa coverage, <code>exports_l21_enriched/</code> là bản mới nhất.','events.jsonl nằm sẵn cạnh scenes.jsonl — điều kiện bắt buộc để bật AIC_ENABLE_EVENT_SEARCH mà container không raise.','color_names rỗng trên cả 217 scene — xem node color_search.']},
+  B3:{title:'Index caption dense (e5)',zone:'B · export & index',tag:'CHƯA NỐI',status:'gap',file:'storage/indexes_l21/caption_dense_enriched/manifest.json',
+    lines:['multilingual-e5-large LOCAL · 216 scene · dim 1024','CaptionDenseRetriever chỉ script thí nghiệm import','container.py không import — online không hề thấy'],
+    detail:['Index đã dựng xong và có manifest đầy đủ (query_prefix "query: ", passage_prefix "passage: ").','Chỉ scripts/run_dense_text_01.py và scripts/list_caption_mismatch.py dùng nó.','Đây là một nhánh retrieval sẵn sàng nhưng chưa được lắp — muốn dùng phải thêm vào composition root và đo ablation trước.']},
+
+  C1:{title:'Settings.from_env()',zone:'C · cấu hình & bootstrap',tag:'RỦI RO',status:'bug',file:'online/config.py',
+    lines:['chỉ đọc 3 biến model FPT: LLM / VLM / RERANK','nhóm AIC_QUERY_*_MODEL không có consumer nào','KHÔNG có load_dotenv — env phải nằm sẵn ở shell'],
+    find:'FIND-01',
+    detail:['Không có <code>load_dotenv</code> ở bất kỳ đâu trong online/, offline/. Chỉ hai script enrichment tự parse <code>--env-file</code>.','<code>uvicorn online.api.app:app</code> khởi động với <code>fpt_enabled=False</code>: không lỗi, không cảnh báo. Text rerank ghi warning chôn trong warnings[], QA rơi hết về rule-based.','eval_kis.py / eval_tasks.py cũng không có cờ --env-file: <code>--use-rerank</code> sẽ SystemExit nếu chưa export biến.','Cũng đã kiểm chứng: <code>rerank_api_key = "${AIC_FPT_API_KEY}"</code> — cú pháp ${…} không được nội suy, sẽ gây 401 ngày quay về worker tự host.'],
+    fix:'Export biến ra shell trước mọi lệnh — bấm nút <b>Runbook</b> để lấy khối PowerShell đã sửa.'},
+  C2:{title:'build_container()',zone:'C · cấu hình & bootstrap',tag:'COMPOSITION',file:'online/api/container.py',
+    lines:['dựng repository, 10 retriever, rerank pipeline, QA','FPT ưu tiên hơn worker tự host khi fpt_enabled=True','chạy đúng 1 lần trong lifespan của FastAPI'],
+    detail:['Đây là composition root — nơi duy nhất chọn hạ tầng cụ thể. Muốn biết cái gì thật sự chạy, đọc file này chứ không đọc tài liệu.','Thiếu events.jsonl mà bật AIC_ENABLE_EVENT_SEARCH thì hàm này RAISE ngay lúc khởi động, cố ý như vậy.']},
+  C3:{title:'Warmup CLIP text tower',zone:'C · cấu hình & bootstrap',tag:'HỎNG NGẦM',status:'bug',
+    file:'container.py:147 · adapters/encoders.py::LocalClipTextEncoder',
+    lines:['has_real_embeddings=True ⇒ BẮT BUỘC phải nạp CLIP','except Exception nuốt lỗi, chỉ in một dòng cảnh báo','trỏ HF thay vì storage/models ⇒ nhánh dense chết'],
+    find:'FIND-03',
+    detail:['.env.fpt.local:139 đặt <code>openai/clip-vit-large-patch14</code> — đó là định danh HF, không phải đường dẫn.','Máy này lỗi SSL "Basic Constraints of CA cert not marked critical" khi transformers tải qua Python.','warmup() được bọc except Exception nên chỉ in cảnh báo rồi ĐI TIẾP. Sau đó mỗi request nhánh dense ném lỗi và orchestrator ghi <code>state="failed"</code>.','Kết quả: vẫn 200 OK, chỉ là mất hẳn nhánh mạnh nhất. Đây là lỗi khó phát hiện nhất trong cả sơ đồ.'],
+    fix:'<code>AIC_VISUAL_EMBEDDING_MODEL=storage/models/clip-vit-large-patch14</code> — weights đã tải sẵn ở đó bằng curl.'},
+  C4:{title:'Gate capabilities → 422',zone:'C · cấu hình & bootstrap',tag:'GATE',file:'online/services/capabilities.py',
+    lines:['option chưa cài đặt ⇒ 422, không nhận rồi lờ đi','hyde / english_variant / temporal_verifier bị chặn','GET /v1/search/capabilities liệt kê kèm lý do'],
+    detail:['Nguyên tắc của file này: implemented thì chạy thật, chưa implemented thì 422.','Chỉ field được caller ĐẶT TƯỜNG MINH mới bị kiểm tra, nên <code>search_options: {}</code> vẫn hợp lệ.','Danh sách UNSUPPORTED ở đây là bản kiểm kê trung thực nhất về những gì chưa có — đọc nó trước khi tin bất kỳ tài liệu thiết kế nào.']},
+
+  D1:{title:'RuleBasedQueryPlanner',zone:'D · làm giàu truy vấn',tag:'RULE',file:'online/services/query_planner.py',
+    lines:['chuẩn hoá NFC + khoảng trắng, luôn chạy','tách step "(1)…(2)" hoặc "sau đó" / "cuối cùng"','compute_modality_weights suy trọng số cho nhánh'],
+    detail:['Trọng số modality quyết định nhánh nào được chạy: weight 0 thì adapter trả rỗng ngay và branch_status ghi "disabled" kèm lý do.','TRAKE dựa hoàn toàn vào bước tách step này — query phải đúng định dạng đánh số.']},
+  D2:{title:'PreparedQueryPlanner',zone:'D · làm giàu truy vấn',tag:'RULE',file:'online/services/query_prep.py · AIC_ENABLE_QUERY_PREP',
+    lines:['tách target / ocr (trong ngoặc kép) / context','target→dense · full→BM25 · ngoặc kép→ocr_fuzzy','chỉ áp cho KIS/QA/AVS, không đụng TRAKE'],
+    detail:['Lý do tồn tại: query KIS dài và kể chuyện theo trình tự, đưa nguyên câu vào một encoder sẽ bị loãng.','Nhánh dense nhận phần moment đích, nhánh BM25 vẫn thấy toàn bộ từ khoá context nên không mất recall.']},
+  D3:{title:'Ràng buộc phủ định',zone:'D · làm giàu truy vấn',tag:'RULE',file:'online/services/negative_constraints.py',
+    lines:['bắt mệnh đề "không có X" trong câu truy vấn','loại candidate vi phạm SAU khi fusion xong','mặc định bật qua QueryProcessingOptions'],
+    detail:['Chạy sau fusion chứ không phải trước retrieval — nhánh vẫn tìm bình thường rồi mới lọc.']},
+  D4:{title:'Mở rộng VI→EN',zone:'D · làm giàu truy vấn',tag:'VÔ HIỆU',status:'bug',
+    file:'online/services/query_expansion.py · AIC_ENABLE_EXPANSION',
+    lines:['nối term tiếng ANH từ lexicon tĩnh vào query','caption/keyword giờ là tiếng VIỆT (language: "vi")','bật hay tắt cho kết quả GIỐNG HỆT nhau'],
+    find:'FIND-06',
+    detail:['Docstring module viết: "caption/object trong pipeline này phần lớn là tiếng Anh". Điều đó đã hết đúng.','Prompt của enrich_keyframes_fpt.py yêu cầu mô tả bằng tiếng Việt; caption thật trong export mang <code>"language": "vi"</code>, keyword là "người dẫn chương trình", "quả cầu".','Term tiếng Anh nối vào không khớp token nào ⇒ <code>idf.get(token, 0.0)</code> trả 0. Không hại điểm, nhưng ablation trên cờ này là số vô nghĩa.'],
+    fix:'Tắt <code>AIC_ENABLE_EXPANSION</code> để bớt một biến nhiễu. Muốn cầu nối ngôn ngữ thật thì xem node "Dịch VI→EN cho dense".'},
+
+  E1:{title:'dense_visual',zone:'E · retrieval',tag:'MẠNH NHẤT',file:'adapters/dense_retriever.py + encoders.py::LocalClipTextEncoder',
+    lines:['CLIP text tower ↔ 307 vector ảnh, cosine','query TIẾNG VIỆT vào tower huấn luyện thuần Anh','CLIP hỏng ⇒ state="failed" mà vẫn trả 200 OK'],
+    detail:['Nhánh đóng góp nhiều nhất cho KIS — và cũng là nhánh dễ mất nhất mà không ai biết (xem node "Warmup CLIP text tower").','Vấn đề chất lượng nằm sâu hơn: query tiếng Việt đi vào text tower tiếng Anh. Đây là trần trên thật sự của R@1 hiện tại, không phải lỗi cấu hình.']},
+  E2:{title:'BM25 caption/ocr/asr/keyword',zone:'E · retrieval',tag:'4 NHÁNH',file:'adapters/bm25.py::LexicalRetriever',
+    lines:['caption 216 · ocr 98 · asr 210 · keyword 170 scene','coverage mặc định None ⇒ BM25 nguyên bản','chỉ caption + keyword bị expansion bọc'],
+    detail:['OCR/ASR cố ý KHÔNG bị expansion bọc: hai nhánh này phải giữ nguyên văn.','Corpus tiếng Việt nên BM25 khớp trực tiếp query tiếng Việt — đây là lý do hệ thống vẫn chạy được dù nhánh dense yếu.']},
+  E3:{title:'BM25 object / action',zone:'E · retrieval',tag:'2 NHÁNH',file:'AIC_ENABLE_OBJECT_SEARCH · AIC_ENABLE_ACTION_SEARCH',
+    lines:['object 170 scene · action 136 scene','nhãn tiếng Việt từ Qwen2.5-VL ⇒ khớp thẳng query VI','eval_kis.py KHÔNG dựng hai nhánh này'],
+    find:'FIND-09',
+    detail:['Đây là chênh lệch lớn nhất giữa harness đo và server thật: build_service của eval chỉ dựng caption/ocr/asr/keyword + dense + ocr_fuzzy.','Hai nhánh phủ 170 và 136 scene hoàn toàn vắng mặt lúc đo ⇒ R@1 từ eval không dự báo được kết quả server.'],
+    fix:'Coi số của eval là so sánh tương đối giữa các cấu hình, không phải giá trị tuyệt đối. Muốn số tuyệt đối thì đo qua HTTP trên server thật.'},
+  E4:{title:'ocr_fuzzy',zone:'E · retrieval',tag:'KHỚP MỜ',file:'adapters/ocr_fuzzy.py · AIC_ENABLE_OCR_FUZZY',
+    lines:['đọc exact_phrases (cụm trong ngoặc kép của query)','normalize_vi bỏ dấu rồi khớp mờ','bù cho OCR sai vài ký tự'],
+    detail:['Chỉ có ích khi query thật sự chứa chuỗi chữ trên màn hình. Với 98/217 scene có OCR, nhánh này thưa nhưng chính xác cao khi trúng.']},
+  E5:{title:'event_search',zone:'E · retrieval',tag:'SỰ KIỆN',file:'adapters/event_search.py · events.jsonl',
+    lines:['BM25 trên event_caption + keyword + action_tags','thiếu events.jsonl cạnh metadata ⇒ container RAISE','exports_l21_enriched có sẵn file này'],
+    detail:['Container cố ý raise thay vì bỏ qua âm thầm: bật cờ mà không có dữ liệu là lỗi cấu hình, không phải chuyện để degrade.']},
+  E6:{title:'color_search',zone:'E · retrieval',tag:'LUÔN RỖNG',status:'bug',file:'adapters/color_search.py · AIC_ENABLE_COLOR_SEARCH',
+    lines:['đọc SceneDocument.color_names','đếm thật trên 217 scene: 0 scene có color_names','state="empty" mỗi request, tốn một slot fusion'],
+    find:'FIND-08',
+    detail:['Không có bước offline nào sinh trường color_names — không phải lỗi runtime mà là nhánh không có dữ liệu.','Hệ quả phụ: branch_status có thêm một dòng nhiễu, khó đọc khi debug.'],
+    fix:'<code>AIC_ENABLE_COLOR_SEARCH=false</code> cho tới khi có bước trích màu offline.'},
+
+  F1:{title:'Chuẩn hoá → ngưỡng → RRF',zone:'F · fusion & rerank',tag:'HỢP NHẤT',file:'services/{score_normalization,thresholding,fusion}.py',
+    lines:['percentile trước, cắt ngưỡng sau, rồi mới fuse','RRF k=60, có trọng số modality theo query','đảo thứ tự sẽ làm sai hạng — bắt buộc như vậy'],
+    detail:['RRF dùng HẠNG trong danh sách của từng nhánh, nên cắt ngưỡng sau khi fuse sẽ không cho candidate còn lại lên hạng.','minimum_matching_branches=1 mặc định: một nhánh trúng là đủ vào kết quả.']},
+  F2:{title:'Dedup + bonus/penalty',zone:'F · fusion & rerank',tag:'SAU FUSION',file:'services/deduplication.py · services/rules.py',
+    lines:['dedup scope = scene (mặc định)','apply_bonus_penalty khi AIC_ENABLE_RULES=true','ràng buộc phủ định loại candidate ở đúng bước này'],
+    detail:['Dedup theo độ tương đồng thị giác (embedding) CHƯA cài đặt — request đặt fusion.dedup_similarity sẽ ăn 422.']},
+  F3:{title:'Text rerank qua FPT',zone:'F · fusion & rerank',tag:'FPT',status:'fpt',file:'adapters/rerank.py::FptTextReranker → FptClient.rerank()',
+    lines:['POST /rerank · bge-reranker-v2-m3 · top 100 → giữ 80','tự sắp lại theo index (FPT trả theo relevance)','KHÔNG có wait_for: xấu nhất ~4,5 phút mỗi request'],
+    find:'FIND-07',
+    detail:['Ưu tiên hơn BgeTextReranker khi fpt_enabled — production đổi về worker tự host chỉ bằng cách tắt AIC_FPT_ENABLED.','FPT trả results sắp theo relevance giảm dần, KHÔNG theo thứ tự documents gửi lên; client sắp lại theo trường index. Sai giả định này là sai toàn bộ thứ hạng.','Rerank nằm trong request path mà không có deadline, trong khi mỗi nhánh retrieval đều có 3 giây. 90s timeout × 3 retry với backoff = trường hợp xấu nhất ~4,5 phút.'],
+    fix:'Khi test: <code>AIC_FPT_TIMEOUT_SEC=20</code>, <code>AIC_FPT_MAX_RETRIES=2</code>. Triệt để: bọc asyncio.wait_for quanh mỗi stage trong rerank_pipeline.py — DependencyUnavailableError đã được bắt sẵn nên degrade tự động đúng.'},
+  F4:{title:'VLM rerank',zone:'F · fusion & rerank',tag:'SAI CONTRACT',status:'bug',file:'adapters/rerank.py::QwenVlReranker · AIC_RERANK_VLM_URL',
+    lines:['POST {query, candidates} vào ĐÚNG url, không thêm path','FPT chỉ có /chat/completions — không có adapter FPT','chưa từng được đo: eval không dựng tầng này'],
+    find:'FIND-04',
+    detail:['.env.fpt.local:279 trỏ AIC_RERANK_VLM_URL vào https://mkp-api.fptcloud.com. Contract của QwenVlReranker là contract worker TỰ HOST, không phải OpenAI-compatible.','Mỗi request tốn thêm một vòng HTTP thất bại rồi ghi warning "rerank.vlm: … rơi về kết quả của stage text". Bạn tưởng chạy 2 tầng rerank, thực tế chỉ 1.','Cả eval_kis lẫn eval_tasks đều dựng RerankPipeline không có vlm_reranker ⇒ tầng này chưa từng có số đo nào.'],
+    fix:'Để <code>AIC_RERANK_VLM_URL</code> TRỐNG. Muốn VLM rerank thật thì phải viết FptVlmReranker mới (gọi chat_completion với image_url, dùng lại image_to_data_url đã có) — không phải đổi biến env.'},
+  F5:{title:'Bốn task processor',zone:'F · fusion & rerank',tag:'TASK',file:'services/{kis,qa,trake,avs}.py',
+    lines:['KIS chọn safe frame · TRAKE khoá video rồi beam search','QA: rule ANSWER_TOOLS chạy trước, LLM bổ sung sau','AVS khớp từ khoá cứng ⇒ hầu như rỗng → HTTP 404'],
+    detail:['Một lõi retrieval dùng chung, bốn processor chuyên biệt chạy sau — đổi task không đổi cách tìm.','AVS gần như luôn rỗng là hạn chế đã ghi nhận ở docs/17, không phải lỗi cấu hình của bạn.','TRAKE yêu cầu query đúng định dạng "(1) …; (2) …" mới tách được step.']},
+  F6:{title:'QA answer qua FPT LLM',zone:'F · fusion & rerank',tag:'FPT',status:'fpt',file:'adapters/qa_llm.py::FptQaAnswerer · AIC_FPT_LLM_MODEL',
+    lines:['Qwen3.6-27B · strict JSON · temperature 0','chỉ top 5 evidence pack (AIC_FPT_QA_TOP_N)','rule ANSWER_TOOLS vẫn chạy song song làm baseline'],
+    detail:['Đây là đường DUY NHẤT một LLM text được gọi trong toàn hệ thống.','Prompt cấm bịa: evidence không đủ thì trả answer rỗng. Verifier vẫn chạy lại trên kết quả LLM giống mọi tool khác.','Giới hạn top 5 để chi phí và độ trễ có trần dự đoán được — không gọi cho cả candidate_limit.'],
+    fix:'Dấu hiệu nó thật sự chạy: trong response QA có ít nhất một answer với <code>source: "fpt_llm"</code>.'},
+  F7:{title:'Evidence · warnings · trace',zone:'F · fusion & rerank',tag:'ĐẦU RA',file:'api/routes.py · domain/session.py · services/evidence_builder.py',
+    lines:['branch_status là nơi DUY NHẤT lộ ra nhánh nào chết','/v1/search-sessions/{id} replay lại được nguyên trạng','submission build / validate nằm cùng router'],
+    detail:['Hệ thống này thiết kế để degrade thay vì sập, nên "200 OK" không chứng minh điều gì. branch_status và warnings mới chứng minh.','Sáu dấu hiệu nghiệm thu: bấm nút <b>Runbook</b>, phần cuối.']},
+
+  G1:{title:'LLM hiểu truy vấn',zone:'G · chưa kích hoạt',tag:'CHƯA NỐI',status:'gap',file:'AIC_FPT_QUERY_LLM_MODEL · AIC_QUERY_LLM_MODEL (Qwen3.6-27B)',
+    lines:['dự định: phân rã / chuẩn hoá / định tuyến modality','KHÔNG dòng code nào đọc hai biến này','phân rã query hiện là regex trong query_planner.py'],
+    detail:['Toàn bộ nhóm biến "provider-neutral" ở mục 4 của .env.fpt.local là ý định, chưa phải cấu hình.','Settings.from_env() chỉ đọc ba biến model: AIC_FPT_LLM_MODEL, AIC_FPT_VLM_MODEL, AIC_FPT_RERANK_MODEL.']},
+  G2:{title:'Dịch VI→EN cho dense',zone:'G · chưa kích hoạt',tag:'CƠ HỘI',status:'gap',file:'capabilities.py: query.generate_english_variant → 422',
+    lines:['lý do từ chối: "chưa có bộ dịch/encoder đa ngữ"','FPT DeepSeek-V4-Flash hoặc Qwen3.6-27B chính là bộ dịch đó','rẻ nhất: không phải embed lại 307 ảnh'],
+    detail:['Đây là thay đổi duy nhất trong cả sơ đồ có khả năng làm R@1 nhích thật.','Nhánh dense đang đưa query tiếng Việt vào text tower CLIP thuần tiếng Anh. Một lần gọi LLM dịch trước khi encode, cache theo query, không đụng index ảnh.','Lựa chọn thay thế — đổi sang CLIP đa ngữ — đòi hỏi embed lại toàn bộ keyframe, đắt hơn nhiều.'],
+    fix:'Làm SAU khi bốn lỗi đỏ đã sạch, và phải đo bằng scripts/eval_kis.py trước khi tin.'},
+  G3:{title:'QA verifier',zone:'G · chưa kích hoạt',tag:'RULE',status:'gap',file:'services/qa.py::verify_answer · AIC_QA_VERIFIER_MODEL',
+    lines:['verifier hiện là rule, không gọi model nào','AIC_QA_VERIFIER_MODEL không có consumer','answer_accuracy ~0.33 ở lần đo gần nhất'],
+    detail:['Verifier chạy lại trên MỌI answer candidate kể cả của LLM — nguyên tắc không tin tưởng mù quáng.','Nhưng bản thân verifier là rule nên nó không bắt được lỗi ngữ nghĩa, chỉ bắt lỗi định dạng.']},
+  G4:{title:'Text embedding FPT',zone:'G · chưa kích hoạt',tag:'CHƯA GỌI',status:'gap',file:'FptClient.embedding() · multilingual-e5-large',
+    lines:['hàm tồn tại, KHÔNG nơi nào trong repo gọi nó','AIC_ENABLE_FPT_TEXT_EMBEDDING=false — đúng chủ ý','bật thì phải rebuild index bằng đúng model đó'],
+    detail:['Index caption dense đã có sẵn nhưng dùng e5 chạy LOCAL, không qua API.','Vòng đầu để tắt là quyết định đúng: giữ số biến thí nghiệm thấp.']},
+  G5:{title:'ASR qua FPT',zone:'G · chưa kích hoạt',tag:'KHÔNG CẦN',status:'gap',file:'AIC_FPT_ASR_MODEL=whisper-large-v3-turbo',
+    lines:['pack ASR đã sinh bằng faster-whisper large-v3 local','264 đoạn đã có, không cần chạy lại','giữ biến này chỉ gây hiểu nhầm khi đọc cấu hình'],
+    detail:['Khác với các mục vàng khác, đây không phải khoảng trống cần lấp — dữ liệu đã đầy đủ.']},
+  G6:{title:'AIC_OFFLINE_PROVIDER=fpt',zone:'G · cấu hình sai',tag:'VALUEERROR',status:'bug',file:'.env.fpt.local:151 · offline/config.py:49',
+    lines:['đã chạy thật: ValueError must be mock or remote','giết offline run / assemble và scripts/preflight.py','enrichment FPT là script riêng, không qua provider'],
+    find:'FIND-05',
+    detail:['offline/config.py chỉ chấp nhận "mock" hoặc "remote". Giá trị "fpt" không tồn tại trong tập hợp đó.','Không có đường nào để provider interface gọi FPT — kiến trúc offline và script enrichment là hai lối đi khác nhau.'],
+    fix:'<code>AIC_OFFLINE_PROVIDER=mock</code>.'},
+  G7:{title:'AIC_METADATA_JSONL sai',zone:'G · cấu hình sai',tag:'SERVER CHẾT',status:'bug',file:'.env.fpt.local:189 → storage/exports/fpt_acceptance/scenes.jsonl',
+    lines:['đã kiểm tra: exists? False — thư mục chưa từng được tạo','MetadataNotFoundError ngay trong lifespan FastAPI','bỏ biến đi thì rơi về fixture demo 3 scene'],
+    find:'FIND-02',
+    detail:['Đây là lỗi đầu tiên bạn sẽ gặp và may mắn là nó ồn ào — server không lên hẳn.','Nguy hiểm hơn là biến thể im lặng của nó: bỏ biến đi thì Settings mặc định về storage/exports/scenes.jsonl, một fixture 3 scene. Server lên bình thường, mọi query đều trả kết quả, và tất cả đều vô nghĩa.'],
+    fix:'<code>AIC_METADATA_JSONL=storage/exports_l21_enriched/scenes.jsonl</code> — 217 scene, caption FPT, đã qua vòng sửa coverage.'},
+};
+
+const FLOWS = {
+  offline:{name:'Offline — một video thành metadata',
+    nodes:['A1','A2','A3','A4','A5','B1','B2','B3'],
+    edges:['e1','e2','e3','e4','e30','e5','e6'],
+    steps:['ffprobe + TransNetV2 cắt 336 shot; ffmpeg trích 307 keyframe có frame_idx thật.',
+      'FPT Qwen2.5-VL enrich caption/OCR/object cho từng keyframe, cache theo sha256(ảnh+prompt+model).',
+      'ASR bằng faster-whisper LOCAL (không qua FPT); CLIP ViT-L/14 embed 307 keyframe trên CPU.',
+      'assemble gộp 8 pack → exports_l21_enriched/ (217 scene). Tầng này đã đóng băng từ 2026-08-03.']},
+  enrich:{name:'Làm giàu truy vấn — 100% rule, không model',
+    nodes:['D1','D2','D3','D4','G1','G2'],
+    edges:['e10','e11','e12'],
+    steps:['RuleBasedQueryPlanner: chuẩn hoá NFC, tách step theo marker, suy trọng số modality.',
+      'PreparedQueryPlanner tách target/ocr/context rồi định tuyến ba phần vào ba loại nhánh khác nhau.',
+      'Ràng buộc phủ định loại candidate sau fusion. Mở rộng VI→EN đã vô hiệu vì corpus giờ là tiếng Việt.',
+      'Không có LLM ở bất kỳ bước nào. HyDE và biến thể tiếng Anh bị capabilities từ chối bằng 422.']},
+  kis:{name:'KIS — một request đi qua đâu',
+    nodes:['C1','C2','C3','D1','D2','D3','E1','E2','E3','E4','E5','F1','F2','F3','F5','F7'],
+    edges:['e7','e8','e10','e11','e32','e33','e13','e14','e15','e16','e34','e18','e19','e21','e23'],
+    steps:['Container đã dựng sẵn lúc khởi động: 10 retriever, rerank pipeline, QA processor.',
+      'Planner tách target/ocr/context; 10 nhánh chạy song song, mỗi nhánh deadline 3 giây, lỗi cô lập theo nhánh.',
+      'Chuẩn hoá percentile → cắt ngưỡng → RRF k=60 → dedup theo scene → bonus/penalty.',
+      'FPT bge-reranker sắp lại top 100 giữ 80; KisProcessor chọn safe frame; trace ghi lại để replay.']},
+  qa:{name:'QA — đường duy nhất gọi LLM text',
+    nodes:['C2','D1','D2','E1','E2','E3','F1','F2','F3','F5','F6','F7'],
+    edges:['e8','e10','e33','e13','e14','e34','e18','e19','e21','e22','e23'],
+    steps:['Retrieval và fusion giống hệt KIS — không có đường riêng cho QA.',
+      'EvidenceBuilder dựng evidence pack; rule ANSWER_TOOLS xếp hạng bằng regex/counter trên metadata.',
+      'FptQaAnswerer gọi Qwen3.6-27B trên đúng 5 evidence pack đứng đầu, strict JSON, cấm bịa.',
+      'verify_answer (rule) chạy lại trên mọi candidate kể cả của LLM. Kiểm chứng bằng source: "fpt_llm".']},
+  fpt:{name:'Đường FPT — đúng ba nơi được gọi thật',
+    nodes:['A3','F3','F6'],
+    edges:[],
+    steps:['OFFLINE: Qwen2.5-VL-7B enrich 307 keyframe — đóng góp lớn nhất, đã chạy xong.',
+      'ONLINE: bge-reranker-v2-m3 sắp lại top 100 sau fusion, một call mỗi request.',
+      'ONLINE: Qwen3.6-27B sinh answer QA trên top 5 evidence pack.',
+      'Ngoài ba điểm này, KHÔNG có lời gọi FPT nào khác. Sáu model còn lại trong .env chưa có consumer.']},
+  dormant:{name:'Chưa kích hoạt — biến env không ai đọc',
+    nodes:['B3','G1','G2','G3','G4','G5'],
+    edges:[],
+    steps:['Settings.from_env() chỉ đọc 3 biến model FPT; nhóm provider-neutral ở mục 4 file env không có consumer.',
+      'Query LLM, expansion LLM, QA verifier: chưa có adapter nào — các bước này vẫn là rule.',
+      'Text embedding FPT: FptClient.embedding() tồn tại nhưng không nơi nào gọi. Index caption dense dùng e5 local và không được container lắp.',
+      'ASR qua FPT không cần kích hoạt: 264 đoạn đã sinh bằng faster-whisper local.']},
+  bugs:{name:'Bảy chỗ hỏng — sửa theo thứ tự này',
+    nodes:['G7','C3','F4','C1','G6','D4','E6','B1'],
+    edges:[],
+    steps:['G7 rồi C3 trước: sai đường dẫn dữ liệu và sai đường dẫn CLIP làm mọi số đo về sau vô nghĩa.',
+      'F4 rồi C1: xoá AIC_RERANK_VLM_URL và export env ra shell — để biết mình đang thật sự đo cấu hình nào.',
+      'G6 (offline provider), D4 (expansion vô hiệu), E6 (nhánh màu rỗng): dọn nhiễu, không ảnh hưởng chất lượng.',
+      'Bấm từng node đỏ để xem bằng chứng đã chạy thật và câu lệnh sửa.']},
+};
+
+const RUNBOOK_HTML = `
+<div class="section"><span class="status-pill ok">BƯỚC 0</span><b style="color:var(--ink)">Dò model FPT nào còn sống</b>
+<p style="margin-top:6px">Chạy trước tiên. Nếu tài khoản không có quyền với một model, mọi số đo sau đó đều vô nghĩa.</p>
+<pre>$env:AIC_FPT_ENABLED = "true"
+$env:AIC_FPT_API_KEY = (Select-String -Path .env.fpt.local \`
+  -Pattern '^AIC_FPT_API_KEY=(.+)$').Matches.Groups[1].Value
+
+<span class="c"># danh sach model tai khoan duoc phep goi</span>
+curl.exe -s https://mkp-api.fptcloud.com/models \`
+  -H "Authorization: Bearer $env:AIC_FPT_API_KEY"
+
+<span class="c"># ba lenh do qua FptClient (da co ban va SSL cua may nay)</span>
+python -X utf8 -c "from online.config import Settings; from online.adapters.fpt_client import FptClient as C; c=C.from_settings(Settings.from_env()); r=c.chat_completion([{'role':'user','content':'tra loi dung mot tu: ok'}], model='Qwen3.6-27B'); print('LLM', r.usage.latency_ms, 'ms |', r.text[:40])"
+
+python -X utf8 -c "from online.config import Settings; from online.adapters.fpt_client import FptClient as C; c=C.from_settings(Settings.from_env()); r=c.rerank('mua lon ngap duong', ['troi mua to duong ngap','mot con meo dang ngu'], model='bge-reranker-v2-m3'); print('RERANK', r.scores)"
+
+python -X utf8 -c "from online.config import Settings; from online.adapters.fpt_client import FptClient as C; c=C.from_settings(Settings.from_env()); r=c.embedding('xin chao', model='multilingual-e5-large'); print('EMBED dim', len(r.vector))"</pre>
+<p style="margin-top:6px">Điểm rerank phải cho phần tử đầu <b>cao hơn hẳn</b>. Hai điểm gần bằng nhau nghĩa là thứ hạng không có ý nghĩa — dừng lại điều tra.</p></div>
+
+<div class="section"><span class="status-pill ok">BƯỚC 1</span><b style="color:var(--ink)">Khối env đã sửa</b>
+<p style="margin-top:6px">Dùng khối này thay cho việc nạp <code>.env.fpt.local</code> — file đó có 3 giá trị sai.</p>
+<pre><span class="c"># --- Du lieu that ---</span>
+$env:AIC_METADATA_JSONL = "storage/exports_l21_enriched/scenes.jsonl"   <span class="g"># G7</span>
+$env:AIC_DATA_ROOT      = "storage"
+$env:AIC_VISUAL_EMBEDDING_MODEL = "storage/models/clip-vit-large-patch14"  <span class="g"># C3</span>
+
+<span class="c"># --- FPT ---</span>
+$env:AIC_FPT_ENABLED      = "true"
+$env:AIC_FPT_BASE_URL     = "https://mkp-api.fptcloud.com"
+$env:AIC_FPT_RERANK_MODEL = "bge-reranker-v2-m3"
+$env:AIC_FPT_LLM_MODEL    = "Qwen3.6-27B"
+$env:AIC_FPT_QA_TOP_N     = "5"
+$env:AIC_FPT_TIMEOUT_SEC  = "20"    <span class="g"># F3: ha tu 90</span>
+$env:AIC_FPT_MAX_RETRIES  = "2"     <span class="g"># F3</span>
+
+<span class="c"># --- Rerank legacy: PHAI de trong ---</span>
+$env:AIC_RERANK_TEXT_URL = ""
+$env:AIC_RERANK_VLM_URL  = ""       <span class="r"># F4: tro vao FPT la hong moi request</span>
+
+<span class="c"># --- Nhanh retrieval ---</span>
+$env:AIC_ENABLE_QUERY_PREP    = "true"
+$env:AIC_ENABLE_RULES         = "true"
+$env:AIC_ENABLE_OCR_FUZZY     = "true"
+$env:AIC_ENABLE_OBJECT_SEARCH = "true"
+$env:AIC_ENABLE_ACTION_SEARCH = "true"
+$env:AIC_ENABLE_EVENT_SEARCH  = "true"
+$env:AIC_ENABLE_COLOR_SEARCH  = "false"   <span class="g"># E6</span>
+$env:AIC_ENABLE_EXPANSION     = "false"   <span class="g"># D4</span>
+
+<span class="c"># --- Offline &amp; tat dinh ---</span>
+$env:AIC_OFFLINE_PROVIDER = "mock"   <span class="g"># G6</span>
+$env:AIC_CANDIDATE_LIMIT  = "100"
+$env:AIC_RRF_K            = "60"
+$env:PYTHONHASHSEED       = "0"      <span class="c"># thieu dong nay: hai lan chay ra hai thu hang</span></pre>
+<p style="margin-top:6px">Kiểm tra khối env đã ăn chưa, một dòng, không tốn quota:</p>
+<pre>python -X utf8 -c "from online.config import Settings as S; s=S.from_env(); print(s.metadata_jsonl, s.fpt_enabled, s.fpt_rerank_model, s.visual_embedding_model, s.rerank_vlm_url)"</pre>
+<p style="margin-top:6px">Phải in: <code>exports_l21_enriched</code> · <code>True</code> · <code>bge-reranker-v2-m3</code> · <code>storage/models/…</code> · <code>None</code>.</p></div>
+
+<div class="section"><span class="status-pill ok">BƯỚC 2</span><b style="color:var(--ink)">Đo baseline rồi mới đo có FPT</b>
+<pre>python -m scripts.eval_tasks --metadata storage/exports_l21_enriched/scenes.jsonl \`
+  --tasks all --use-query-prep --use-rules --verbose \`
+  --json-out outputs/evaluation/fpt_test_baseline.json
+
+python -m scripts.eval_tasks --metadata storage/exports_l21_enriched/scenes.jsonl \`
+  --tasks all --use-query-prep --use-rules --use-rerank --verbose \`
+  --json-out outputs/evaluation/fpt_test_with_fpt.json</pre>
+<p style="margin-top:6px"><code>--use-rerank</code> bật đồng thời text rerank FPT và QA answer qua LLM — cùng một cờ, cố ý. Nếu nó SystemExit thì khối env chưa ăn (node C1).</p></div>
+
+<div class="section"><span class="status-pill ok">BƯỚC 3</span><b style="color:var(--ink)">Server và bốn task</b>
+<pre>python -m uvicorn online.api.app:app --port 8000
+
+curl.exe -s http://127.0.0.1:8000/v1/health | python -m json.tool
+curl.exe -s http://127.0.0.1:8000/v1/search/capabilities | python -m json.tool
+
+curl.exe -s -X POST http://127.0.0.1:8000/v1/search/kis \`
+  -H "Content-Type: application/json" \`
+  -d "{\\"query\\":\\"nguoi dan chuong trinh dung truoc ban do thoi tiet\\",\\"top_k\\":10,\\"debug\\":true}"</pre>
+<p style="margin-top:6px">Bộ query gold đủ bốn task: <code>examples/AIC2026_L21_V001_queries_4tasks.jsonl</code> — có sẵn gold answer, dùng nó thay vì tự nghĩ câu hỏi.</p></div>
+
+<div class="section"><span class="status-pill gap">NGHIỆM THU</span><b style="color:var(--ink)">Sáu dấu hiệu chứng minh nó chạy đủ</b>
+<p style="margin-top:6px">Hệ thống degrade thay vì sập, nên 200 OK không chứng minh gì.</p>
+<ul>
+<li><code>/v1/health</code> → <code>scene_count: 217</code>. Là 3 ⇒ đang chạy fixture demo.</li>
+<li><code>/v1/health</code> → <code>branch_count: 9</code> và <code>dataset_version</code> khác null.</li>
+<li><code>/v1/search/capabilities</code> → <code>rerank.text: true</code>, <code>rerank.vlm: <b>false</b></code>.</li>
+<li>Response KIS có <code>branch_status.dense_visual.state == "success"</code>. <b>Dấu hiệu quan trọng nhất.</b></li>
+<li><code>warnings[]</code> KHÔNG chứa "chưa cấu hình text reranker".</li>
+<li>Response QA có ít nhất một answer <code>source: "fpt_llm"</code>.</li>
+</ul></div>`;
+
+const MODELS_HTML = `
+<div class="section"><p><code>.env.fpt.local</code> khai báo 9 model. <code>Settings.from_env()</code> chỉ đọc <b>ba</b> biến model. Mọi biến provider-neutral ở mục 4 file env là ý định, chưa phải cấu hình.</p>
+<table>
+<thead><tr><th>Model</th><th>Nơi tiêu thụ</th><th>Trạng thái</th></tr></thead>
+<tbody>
+<tr><td>Qwen2.5-VL-7B-Instruct</td><td>scripts/enrich_keyframes_fpt.py<br><span style="color:var(--muted)">offline · Settings.fpt_vlm_model không có consumer online</span></td><td class="y">đã chạy thật<br>305/307</td></tr>
+<tr><td>bge-reranker-v2-m3</td><td>FptTextReranker · container.py:190</td><td class="y">đã đấu nối</td></tr>
+<tr><td>Qwen3.6-27B</td><td>FptQaAnswerer · container.py:217<br><span style="color:var(--muted)">chỉ QA answer, top 5 pack</span></td><td class="y">đã đấu nối</td></tr>
+<tr><td>Qwen3.6-27B (query)</td><td>—</td><td class="n">chưa kích hoạt</td></tr>
+<tr><td>DeepSeek-V4-Flash</td><td>—</td><td class="n">chưa kích hoạt</td></tr>
+<tr><td>Qwen3.6-27B (verifier)</td><td>—<br><span style="color:var(--muted)">verify_answer là rule</span></td><td class="n">chưa kích hoạt</td></tr>
+<tr><td>multilingual-e5-large</td><td>FptClient.embedding() tồn tại, không ai gọi</td><td class="n">chưa kích hoạt</td></tr>
+<tr><td>Vietnamese_Embedding</td><td>—</td><td class="n">chưa kích hoạt</td></tr>
+<tr><td>whisper-large-v3-turbo</td><td>—<br><span style="color:var(--muted)">ASR đã sinh bằng faster-whisper local</span></td><td class="n">không cần</td></tr>
+<tr><td>FPT.AI-VITs (TTS)</td><td>—</td><td class="n">không dùng</td></tr>
+</tbody></table></div>
+<div class="section"><h4>Không có script preflight cho FPT</h4>
+<p><code>online/adapters/fpt_client.py</code> nhắc <code>scripts/fpt_api_preflight.py</code> ở ba chỗ trong docstring, nhưng file đó không tồn tại. <code>scripts/preflight.py</code> là thứ khác và sẽ chết vì node G6. Dùng ba lệnh dò ở nút <b>Runbook</b>, bước 0.</p></div>`;
+
+const stage=document.getElementById('stage'), svg=document.getElementById('svg'), world=document.getElementById('world');
+const nodes=[...document.querySelectorAll('.node')], edges=[...document.querySelectorAll('.edge')], labels=[...document.querySelectorAll('.elabel')];
+const flowButtons=[...document.querySelectorAll('[data-flow]')];
+
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+
+function renderNodes(){
+  nodes.forEach(n=>{
+    const key=n.dataset.k, data=NODES[key]; if(!data)return;
+    [...n.querySelectorAll('.line')].forEach((el,i)=>el.textContent=data.lines[i]||'');
+    const fileEl=n.querySelector('.fileline'); if(fileEl) fileEl.textContent=data.file;
+    n.querySelector('.tag').textContent=data.tag;
+    n.dataset.search=(data.title+' '+data.file+' '+data.lines.join(' ')+' '+data.tag+' '+(data.find||'')).toLowerCase();
+  });
+}
+renderNodes();
+
+const PILL={fpt:['fpt','GỌI FPT THẬT'],gap:['gap','CHƯA KÍCH HOẠT'],bug:['bug','HỎNG / SAI CẤU HÌNH']};
+function showDetail(key){
+  const n=NODES[key]; if(!n)return;
+  nodes.forEach(x=>x.classList.toggle('sel',x.dataset.k===key));
+  document.getElementById('detailTitle').textContent=n.title;
+  document.getElementById('detailMeta').textContent=n.zone;
+  const p=PILL[n.status]||['ok','CHẠY BÌNH THƯỜNG'];
+  let html=`<div class="section"><span class="status-pill ${p[0]}">${p[1]}</span>`
+    +(n.find?`<span class="status-pill bug">${n.find}</span>`:'')
+    +`<div class="fileref" style="margin-top:6px">${esc(n.file)}</div></div>`;
+  html+=`<div class="section"><h4>Tóm tắt</h4><ul>${n.lines.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`;
+  if(n.detail) html+=`<div class="section"><h4>Chi tiết &amp; bằng chứng</h4><ul>${n.detail.map(x=>`<li>${x}</li>`).join('')}</ul></div>`;
+  if(n.fix) html+=`<div class="section"><h4>Cách sửa</h4><p>${n.fix}</p></div>`;
+  document.getElementById('detailBody').innerHTML=html;
+  document.getElementById('detail').style.display='block';
+  document.getElementById('detail').scrollTop=0;
+}
+
+function setFlow(key){
+  flowButtons.forEach(b=>b.classList.toggle('on',b.dataset.flow===key));
+  edges.forEach(e=>e.classList.remove('lit')); labels.forEach(l=>l.classList.remove('lit')); nodes.forEach(n=>n.classList.remove('lit'));
+  if(key==='all'||!FLOWS[key]){stage.classList.remove('flowing');document.getElementById('flowCard').style.display='none';return}
+  const f=FLOWS[key]; stage.classList.add('flowing'); document.getElementById('flowCard').style.display='block';
+  f.edges.forEach(id=>document.getElementById(id)?.classList.add('lit'));
+  labels.forEach(l=>{if(f.edges.includes(l.dataset.e))l.classList.add('lit')});
+  f.nodes.forEach(k=>document.querySelector(`.node[data-k="${k}"]`)?.classList.add('lit'));
+  document.getElementById('flowName').textContent=f.name;
+  document.getElementById('flowSteps').innerHTML=f.steps.map(x=>`<li>${x}</li>`).join('');
+}
+
+flowButtons.forEach(b=>b.addEventListener('click',()=>setFlow(b.dataset.flow)));
+nodes.forEach(n=>n.addEventListener('click',e=>{if(didPan)return;e.stopPropagation();showDetail(n.dataset.k)}));
+function closeDetail(){document.getElementById('detail').style.display='none';nodes.forEach(n=>n.classList.remove('sel'))}
+document.getElementById('detailClose').addEventListener('click',closeDetail);
+svg.addEventListener('click',e=>{if(!didPan&&!e.target.closest('.node'))closeDetail()});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeDetail()});
+
+const DEFAULT_DETAIL={t:document.getElementById('detailTitle').textContent,m:document.getElementById('detailMeta').textContent,b:document.getElementById('detailBody').innerHTML};
+function openPanel(title,meta,body){
+  document.getElementById('detailTitle').textContent=title;
+  document.getElementById('detailMeta').textContent=meta;
+  document.getElementById('detailBody').innerHTML=body;
+  document.getElementById('detail').style.display='block';
+  document.getElementById('detail').scrollTop=0;
+  nodes.forEach(n=>n.classList.remove('sel'));
+}
+document.getElementById('helpBtn').addEventListener('click',()=>openPanel(DEFAULT_DETAIL.t,DEFAULT_DETAIL.m,DEFAULT_DETAIL.b));
+document.getElementById('runbookBtn').addEventListener('click',()=>openPanel('Runbook — chạy đúng và đủ','PowerShell, chạy từ gốc repo. Bốn bước, theo đúng thứ tự.',RUNBOOK_HTML));
+document.getElementById('modelBtn').addEventListener('click',()=>openPanel('Ma trận kích hoạt model FPT','3/9 model có consumer thật trong code.',MODELS_HTML));
+
+try{if(localStorage.getItem('aic-fpt-theme')==='dark')document.documentElement.classList.add('dark');}catch(_){}
+document.getElementById('themeToggle').addEventListener('click',()=>{const dark=!document.documentElement.classList.contains('dark');document.documentElement.classList.toggle('dark',dark);try{localStorage.setItem('aic-fpt-theme',dark?'dark':'light');}catch(_){}});
+function runSearch(){const q=document.getElementById('searchBox').value.trim().toLowerCase();nodes.forEach(n=>{n.classList.remove('search-dim','search-hit');if(q){const hit=(n.dataset.search||'').includes(q);n.classList.add(hit?'search-hit':'search-dim')}})}
+document.getElementById('searchBox').addEventListener('input',runSearch);
+
+const W=2770,H=1410;let scale=1,tx=0,ty=0,fitScale=1,userMoved=false;const MAXZ=3;const minZ=()=>Math.min(.3,fitScale);
+function applyTransform(){world.setAttribute('transform',`translate(${tx} ${ty}) scale(${scale})`);document.getElementById('zoomPct').textContent=Math.round(scale*100)+'%'}
+function fit(){const r=stage.getBoundingClientRect();fitScale=Math.min(r.width/W,r.height/H)*.95;scale=fitScale;tx=(r.width-W*scale)/2;ty=(r.height-H*scale)/2;userMoved=false;applyTransform()}
+function zoomAt(px,py,f){const ns=Math.min(MAXZ,Math.max(minZ(),scale*f)),k=ns/scale;tx=px-(px-tx)*k;ty=py-(py-ty)*k;scale=ns;userMoved=true;applyTransform()}
+svg.addEventListener('wheel',e=>{e.preventDefault();const r=svg.getBoundingClientRect();zoomAt(e.clientX-r.left,e.clientY-r.top,Math.exp(-e.deltaY*.0015))},{passive:false});
+const pointers=new Map();let panning=false,didPan=false,startX=0,startY=0,lastX=0,lastY=0,lastDist=0;
+svg.addEventListener('pointerdown',e=>{if(e.target.closest('.node')){didPan=false;return}svg.setPointerCapture(e.pointerId);pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});if(pointers.size===1){panning=false;didPan=false;startX=lastX=e.clientX;startY=lastY=e.clientY}else if(pointers.size===2){const[a,b]=[...pointers.values()];lastDist=Math.hypot(a.x-b.x,a.y-b.y)}});
+svg.addEventListener('pointermove',e=>{if(!pointers.has(e.pointerId))return;pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});if(pointers.size===2){const[a,b]=[...pointers.values()],d=Math.hypot(a.x-b.x,a.y-b.y),r=svg.getBoundingClientRect();if(lastDist>0)zoomAt((a.x+b.x)/2-r.left,(a.y+b.y)/2-r.top,d/lastDist);lastDist=d;didPan=true;return}if(pointers.size!==1)return;const dx=e.clientX-lastX,dy=e.clientY-lastY;if(!panning&&Math.hypot(e.clientX-startX,e.clientY-startY)>5){panning=true;didPan=true;stage.classList.add('grabbing')}if(panning){tx+=dx;ty+=dy;userMoved=true;applyTransform()}lastX=e.clientX;lastY=e.clientY});
+function endPointer(e){pointers.delete(e.pointerId);if(pointers.size<2)lastDist=0;if(!pointers.size){panning=false;stage.classList.remove('grabbing')}}
+svg.addEventListener('pointerup',endPointer);svg.addEventListener('pointercancel',endPointer);
+document.getElementById('zoomIn').addEventListener('click',()=>{const r=svg.getBoundingClientRect();zoomAt(r.width/2,r.height/2,1.25)});
+document.getElementById('zoomOut').addEventListener('click',()=>{const r=svg.getBoundingClientRect();zoomAt(r.width/2,r.height/2,.8)});
+document.getElementById('zoomFit').addEventListener('click',fit);
+window.addEventListener('resize',()=>{if(!userMoved)fit()});
+
+setFlow('all');requestAnimationFrame(fit);
+</script>
+</body>
+</html>

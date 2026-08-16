@@ -264,6 +264,70 @@ async def get_scene(scene_id: str, container: Container) -> dict:
     return scene.model_dump(mode="json")
 
 
+@router.get("/videos")
+async def list_videos(container: Container) -> dict:
+    """Metadata mọi video: fps, frame_count, duration, đường dẫn media.
+
+    UI cần `fps` THẬT để quy đổi frame <-> giây. Đo trên corpus hiện tại:
+    V001/V002 chạy 30 fps nhưng **V003 chạy 25 fps** — đoán 30 cho tất cả thì
+    tua lệch 20% trên V003, và thanh kéo chỉnh frame bằng tay thành vô dụng.
+
+    `media_available` phân biệt "video này không có trong dataset" với "có
+    trong dataset nhưng thiếu file mp4" — V002/V003 hiện rơi vào vế sau, và UI
+    phải nói được điều đó thay vì hiện một player 404.
+    """
+
+    root = container.settings.data_root.resolve()
+    return {
+        "videos": [
+            {
+                "video_id": item.video_id,
+                "media_path": item.source_path,
+                "fps": item.fps,
+                "frame_count": item.frame_count,
+                "duration_sec": item.duration_sec,
+                "width": item.width,
+                "height": item.height,
+                "media_available": (root / item.source_path).is_file(),
+            }
+            for item in await container.repository.all_videos()
+        ]
+    }
+
+
+@router.get("/videos/{video_id}/frames")
+async def list_video_frames(video_id: str, container: Container) -> dict:
+    """Mọi keyframe của một video: `frame_idx` + đường dẫn ảnh.
+
+    Để tab chỉnh frame soát được CẢ những video thiếu file mp4. `storage/raw/videos/`
+    hiện chỉ có `L21_V001.mp4`, nhưng ảnh keyframe thì đủ cho cả ba video — nên
+    người chấm vẫn nhìn được nội dung, chỉ là ở mật độ keyframe thay vì mượt
+    như video.
+
+    Payload nhỏ (855 keyframe cho toàn corpus 3 video) nên trả một lần rồi tra
+    tại chỗ, không cần endpoint tra từng frame.
+    """
+
+    scenes = await container.repository.all()
+    frames = sorted(
+        (
+            {
+                "frame_idx": frame.frame_idx,
+                "image_path": frame.image_path,
+                "timestamp_sec": frame.timestamp_sec,
+                "scene_id": frame.scene_id,
+            }
+            for scene in scenes
+            if scene.video_id == video_id
+            for frame in scene.keyframes
+        ),
+        key=lambda item: item["frame_idx"],
+    )
+    if not frames:
+        raise HTTPException(status_code=404, detail=f"no keyframes for video {video_id}")
+    return {"video_id": video_id, "frames": frames}
+
+
 @router.get("/events/{event_id}")
 async def get_event(event_id: str, container: Container) -> dict:
     if container.event_repository is None:
@@ -337,7 +401,10 @@ async def search_capabilities(container: Container) -> dict:
     """
 
     branches = [
-        item.model_dump(mode="json")
+        {
+            **item.model_dump(mode="json"),
+            "default_weight": container.search_service.branch_weights.get(item.branch_id),
+        }
         for item in container.search_service.registry.capabilities()
     ]
     return {
@@ -345,7 +412,10 @@ async def search_capabilities(container: Container) -> dict:
         "branches": branches,
         # weighted_sum/max_score reuse rank-derived contribution, not a properly
         # score-normalized weighted sum — see online/services/fusion.py docstring.
-        "fusion_methods": ["rrf", "weighted_sum", "max_score", "intersection", "union"],
+        "fusion_methods": [
+            "rrf", "weighted_sum", "max_score", "intersection", "union",
+            "norm_sum", "norm_max", "margin_sum", "entropy_sum",
+        ],
         # Option bị từ chối kèm lý do: UI hiện được "vì sao control này mờ đi"
         # thay vì để người dùng thử rồi ăn 422 mà không hiểu.
         "unsupported_options": {

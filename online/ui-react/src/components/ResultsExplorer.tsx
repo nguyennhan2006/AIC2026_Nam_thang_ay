@@ -10,6 +10,15 @@ export interface ResultsExplorerProps {
   apiConfig: ApiClientConfig;
   selectedCandidateId: string | null;
   onSelect: (candidateId: string) => void;
+  /**
+   * TRAKE: bấm vào một thẻ thì báo luôn thẻ đó thuộc CHUỖI nào, BƯỚC nào.
+   *
+   * Không có callback này thì lưới và panel xem chạy trên hai state rời nhau:
+   * lưới đổi `selectedCandidateId`, còn panel đọc `trake[selectedSequenceIndex]`
+   * mà `selectedSequenceIndex` chẳng ai đụng tới — nên bấm chuỗi nào panel cũng
+   * hiện chuỗi 1. Dữ liệu backend vẫn khớp 10/10; lỗi hoàn toàn ở tầng UI.
+   */
+  onSelectSequenceStep?: (sequenceIndex: number, stepIndex: number) => void;
   /** Chưa từng search lần nào — khác với "đã search nhưng không ra gì". */
   pristine: boolean;
   topK: number;
@@ -23,6 +32,7 @@ export function ResultsExplorer({
   apiConfig,
   selectedCandidateId,
   onSelect,
+  onSelectSequenceStep,
   pristine,
   topK,
   perVideoCapSet,
@@ -39,12 +49,17 @@ export function ResultsExplorer({
               </span>
             </header>
             <div className="result-grid">
-              {sequence.scenes.map((hit) => (
+              {sequence.scenes.map((hit, stepIndex) => (
                 <ResultCard
                   key={hit.candidate_id}
                   hit={hit}
                   apiConfig={apiConfig}
-                  onInspect={onSelect}
+                  onInspect={(candidateId) => {
+                    onSelect(candidateId);
+                    // Vị trí trong `scenes` CHÍNH LÀ số thứ tự bước của chuỗi,
+                    // nên bấm thẻ thứ 3 của chuỗi 5 là chọn đúng chuỗi 5 bước 3.
+                    onSelectSequenceStep?.(index, stepIndex);
+                  }}
                   selected={hit.candidate_id === selectedCandidateId}
                 />
               ))}

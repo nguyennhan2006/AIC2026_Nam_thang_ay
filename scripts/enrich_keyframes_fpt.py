@@ -188,7 +188,7 @@ def main() -> None:
         raise SystemExit("AIC_FPT_VLM_MODEL trống — cần model VLM (vd Qwen2.5-VL-7B-Instruct)")
 
     data_root = args.data_root or settings.data_root
-    concurrency = args.concurrency or settings.fpt_max_concurrency
+    concurrency = args.concurrency or settings.fpt_max_concurrencyx
 
     manifest_path = args.keyframes / "manifests" / "keyframe_manifest.jsonl"
     rows = [json.loads(line) for line in manifest_path.read_text(encoding="utf-8").splitlines() if line.strip()]

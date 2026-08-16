@@ -56,7 +56,11 @@ class QueryProcessingOptions(StrictModel):
 
 
 class FusionOptions(StrictModel):
-    method: Literal["rrf", "weighted_sum", "max_score", "intersection", "union"] = "rrf"
+    method: Literal[
+        "rrf", "weighted_sum", "max_score", "intersection", "union",
+        # Phase D docs/31 — doc diem that thay vi suy tu rank.
+        "norm_sum", "norm_max", "margin_sum", "entropy_sum",
+    ] = "rrf"
     fusion_top_k: int = Field(default=1000, ge=1, le=10000)
     rrf_k: int = Field(default=60, ge=1, le=500)
     minimum_matching_branches: int = Field(default=1, ge=1)

@@ -8,6 +8,8 @@ import type {
   SearchResponse,
   StreamEvent,
   SubmissionBuildResponse,
+  VideoFrame,
+  VideoMeta,
   SubmissionIssue,
   TaskType,
 } from "./types";
@@ -187,4 +189,32 @@ export async function validateSubmission(
     body: JSON.stringify(body),
   });
   return parseOrThrow<SubmissionIssue[]>(response);
+}
+
+/** Metadata mức video — UI cần `fps` THẬT để quy đổi frame <-> giây.
+ *
+ * Đo trên corpus hiện tại: V001/V002 chạy 30 fps nhưng **V003 chạy 25 fps**.
+ * Giả định 30 cho tất cả thì tua lệch 20% trên V003.
+ */
+export async function listVideos(config: ApiClientConfig): Promise<VideoMeta[]> {
+  const response = await fetch(`${normalizedBase(config)}/v1/videos`, { headers: headers(config) });
+  const data = await parseOrThrow<{ videos: VideoMeta[] }>(response);
+  return data.videos;
+}
+
+/** Keyframe của một video — dùng làm ảnh thay thế khi thiếu file mp4.
+ *
+ * `storage/raw/videos/` hiện chỉ có L21_V001.mp4, nhưng ảnh keyframe đủ cho cả
+ * ba video, nên người chấm vẫn soát được nội dung ở mật độ keyframe.
+ */
+export async function listVideoFrames(
+  config: ApiClientConfig,
+  videoId: string
+): Promise<VideoFrame[]> {
+  const response = await fetch(
+    `${normalizedBase(config)}/v1/videos/${encodeURIComponent(videoId)}/frames`,
+    { headers: headers(config) }
+  );
+  const data = await parseOrThrow<{ frames: VideoFrame[] }>(response);
+  return data.frames;
 }

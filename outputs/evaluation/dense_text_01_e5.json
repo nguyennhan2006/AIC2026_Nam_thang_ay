@@ -1,0 +1,35 @@
+{
+ "A baseline": {
+  "variant": "A baseline",
+  "steps": 110,
+  "R@20": 55,
+  "R@50": 67,
+  "R@100": 79,
+  "median_rank": 8,
+  "all_events": 6,
+  "queries": 24,
+  "pool": 100
+ },
+ "B dense only": {
+  "variant": "B dense only",
+  "steps": 110,
+  "R@20": 66,
+  "R@50": 78,
+  "R@100": 86,
+  "median_rank": 4.0,
+  "all_events": 8,
+  "queries": 24,
+  "pool": 100
+ },
+ "C baseline+dense": {
+  "variant": "C baseline+dense",
+  "steps": 110,
+  "R@20": 61,
+  "R@50": 75,
+  "R@100": 86,
+  "median_rank": 5.0,
+  "all_events": 11,
+  "queries": 24,
+  "pool": 100
+ }
+}

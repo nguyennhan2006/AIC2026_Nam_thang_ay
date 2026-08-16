@@ -61,6 +61,13 @@ class BranchCapabilities(StrictModel):
     model_id: str | None = None
     index_id: str | None = None
     supported_controls: list[str] = Field(default_factory=list)
+    # Trọng số MẶC ĐỊNH mức triển khai (AIC_BRANCH_WEIGHTS). `None` = không đặt,
+    # nhánh rơi về trọng số theo modality mà planner tính cho từng truy vấn.
+    #
+    # Có mặt ở đây vì trước đó muốn biết "nhánh nào đang chạy ở mức nào" phải
+    # đối chiếu SÁU biến bool, một chuỗi trọng số, và mặc định trong code —
+    # ba nguồn, không nguồn nào tự nói ra kết quả cuối cùng.
+    default_weight: float | None = None
 
 
 __all__ = ["BackendKind", "BranchCapabilities", "BranchState", "BranchStatus"]

@@ -20,7 +20,7 @@ from online.domain.models import (
     TaskType,
 )
 from online.domain.execution import BranchStatus
-from online.domain.search_config import ResultOptions
+from online.domain.search_config import BranchRuntimeOptions, ResultOptions
 from online.domain.session import SearchExecutionTrace
 from online.ports.interfaces import Retriever, SceneRepository, SessionStore
 from online.services.avs import AvsProcessor
@@ -40,6 +40,7 @@ from online.services.retrieval_orchestrator import RetrievalOrchestrator, _branc
 from online.services.rules import RuleConfig, apply_bonus_penalty
 from online.services.thresholding import apply_thresholds
 from online.services.temporal import link_event_hits
+from online.services.temporal_dp import link_event_hits_dp
 from online.services.trake import TrakeProcessor, trake_processor_for_request
 from online.services.trake.from_sequences import to_trake_results
 
@@ -64,7 +65,12 @@ class SearchService:
         avs_config=None,
         avs_idf=None,
         playback_pad_sec: float = DEFAULT_PAD_SEC,
+        fusion_method: str = "rrf",
+        branch_weights: dict[str, float] | None = None,
+        fusion_method_qa: str | None = None,
         trake_engine: str = "sequences",
+        trake_solver: str = "beam",
+        trake_gap_penalty: float | None = None,
         media_root=None,
         branch_timeout_ms: int | None = None,
         evidence_select_top_n: int = 10,
@@ -101,7 +107,15 @@ class SearchService:
         # Nới cửa sổ phát mỗi phía. Scene p50 chỉ 4.1s — xem đúng 4 giây
         # không đủ để người chấm hiểu bối cảnh.
         self.playback_pad_sec = playback_pad_sec
+        self.fusion_method = fusion_method
+        self.branch_weights = branch_weights or {}
+        self.fusion_method_qa = fusion_method_qa
         self.trake_engine = trake_engine
+        # Phase A của docs/31. `beam` = `link_event_hits` (hiện tại),
+        # `dp` = quy hoạch động kiểu DANTE, tối ưu toàn cục thay vì cắt tỉa
+        # theo từng bước. `trake_gap_penalty=None` giữ mặc định của từng solver.
+        self.trake_solver = trake_solver
+        self.trake_gap_penalty = trake_gap_penalty
         self.media_root = media_root
         self._last_avs_diagnostics: dict = {}
         self.planner = planner or RuleBasedQueryPlanner()
@@ -110,6 +124,57 @@ class SearchService:
         # Phương án E (bonus/penalty sau RRF), optional — None giữ nguyên hành vi
         # cũ; xem online/services/rules.py và docs/15_RESEARCH_AGENDA.md mục 5.
         self.rule_config = rule_config
+
+    def _apply_default_branch_weights(self, plan: QueryPlan) -> QueryPlan:
+        """Gắn trọng số MẶC ĐỊNH mức triển khai vào plan, request vẫn thắng.
+
+        Vì sao phải làm ở đây chứ không ở fusion: `effective_weight` vừa quyết
+        điểm fusion VỪA quyết nhánh có chạy hay không (weight <= 0 -> trả rỗng).
+        Đặt vào `plan.search_options.branches` là cả hai chỗ cùng thấy một giá
+        trị, không có đường nào đọc lệch.
+
+        Chỉ điền cho nhánh request KHÔNG khai — `model_fields_set` không dùng
+        được ở đây vì `branches` là dict, nên "có khoá" chính là "đã khai".
+
+        Đây là cách nói *"tính năng này trọng số thấp nhưng BẮT BUỘC có mặt"*,
+        thay cho việc tắt hẳn nhánh. Nhánh tắt thì không bao giờ cứu được truy
+        vấn mà chỉ nó tìm ra.
+        """
+
+        if not self.branch_weights:
+            return plan
+        branches = dict(plan.search_options.branches)
+        changed = False
+        for branch_id, weight in self.branch_weights.items():
+            if branch_id in branches:
+                continue
+            branches[branch_id] = BranchRuntimeOptions(weight=weight)
+            changed = True
+        if not changed:
+            return plan
+        options = plan.search_options.model_copy(update={"branches": branches})
+        return plan.model_copy(update={"search_options": options})
+
+    def _fusion_method_for(self, task: TaskType | None) -> str:
+        """Fusion method mặc định của deployment, cho phép ghi đè theo TASK.
+
+        Cần tách theo task vì đo được (Phase D, docs/31) là các task muốn hai
+        thứ khác nhau, và mâu thuẫn đó nhất quán trên cả holdout::
+
+                       KIS R@1   TRAKE mean_r   AVS nDCG   QA joint
+            rrf          0.583          0.254      0.558      0.472
+            norm_sum     0.611          0.315      0.606      0.389
+            norm_max     0.750          0.354      0.565      0.389
+
+        Giải thích hợp lý: KIS/TRAKE hỏi "khung hình nào ĐÚNG nhất" nên một
+        nhánh rất chắc chắn phải được thắng — `norm_max` cho đúng điều đó. QA
+        hỏi "scene nào là BẰNG CHỨNG tốt" nên đồng thuận nhiều nhánh đáng tin
+        hơn một nhánh đơn độc, và RRF vốn thưởng cho đồng thuận.
+        """
+
+        if task == TaskType.QA and self.fusion_method_qa:
+            return self.fusion_method_qa
+        return self.fusion_method
 
     async def _retrieve(
         self, plan: QueryPlan, limit: int
@@ -130,10 +195,18 @@ class SearchService:
         # with no search_options keeps using the deployment default exactly as
         # before FusionOptions existed.
         rrf_k = fusion_options.rrf_k if "rrf_k" in fusion_options.model_fields_set else self.rrf_k
+        # Cùng quy ước với `rrf_k`: mặc định mức triển khai (AIC_FUSION_METHOD)
+        # chỉ bị ghi đè khi request ĐẶT TƯỜNG MINH `fusion.method`, nên request
+        # không kèm search_options vẫn dùng đúng cấu hình server.
+        method = (
+            fusion_options.method
+            if "method" in fusion_options.model_fields_set
+            else self._fusion_method_for(plan.task)
+        )
         candidates = fuse_candidates(
             lists,
             plan.modality_weights,
-            method=fusion_options.method,
+            method=method,
             rrf_k=rrf_k,
             limit=limit,
             branches=plan.search_options.branches,
@@ -334,7 +407,7 @@ class SearchService:
         # từ script/test); mặc định về task chính của cuộc thi. Route convenience
         # đã điền task của path trước khi tới đây.
         task = request.task or TaskType.TEXTUAL_KIS
-        plan = await self.planner.plan(request)
+        plan = self._apply_default_branch_weights(await self.planner.plan(request))
         if task == TaskType.TRAKE and len(plan.events) >= 2:
             step_overrides = plan.search_options.temporal.step_modality_weights
             event_hit_lists: list[list[SearchHit]] = []
@@ -375,7 +448,18 @@ class SearchService:
                 documents,
                 limit=request.top_k,
             )
-            sequences = link_event_hits(event_hit_lists, limit=request.top_k)
+            if self.trake_solver == "dp":
+                sequences = link_event_hits_dp(
+                    event_hit_lists,
+                    limit=request.top_k,
+                    gap_penalty=0.0 if self.trake_gap_penalty is None else self.trake_gap_penalty,
+                )
+            elif self.trake_gap_penalty is None:
+                sequences = link_event_hits(event_hit_lists, limit=request.top_k)
+            else:
+                sequences = link_event_hits(
+                    event_hit_lists, limit=request.top_k, gap_penalty=self.trake_gap_penalty
+                )
             # Đường CŨ (`link_event_hits`) đo ra TỐT HƠN đường đã thay thế nó:
             # video_recall@1 0.833 so với 0.542, và gấp đôi trên hai video
             # holdout. Bảng số đầy đủ ở `trake/from_sequences.py`.
@@ -524,7 +608,7 @@ class SearchService:
         task = request.task or TaskType.TEXTUAL_KIS
         yield {"type": "search_started", "query_id": query_id, "task": task.value}
 
-        plan = await self.planner.plan(request)
+        plan = self._apply_default_branch_weights(await self.planner.plan(request))
         yield {
             "type": "query_prepared",
             "query_id": query_id,

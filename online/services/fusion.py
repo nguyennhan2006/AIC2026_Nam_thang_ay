@@ -1,26 +1,121 @@
 """Fusion methods across incomparable retrieval scores — Search Mixing Console W5.
 
-Every method reuses the same rank-derived, scale-free per-branch contribution
-`weight / (rrf_k + rank)` — never a raw score across branches (BM25 vs.
-cosine vs. color-overlap-ratio are not comparable, see the plan's "không dùng
-raw score giữa các branch" rule). `weighted_sum`/`max_score` differ from
-`rrf` only in how they combine that same contribution across branches
-(sum vs. max instead of RRF's harmonic-ish sum); they are NOT a properly
-score-normalized weighted sum (that needs per-branch min-max/percentile
-calibration — see docs/15_RESEARCH_AGENDA.md, not implemented yet).
-`intersection`/`union` differ in which candidates survive: intersection
-keeps only candidates seen by at least `minimum_matching_branches` branches.
+Có HAI họ method, khác nhau ở chỗ căn bản: cái gì được dùng làm đóng góp.
+
+**Họ suy từ RANK** — `rrf`, `weighted_sum`, `max_score`, `intersection`, `union`.
+Tất cả dùng chung `weight / (rrf_k + rank)`, không bao giờ đụng tới `raw_score`
+giữa các branch (BM25 vs cosine vs color-overlap-ratio không so sánh được).
+`weighted_sum`/`max_score` chỉ khác `rrf` ở cách GỘP (sum/max thay vì tổng kiểu
+điều hoà) — chúng **không phải** weighted sum có chuẩn hoá điểm.
+
+**Họ ĐỌC ĐIỂM THẬT** (Phase D, docs/31) — `norm_sum`, `norm_max`, `margin_sum`,
+`entropy_sum`. Chuẩn hoá min-max trong phạm vi TỪNG branch rồi mới gộp.
+
+Cơ chế thật là **ĐẬP ĐUÔI**, không phải "branch chắc chắn thắng branch đoán mò".
+Tôi ban đầu giải thích theo hướng thứ hai và `tests/test_fusion_score_methods.py`
+bác bỏ nó: ba branch cùng xếp một candidate hạng 1 thì `norm_max` vẫn chọn phía
+đồng thuận, đúng như nó nên làm.
+
+Con số nói rõ hơn::
+
+    ti le dong gop hang-1 so voi hang-100 CUA CUNG MOT BRANCH
+      RRF (k=60)     1/61 so voi 1/160   ->  2.62x
+      min-max        1.00 so voi ~0.00   ->  vo han
+
+RRF cho candidate hạng 100 tận **38%** số phiếu của hạng 1. Bảy branch × 100
+candidate = 700 lá phiếu gần bằng nhau, và tín hiệu thật chìm trong đó. Chuẩn
+hoá làm đuôi về ~0, nên chỉ phần đỉnh của mỗi branch còn bỏ phiếu.
+
+`margin_sum`/`entropy_sum` đi xa hơn — nhân thêm hệ số đo độ tự tin của branch ở
+lần truy vấn này. **Đo được là CẢ HAI đều kém hơn** bản chỉ chuẩn hoá (docs/31
+§2.6): chuẩn hoá là thứ có ích, nhân thêm hệ số tự tin thì hại.
+
+`intersection`/`union` khác ở chỗ candidate nào sống sót: `intersection` chỉ giữ
+candidate được ít nhất `minimum_matching_branches` branch nhìn thấy.
 """
 
 from __future__ import annotations
 
 from collections import defaultdict
+import math
 from typing import Literal
 
 from online.domain.models import Candidate, Modality
 from online.domain.search_config import BranchRuntimeOptions
 
-FusionMethod = Literal["rrf", "weighted_sum", "max_score", "intersection", "union"]
+FusionMethod = Literal[
+    "rrf", "weighted_sum", "max_score", "intersection", "union",
+    # Phase D của docs/31 — nhóm ĐỌC ĐIỂM THẬT, không suy từ rank.
+    "norm_sum", "norm_max", "margin_sum", "entropy_sum",
+]
+
+# Nhóm method dùng điểm đã chuẩn hoá thay cho `weight / (rrf_k + rank)`.
+_SCORE_METHODS = frozenset({"norm_sum", "norm_max", "margin_sum", "entropy_sum"})
+
+
+def _minmax(values: list[float]) -> list[float]:
+    """Chuẩn hoá về [0, 1] TRONG PHẠM VI một branch.
+
+    Min-max chứ không z-score: điểm giữa các branch không cùng thang (BM25 ~27,
+    cosine ~0.8, overlap-ratio ~0.5) và cũng không cùng phân bố, nên thứ duy
+    nhất so sánh được là "candidate này mạnh đến đâu SO VỚI phần còn lại mà
+    chính branch đó trả về". Min-max cho đúng nghĩa đó và bị chặn, nên một
+    branch có đuôi dài không tự thổi phồng mình.
+
+    Mọi điểm bằng nhau -> trả 1.0: branch đó không phân biệt được gì, nhưng nó
+    vẫn bỏ phiếu "tất cả đều liên quan". Trả 0.0 sẽ là xoá phiếu của nó.
+    """
+
+    if not values:
+        return []
+    low, high = min(values), max(values)
+    if high - low < 1e-12:
+        return [1.0] * len(values)
+    span = high - low
+    return [(value - low) / span for value in values]
+
+
+def _confidence(values: list[float]) -> float:
+    """Độ chắc chắn của một branch = mức độ phân bố điểm của nó bị dồn về đỉnh.
+
+    `1 - H/H_max` với `H` là entropy của phân bố điểm đã chuẩn hoá thành xác
+    suất. Branch chỉ ra đúng một candidate -> H thấp -> confidence cao. Branch
+    trả 100 candidate điểm ngang nhau -> H = H_max -> confidence 0.
+
+    Chỉ dùng bởi `entropy_sum`. **Đo được là làm KÉM đi** so với bản chỉ chuẩn
+    hoá (KIS R@1 0.611 so với 0.750) — giữ lại để không ai thử lại ý này mà
+    không biết đã đo. Xem docs/31 §2.6.
+    """
+
+    total = sum(values)
+    if total <= 0 or len(values) < 2:
+        return 1.0
+    entropy = 0.0
+    for value in values:
+        share = value / total
+        if share > 0:
+            entropy -= share * math.log(share)
+    ceiling = math.log(len(values))
+    if ceiling <= 0:
+        return 1.0
+    return max(0.0, min(1.0, 1.0 - entropy / ceiling))
+
+
+def _margin(values: list[float]) -> float:
+    """Khoảng cách tương đối giữa hạng 1 và hạng 2 của một branch, trong [0, 1].
+
+    Cùng mục đích với `_confidence` nhưng chỉ nhìn hai vị trí đầu. Chỉ dùng bởi
+    `margin_sum`, và cũng **đo được là kém hơn** bản chỉ chuẩn hoá (KIS R@1
+    0.583 so với 0.750). Giữ lại làm ghi chép thí nghiệm.
+    """
+
+    if len(values) < 2:
+        return 1.0
+    ordered = sorted(values, reverse=True)
+    top = ordered[0]
+    if top <= 0:
+        return 0.0
+    return max(0.0, min(1.0, (top - ordered[1]) / top))
 
 
 def _branch_weight(
@@ -51,6 +146,12 @@ def fuse_candidates(
 
     branches = branches or {}
     totals: defaultdict[str, float] = defaultdict(float)
+    # Khoá phụ cho các method lấy MAX. Không có nó thì mọi candidate đứng hạng 1
+    # của bất kỳ nhánh nào đều được đúng `weight * 1.0` và HOÀ nhau, rồi thứ
+    # hạng bị quyết bằng `scene_id` — tức bảng chữ cái. Đo trên 8 truy vấn KIS
+    # thật: 3/8 có hoà ở đỉnh. Tổng (chứ không phải max) là thứ tự nhiên để phá
+    # hoà: cùng một đỉnh thì candidate được NHIỀU nhánh ủng hộ nên đứng trước.
+    sums: defaultdict[str, float] = defaultdict(float)
     representatives: dict[str, Candidate] = {}
     components: defaultdict[str, dict[str, float]] = defaultdict(dict)
     contributions: defaultdict[str, dict[str, float]] = defaultdict(dict)
@@ -60,13 +161,30 @@ def fuse_candidates(
     frame_hints: dict[str, Candidate] = {}
 
     for candidates in ranked_lists:
+        # Chuẩn hoá TRONG PHẠM VI từng ranked list (= từng branch), tính một lần
+        # trước vòng lặp: mọi candidate của cùng branch phải dùng chung min/max,
+        # nếu tính lẻ thì mỗi candidate lại có một thang riêng.
+        normalized: list[float] = []
+        branch_scale = 1.0
+        if method in _SCORE_METHODS:
+            raw = [candidate.raw_score for candidate in candidates]
+            normalized = _minmax(raw)
+            if method == "margin_sum":
+                branch_scale = _margin(raw)
+            elif method == "entropy_sum":
+                branch_scale = _confidence(raw)
+
         for fallback_rank, candidate in enumerate(candidates, start=1):
             rank = candidate.rank or fallback_rank
             weight = _branch_weight(candidate, modality_weights, branches)
-            contribution = weight / (rrf_k + rank)
+            if method in _SCORE_METHODS:
+                contribution = weight * branch_scale * normalized[fallback_rank - 1]
+            else:
+                contribution = weight / (rrf_k + rank)
             key = candidate.grouping_key
-            if method == "max_score":
+            if method in ("max_score", "norm_max"):
                 totals[key] = max(totals[key], contribution)
+                sums[key] += contribution
             else:
                 totals[key] += contribution
             matching_branches[key].add(candidate.source)
@@ -102,7 +220,7 @@ def fuse_candidates(
         threshold = max(2, minimum_matching_branches)
         eligible = [key for key in totals if len(matching_branches[key]) >= threshold]
 
-    ordered = sorted(eligible, key=lambda item: (-totals[item], item))[:limit]
+    ordered = sorted(eligible, key=lambda item: (-totals[item], -sums[item], item))[:limit]
     output: list[Candidate] = []
     for rank, key in enumerate(ordered, start=1):
         base = representatives[key]

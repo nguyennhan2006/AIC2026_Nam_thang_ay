@@ -323,3 +323,195 @@
   font-weight: var(--weight-bold);
   flex: 0 0 auto;
 }
+
+/* ---- Tab chỉnh frame (FrameTuner) ----
+   Bảng bên trái cuộn độc lập với sân khấu video bên phải: danh sách có thể dài
+   hàng trăm dòng, mà video thì phải luôn nhìn thấy trong lúc soát. */
+.tuner { display: flex; flex-direction: column; min-height: 0; height: 100%; }
+
+.tuner-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+}
+.tuner-actions { display: flex; gap: var(--space-2); margin-left: auto; flex-wrap: wrap; }
+
+.tuner-body {
+  display: grid;
+  grid-template-columns: minmax(260px, 360px) minmax(0, 1fr);
+  gap: var(--space-4);
+  padding: var(--space-4);
+  min-height: 0;
+  flex: 1 1 auto;
+}
+@media (max-width: 900px) {
+  .tuner-body { grid-template-columns: minmax(0, 1fr); }
+}
+
+.tuner-list { min-height: 0; max-height: 100%; }
+.tuner-list tbody tr.is-selected { background: var(--accent-soft); }
+.tuner-list tbody tr.is-selected td { color: var(--text-primary); }
+
+/* Khung cha (.surface-fill) có `overflow: hidden`, nên nếu sân khấu không tự
+   co thì video đẩy toàn bộ thanh kéo xuống vùng bị cắt — thanh kéo có tồn tại
+   nhưng không ai nhìn thấy. Video co được (`flex: 1 1 auto` + `min-height: 0`),
+   cụm điều khiển GHIM cứng (`flex: 0 0 auto`) nên luôn nằm trong tầm mắt. */
+.tuner-stage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.tuner-video {
+  width: 100%;
+  flex: 1 1 auto;
+  min-height: 120px;
+  border-radius: var(--radius-nested);
+  background: #000;
+  display: block;
+  object-fit: contain;
+}
+.tuner-controls { flex: 0 0 auto; }
+
+/* ---- Ruy băng thời gian kiểu trình dựng phim ---- */
+.tuner-timeline {
+  position: relative;
+  height: 54px;
+  border-radius: var(--radius-control);
+  overflow: hidden;
+  background: var(--surface-app);
+  cursor: ew-resize;
+  user-select: none;
+  touch-action: none;
+  flex: 0 0 auto;
+}
+.tuner-timeline:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.tuner-film { display: flex; height: 100%; pointer-events: none; }
+.tuner-film img {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.62;
+}
+
+/* Đầu đọc: vạch dọc + tay cầm ở đỉnh, đủ tương phản trên mọi ảnh nền. */
+.tuner-playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--accent);
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.55);
+  pointer-events: none;
+}
+.tuner-playhead::before {
+  content: "";
+  position: absolute;
+  top: -1px;
+  left: -5px;
+  width: 12px;
+  height: 6px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+.tuner-number {
+  width: 92px;
+  padding: 0 var(--space-2);
+  height: 26px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--border-default);
+  background: var(--surface-control);
+  color: var(--text-primary);
+  font-size: var(--text-caption);
+}
+
+.tuner-controls { display: flex; flex-direction: column; gap: var(--space-2); flex: 0 0 auto; }
+.tuner-readout {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--text-label);
+  color: var(--text-secondary);
+  flex-wrap: wrap;
+}
+.tuner-readout strong { color: var(--text-primary); }
+
+/* Thanh kéo trải toàn bộ video (tới ~38k frame), nên vùng bấm phải đủ dày để
+   kéo được bằng chuột mà không trượt. */
+.tuner-slider { width: 100%; accent-color: var(--accent); height: 22px; cursor: pointer; }
+
+.tuner-nudges { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+
+.tuner-missing {
+  display: flex;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-radius: var(--radius-nested);
+  background: var(--surface-raised);
+  color: var(--accent-amber);
+}
+.tuner-missing p { margin: var(--space-2) 0 0; }
+.tuner-missing code { color: var(--text-secondary); }
+
+/* Ảnh keyframe thay thế khi video thiếu file mp4. */
+.tuner-fallback { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; }
+.tuner-fallback img { object-fit: contain; }
+.tuner-fallback .result-sub { display: flex; align-items: baseline; gap: 4px; flex-wrap: wrap; }
+.tuner-fallback code { color: var(--text-secondary); }
+
+/* ---- Hướng dẫn chỉnh trọng số (WeightPanel) ---- */
+.tuning-guide {
+  margin: 0;
+  padding-left: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  font-size: var(--text-caption);
+  color: var(--text-secondary);
+  line-height: var(--leading-normal);
+}
+.tuning-guide strong { color: var(--text-primary); }
+.tuning-note {
+  margin: var(--space-3) 0 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-nested);
+  background: var(--surface-raised);
+  font-size: var(--text-caption);
+  color: var(--text-tertiary);
+  line-height: var(--leading-normal);
+}
+
+.preset-intro {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-caption);
+  color: var(--text-tertiary);
+  line-height: var(--leading-normal);
+}
+.preset-intro strong { color: var(--text-secondary); }
+
+.preset-guide {
+  margin-top: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-nested);
+  background: var(--surface-raised);
+  border-left: 2px solid var(--accent);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  font-size: var(--text-caption);
+  color: var(--text-secondary);
+  line-height: var(--leading-normal);
+}
+.preset-guide p { margin: 0; }
+.preset-guide strong { color: var(--text-primary); }
+.preset-evidence { color: var(--text-tertiary); }

@@ -99,6 +99,16 @@ backend Vast.ai và token Online nếu bật — chi tiết đầy đủ (CORS, 
 18. `docs/18_MASTER_SYNC_GUIDE.md` — kế hoạch kiến trúc đích (tài liệu tham chiếu)
 19. `docs/19_COMPETITION_SYSTEM_NOTES.md` — ghi chú hệ thống thi đấu (thao tác, UI, độ tin cậy)
 20. `docs/20_EXPERIMENT_LOG.md` — nhật ký thí nghiệm search: giả thuyết, số đo, quyết định giữ/bỏ
+21. `docs/21_ONLINE_PIPELINE_PLAYBOOK.md` — **bản chốt**: kỹ thuật nào đã đo là hiệu quả,
+    kỹ thuật nào đã bỏ và vì sao, trần cứng của dữ liệu, và bài học rút ra
+22. `docs/22_TRAKE_CHAIN_SCORING.md` — đề xuất sinh chuỗi TRAKE theo n điểm neo
+    và cách chấm điểm chuỗi (chưa đo)
+23. `docs/23_GOLD_QUERY_FORMAT.md` — định dạng gold query cho từng task,
+    kèm `scripts/validate_gold.py` để kiểm trước khi chạy eval
+24. `docs/24_SEARCH_FLOW_AUDIT.md` — kiểm định luồng search trước khi làm rerank:
+    lỗi `branch_ceiling`, nhánh thiên vị, và thứ tự việc phải sửa
+25. `docs/25_P2_BASELINE.md` — **baseline sạch đầu tiên** + phân rã theo tầng
+    (fusion 2/32, rerank 1/27, task-scoring 18/36) và quyết định hướng rerank
 
 Model thật trên Kaggle: `docs/KAGGLE_OFFLINE_GUIDE.md`. `scripts/caption_qwen3vl.py`
 là đường khác để nâng chất lượng caption (Qwen3-VL-32B qua OpenRouter, không cần

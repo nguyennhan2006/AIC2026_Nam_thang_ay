@@ -6,12 +6,16 @@
   "video_count": 1,
   "scene_count": 3,
   "keyframe_count": 3,
+  "clip_count": 0,
+  "event_count": 0,
   "models": [],
   "indexes": [],
   "export_checksums": {
-    "videos.jsonl": "sha256:8f512b4c2c43a363aaa09b3fc72d12e0f95f87d268cbdfeef09edfa79934963f",
-    "scenes.jsonl": "sha256:edaf4e6f6a137fa7c14272eca21a001d27fd2890d2e043b04bad9fd164963ce3",
-    "keyframes.jsonl": "sha256:90f5b5fb6b3afa2852594f7e9f71e7af878494c400852193de588c8063f0674d"
+    "videos.jsonl": "sha256:9b6d145448b8ad29c4f91028c196c198a402664fcbf429cc5e622b37749200d3",
+    "scenes.jsonl": "sha256:61868a76c064973299714c3c224806a25d97de42fbc9f07dac8dd04a86279e15",
+    "keyframes.jsonl": "sha256:b1389e646130e1360b26864eef619e0174b26f81c0fdb0b92facca159be898dc",
+    "clips.jsonl": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "events.jsonl": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
   },
-  "created_at": "2026-07-18T08:16:01.292775Z"
+  "created_at": "2026-08-16T01:13:36.443643Z"
 }

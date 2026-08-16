@@ -32,6 +32,7 @@ from online.domain.task_results import AnswerCandidate, AnswerType, QaResultItem
 from online.errors import DependencyUnavailableError
 
 if TYPE_CHECKING:
+    from online.services.keyword_extraction import CorpusIdf
     from online.services.normalizers import ScoreNormalizers
 
 _NUMBER_WORDS_VI = {
@@ -289,11 +290,51 @@ ANSWER_TOOLS = {
 # --------------------------------------------------------------------------
 
 
-def verify_answer(answer: AnswerCandidate, pack: EvidencePack) -> VerifierStatus:
+def verify_answer(
+    answer: AnswerCandidate,
+    pack: EvidencePack,
+    *,
+    idf: "CorpusIdf | None" = None,
+    min_phrase_idf: float = 0.0,
+) -> VerifierStatus:
     """Kiểm chứng độc lập: câu trả lời có thật sự nằm trong evidence không.
 
     Chạy TÁCH KHỎI tool sinh ra nó — nếu dùng chính tool để tự xác nhận thì
     verifier chỉ lặp lại niềm tin của tool.
+
+    `min_phrase_idf` sửa một lỗ hổng quan sát được: khớp CHUỖI CON với một đáp án
+    quá phổ biến thì luôn đúng và chẳng chứng minh gì. Đo thật — hỏi *"người đàn
+    ông được phỏng vấn tên là gì"*, cả 20/20 dòng trả về danh từ chung
+    (`"người"`, `"áo sơ mi"`) và **tất cả** được đóng dấu `SUPPORTED`, vì mọi
+    caption tiếng Việt đều chứa chữ "người".
+
+    IDF trên chính corpus tách bạch được hai loại (765 tài liệu, `phrase_score`):
+
+        rac:  nguoi 1.40 · nguoi dan ong 2.01 · ao so mi 2.63 · nha bao 2.74
+        that: tuong voi 3.22 · trai tim 3.81 · duong phu xuan 4.29 · han quoc 6.14
+
+    HẠ CẤP chứ không loại bỏ: `score_qa` (luật thi) chấm bất kỳ dòng nào trong
+    submission, nên vứt hẳn một đáp án là bỏ mất một cơ hội trúng. `INSUFFICIENT`
+    chỉ hạ trọng số 1.0 -> 0.25, tức đẩy nó xuống dưới các đáp án có bằng chứng
+    thật mà vẫn giữ trong danh sách.
+
+    ⚠️ **ĐO RỒI, KẾT QUẢ ÂM — mặc định 0.0 (tắt).** Cơ chế nghe hợp lý nhưng
+    không ăn, và số tổng đánh lừa (2026-08-09, 36 truy vấn VQA)::
+
+                            R@1    joint  |  V001   V002   V003*
+        tat                0.611   0.472  | 0.333  0.500  0.583
+        min_phrase_idf=2.8 0.583   0.444  | 0.333  0.500  0.500
+        min_phrase_idf=3.2 0.639   0.472  | 0.417  0.500  0.500
+
+    Ngưỡng 3.2 có `R@1` đẹp nhất, nhưng toàn bộ phần tăng nằm ở video TUNE còn
+    HOLDOUT (V003) tụt ở CẢ HAI ngưỡng. Và 2.8 còn kém hơn tắt — không đơn điệu,
+    tức phần lớn là nhiễu.
+
+    Giả thuyết về cơ chế, chưa kiểm chứng: `joint_score` gắn frame với answer,
+    nên hạ điểm một dòng vì answer chung chung cũng hạ luôn frame ĐÚNG của dòng
+    đó. Muốn theo tiếp thì phải tách hai thành phần trước.
+
+    Giữ code lại (tắt sẵn) để không ai thử lại ý này mà không biết đã đo rồi.
     """
 
     evidence = normalize_answer(pack.rerank_text(max_chars=4000))
@@ -301,6 +342,11 @@ def verify_answer(answer: AnswerCandidate, pack: EvidencePack) -> VerifierStatus
         return "INSUFFICIENT"
     surfaces = [answer.canonical, answer.surface, *answer.aliases]
     if any(normalize_answer(item) and normalize_answer(item) in evidence for item in surfaces):
+        if idf is not None and min_phrase_idf > 0.0:
+            # Chấm trên `canonical` — `aliases` có thể chứa biến thể ngắn hơn và
+            # nghèo thông tin hơn, dùng chúng sẽ tự hạ điểm chính mình.
+            if idf.phrase_score(answer.canonical) < min_phrase_idf:
+                return "INSUFFICIENT"
         return "SUPPORTED"
     if answer.answer_type in ("yes_no", "temporal"):
         # Hai kiểu này suy luận từ evidence chứ không trích nguyên văn, nên
@@ -345,6 +391,8 @@ class QaProcessor:
         llm_answerer=None,
         llm_rank_mode: str = "keep",
         llm_top_n: int = 5,
+        idf: "CorpusIdf | None" = None,
+        min_answer_idf: float = 0.0,
     ) -> None:
         self.parser = parser or QuestionParser()
         self.llm_answerer = llm_answerer
@@ -361,6 +409,15 @@ class QaProcessor:
         #   answer_first  conf_llm là chính, joint chỉ để phá hoà
         self.llm_rank_mode = llm_rank_mode
         self.llm_top_n = llm_top_n
+        # Cổng thông tin cho verifier — xem `verify_answer`. Dùng CHUNG đối
+        # tượng IDF với AVS (container dựng một lần lúc khởi động), không tính lại.
+        self.idf = idf
+        self.min_answer_idf = min_answer_idf
+
+    def _verify(self, answer: AnswerCandidate, pack: EvidencePack) -> VerifierStatus:
+        return verify_answer(
+            answer, pack, idf=self.idf, min_phrase_idf=self.min_answer_idf
+        )
 
     async def answer_async(
         self,
@@ -405,7 +462,7 @@ class QaProcessor:
             if llm_candidate is None:
                 enhanced.append(item)
                 continue
-            status = verify_answer(llm_candidate, pack)
+            status = self._verify(llm_candidate, pack)
             if status == "CONTRADICTED":
                 # LLM mâu thuẫn với evidence — giữ answer rule-based an toàn hơn.
                 enhanced.append(item)
@@ -497,7 +554,7 @@ class QaProcessor:
             for candidate in tool(parsed, pack):
                 if not candidate.canonical.strip():
                     continue
-                status = verify_answer(candidate, pack)
+                status = self._verify(candidate, pack)
                 # Nhân chứ không cộng: sai một khâu là item mất giá trị, đúng
                 # như cách luật chấm (sai video/frame/answer đều = 0).
                 joint = (

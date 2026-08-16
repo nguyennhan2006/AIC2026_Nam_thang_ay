@@ -156,6 +156,19 @@ class Settings:
     # Có default để chỗ nào dựng Settings trực tiếp (không qua from_env, vd
     # tests/test_container_flags.py) vẫn chạy — cùng cách OfflineSettings làm
     # với nhóm field clip pooling.
+    # Cổng IDF cho verifier QA. Đáp án có `phrase_score` dưới ngưỡng mà chỉ khớp
+    # bằng chuỗi con sẽ bị hạ từ SUPPORTED xuống INSUFFICIENT — xem `verify_answer`.
+    # 0.0 = tắt, giữ nguyên hành vi cũ.
+    qa_min_answer_idf: float = 0.0
+    # Nhánh `bm25_ocr`. Mặc định True = giữ nguyên hành vi cũ. Đo được trên
+    # corpus hiện tại là TẮT thì tốt hơn ở cả KIS lẫn QA (xem .env.fpt.local);
+    # có default ở đây để mọi chỗ dựng `Settings(...)` trực tiếp (tests) không
+    # phải khai thêm một field nữa.
+    #
+    # Tắt nhánh KHÔNG xoá dữ liệu OCR: `ocr_texts` vẫn vào evidence pack mà QA
+    # đọc để TRẢ LỜI, và vẫn bật lại được cho từng request qua
+    # `search_options.branches.bm25_ocr.weight`.
+    enable_ocr_branch: bool = True
     rerank_text_url: str | None = None
     rerank_vlm_url: str | None = None
     rerank_api_key: str | None = None
@@ -191,13 +204,53 @@ class Settings:
     ocr_overlay_max_words: int = 0
     branch_timeout_ms: int = 8000
     playback_pad_sec: float = 5.0
+    # Phase D docs/31: rrf (hien tai) | norm_sum | norm_max | margin_sum | entropy_sum
+    fusion_method: str = "rrf"
+    # Ghi de rieng cho task QA. None = dung fusion_method chung.
+    fusion_method_qa: str | None = None
     trake_engine: str = "sequences"
+    # Phase A docs/31: beam (link_event_hits, hien tai) | dp (DANTE)
+    trake_solver: str = "beam"
+    # None = giu mac dinh cua solver (beam 0.002, dp 0.0). Hieu chuan: khoang
+    # cach giua hai buoc gold p50=10s, diem moi scene ~0.04 — nen 0.002 phat
+    # 0.02 tai p50, tuc bang NUA tin hieu.
+    trake_gap_penalty: float | None = None
     # Dense visual local (PR-13) — text tower phải cùng model với vector ảnh
     # đã sinh (`scripts/embed_keyframes_local.py`), nếu không hai không gian
     # embedding lệch nhau và cosine similarity vô nghĩa. Chỉ thật sự nạp model
     # khi export có embedding thật (online/adapters/frame_vector_store.py);
     # không có thì container vẫn dùng lexical_hash_fallback như trước.
     visual_embedding_model: str = "openai/clip-vit-large-patch14"
+    # Nhieu index dense chay song song. Dinh dang, ngan cach bang dau phay:
+    #     <embedding_name>:<model_path>[:<kind>]
+    # vd  clip_vit_l14_v1:storage/models/clip-vit-large-patch14,jina_v2:jinaai/jina-clip-v2:jina
+    # `kind` bo trong -> suy tu duong dan (clip | siglip | jina).
+    # Rong = giu nguyen hanh vi cu: MOT nhanh dense_visual dung
+    # AIC_VISUAL_EMBEDDING_MODEL tren moi vector tim thay.
+    dense_indexes: str = ""
+    # DENSE-TEXT-01 — nhanh dense tren TEXT cua caption/tag (E5), khac han
+    # dense_visual (embedding ANH). Rong = tat, dung nhu AIC_DENSE_INDEXES.
+    # Duong dan toi thu muc index do scripts/build_caption_dense_index.py sinh
+    # (embeddings.npy + scene_ids.json + manifest.json).
+    #
+    # Index la mot thu muc ROI, khong nam trong export — khong co gi buoc no
+    # phai dung lai khi doi AIC_METADATA_JSONL. Container kiem tra do phu
+    # scene va CHAN khoi dong neu lech, xem CaptionDenseRetriever.assert_covers.
+    caption_dense_index: str = ""
+    # Model text encoder cho nhanh tren. PHAI trung model da dung luc dung
+    # index (manifest ghi `model_id`); khac model thi cosine vo nghia.
+    caption_dense_model: str = "storage/models/multilingual-e5-large"
+    # Ho encoder cua model tren: e5 | jina_v3. PHAI trung `encoder_kind` trong
+    # manifest cua index. Ca hai ho deu ra vector 1024 chieu nen khai lech thi
+    # chot theo chieu KHONG bat duoc — container chan bang assert_encoder_kind.
+    caption_dense_encoder: str = "e5"
+    # Trong so MAC DINH cho tung nhanh, dat o muc trien khai.
+    #     AIC_BRANCH_WEIGHTS=bm25_ocr:0.2,color_search:0.1
+    # Khac han voi viec TAT nhanh: nhanh van chay, van dong gop, chi la it.
+    # Nhanh bi tat thi KHONG BAO GIO cuu duoc truy van ma chi no tim ra —
+    # va do la truong hop thuc te da gap (ten nguoi tren chyron chi OCR thay).
+    # Request van ghi de duoc qua search_options.branches[...].weight.
+    branch_weights: str = ""
     visual_embedding_model_revision: str | None = None
     # PR-12 — FPT AI Marketplace, dùng TẠM thay server A100 tự host để test/
     # tune prompt (xem AIC2026_FPT_API_SINGLE_VIDEO_TEST_TUNING_GUIDE.md).
@@ -279,6 +332,8 @@ class Settings:
             cors_origins=tuple(x.strip() for x in os.getenv("AIC_CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").split(",") if x.strip()),
             api_key=os.getenv("AIC_ONLINE_API_KEY"),
             enable_ocr_fuzzy=_env_bool("AIC_ENABLE_OCR_FUZZY", False),
+            enable_ocr_branch=_env_bool("AIC_ENABLE_OCR_BRANCH", True),
+            qa_min_answer_idf=float(os.getenv("AIC_QA_MIN_ANSWER_IDF", "0.0")),
             enable_query_prep=_env_bool("AIC_ENABLE_QUERY_PREP", False),
             enable_expansion=_env_bool("AIC_ENABLE_EXPANSION", False),
             enable_rules=_env_bool("AIC_ENABLE_RULES", False),
@@ -310,8 +365,22 @@ class Settings:
             ocr_overlay_max_words=int(os.getenv("AIC_OCR_OVERLAY_MAX_WORDS", "0")),
             branch_timeout_ms=_env_int("AIC_BRANCH_TIMEOUT_MS", 8000),
             playback_pad_sec=float(os.getenv("AIC_PLAYBACK_PAD_SEC", "5.0")),
+            fusion_method=os.getenv("AIC_FUSION_METHOD", "rrf").lower(),
+            fusion_method_qa=(os.getenv("AIC_FUSION_METHOD_QA") or "").lower() or None,
             trake_engine=os.getenv("AIC_TRAKE_ENGINE", "sequences").lower(),
+            trake_solver=os.getenv("AIC_TRAKE_SOLVER", "beam").lower(),
+            trake_gap_penalty=(
+                float(os.environ["AIC_TRAKE_GAP_PENALTY"])
+                if os.getenv("AIC_TRAKE_GAP_PENALTY") else None
+            ),
             visual_embedding_model=os.getenv("AIC_VISUAL_EMBEDDING_MODEL", "openai/clip-vit-large-patch14"),
+            dense_indexes=os.getenv("AIC_DENSE_INDEXES", "").strip(),
+            caption_dense_index=os.getenv("AIC_CAPTION_DENSE_INDEX", "").strip(),
+            caption_dense_model=os.getenv(
+                "AIC_CAPTION_DENSE_MODEL", "storage/models/multilingual-e5-large"
+            ).strip(),
+            caption_dense_encoder=os.getenv("AIC_CAPTION_DENSE_ENCODER", "e5").strip() or "e5",
+            branch_weights=os.getenv("AIC_BRANCH_WEIGHTS", "").strip(),
             visual_embedding_model_revision=os.getenv("AIC_VISUAL_EMBEDDING_MODEL_REVISION") or None,
             **_fpt_settings_kwargs(),
         )

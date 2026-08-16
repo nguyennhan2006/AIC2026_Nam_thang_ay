@@ -71,6 +71,7 @@ export function WeightPanel({ apiConfig, task, draftOptions, onDraftChange, hasU
   const [error, setError] = useState<string | null>(null);
   const [stepMode, setStepMode] = useState<"global" | "per_step">("global");
   const [presetName, setPresetName] = useState("");
+  const [appliedPresetId, setAppliedPresetId] = useState("");
   const [presets, setPresets] = useState<SearchPreset[]>(() => allPresets());
   const [normalizeError, setNormalizeError] = useState<string | null>(null);
   const [locked, setLocked] = useState<Set<string>>(() => new Set());
@@ -238,7 +239,7 @@ export function WeightPanel({ apiConfig, task, draftOptions, onDraftChange, hasU
             <WeightRow
               key={branch.branch_id}
               label={MODALITY_LABELS[branch.modality ?? ""] ?? branch.branch_id}
-              value={Math.min(branchWeight(draftOptions, branch.branch_id), 1)}
+              value={branchWeight(draftOptions, branch.branch_id)}
               onValueChange={(value) => updateBranch(branch.branch_id, { weight: value })}
               enabled={branchEnabled(draftOptions, branch.branch_id)}
               onEnabledChange={(enabled) => updateBranch(branch.branch_id, { enabled })}
@@ -496,16 +497,54 @@ export function WeightPanel({ apiConfig, task, draftOptions, onDraftChange, hasU
           </Section>
         )}
 
-        <Section title="Presets">
+        <Section title="Cách chỉnh cho ra điểm cao">
+          {/* Ba điều này rút từ chính số đo của hệ, không phải lời khuyên chung
+              chung. Đặt TRƯỚC bảng trọng số vì đó là thứ quyết định người dùng
+              có cần động vào thanh trượt hay không. */}
+          <ol className="tuning-guide">
+            <li>
+              <strong>Tìm bằng bản Mặc định trước.</strong> Nó là cấu hình đã đo:
+              KIS <span className="tabular">R@20 = 1.000</span>, tức đáp án gần như
+              luôn nằm đâu đó trong 20 dòng đầu. Hãy xem hết 20 dòng trước khi kết
+              luận là không tìm thấy.
+            </li>
+            <li>
+              <strong>Không thấy thì đổi theo LOẠI MANH MỐI</strong>, đừng kéo bừa:
+              chữ trên màn hình → bản “Tìm chữ”; lời người ta nói → bản “ASR”;
+              mô tả cảnh → bản “Hình ảnh”.
+            </li>
+            <li>
+              <strong>Đổi một thứ mỗi lần.</strong> Kéo hai thanh cùng lúc thì
+              không biết cái nào giúp. Bấm <em>Đặt lại</em> trước khi thử hướng khác.
+            </li>
+          </ol>
+          <p className="tuning-note">
+            Trọng số <span className="tabular">0.25</span> gần như không đổi được thứ
+            hạng — muốn một nhánh thật sự thắng thì cần <span className="tabular">1.0</span>
+            trở lên. Đo được: truy vấn tra tên ở 0.25 không vào nổi top-20, ở 1.0 lên hạng 1.
+          </p>
+        </Section>
+
+        <Section title="Bản chấm dựng sẵn">
+          {/* Người chưa quen chỉnh thông số cần biết ba điều trước khi động vào
+              thanh trượt: nên bắt đầu ở đâu, khi nào cần đổi, và đổi rồi thì
+              tin được tới mức nào. Ba điều đó hiện ngay dưới ô chọn. */}
+          <p className="preset-intro">
+            Chưa biết chỉnh gì thì cứ để <strong>Mặc định</strong> rồi tìm một lượt.
+            Chỉ đổi khi đã xem hết 20 kết quả mà vẫn chưa thấy đáp án — và đổi theo
+            <em> loại manh mối bạn đang có</em>, không đổi bừa.
+          </p>
+
           <SelectField
             label="Áp dụng"
-            value=""
+            value={appliedPresetId}
             onChange={(value) => {
+              setAppliedPresetId(value);
               const preset = presets.find((item) => item.id === value);
               if (preset) onDraftChange(preset.searchOptions);
             }}
           >
-            <option value="">Chọn preset…</option>
+            <option value="">Chọn bản chấm…</option>
             {presets.map((preset) => (
               <option key={preset.id} value={preset.id}>
                 {preset.name}
@@ -513,6 +552,26 @@ export function WeightPanel({ apiConfig, task, draftOptions, onDraftChange, hasU
               </option>
             ))}
           </SelectField>
+
+          {(() => {
+            const active = presets.find((item) => item.id === appliedPresetId);
+            if (!active) return null;
+            return (
+              <div className="preset-guide">
+                {active.description && <p>{active.description}</p>}
+                {active.whenToUse && (
+                  <p><strong>Khi nào dùng:</strong> {active.whenToUse}</p>
+                )}
+                {active.evidence ? (
+                  <p className="preset-evidence"><strong>Số đo:</strong> {active.evidence}</p>
+                ) : (
+                  <p className="preset-evidence">
+                    <strong>Chưa đo</strong> — bản chấm này chưa có số liệu ủng hộ.
+                  </p>
+                )}
+              </div>
+            );
+          })()}
 
           <div className="preset-save">
             <input
