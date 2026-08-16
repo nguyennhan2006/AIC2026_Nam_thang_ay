@@ -2142,7 +2142,7 @@ trọng số của nó. Gợi ý `caption_dense` đang bị đánh trọng số 
 < 1.0 gần như là công tắc, nên kết luận này KHÔNG chuyển thẳng sang được. Phải
 đo lại dưới `norm_max` trước khi tin.
 
-### VISUAL-01 — `jina-clip-v2` thay CLIP ở `dense_visual` · **KHÔNG KẾT LUẬN ĐƯỢC**
+### VISUAL-01 — `jina-clip-v2` thay CLIP ở `dense_visual` · **DROP** (hoà, sau khi sửa phép đo)
 
 `scripts/run_visual_clip_ab.py`, cùng corpus/gold/harness. Đã embed lại 855
 keyframe bằng jina-clip-v2 (`scripts/embed_export_keyframes.py --kind jina`);
@@ -2160,12 +2160,38 @@ export mang **cả hai** bộ vector song song nên đổi qua lại chỉ là �
 Dưới `norm_max`, E (thêm) **kém hơn** D (thay) — khớp với cơ chế đã ghi 13/08:
 lấy `max` nên thêm nhánh không cộng dồn được gì.
 
-⚠️ **Vì sao KHÔNG kết luận được, dù chênh lệch rất lớn.** Variant B đo CLIP
-**không dịch**. Production bọc text tower bằng `TranslatingTextEncoder`
-(VI→EN qua LLM, [container.py:238](../online/api/container.py#L238)), và
-`AIC_ENABLE_QUERY_TRANSLATION=true` được [docs/27](27_SYSTEM_ISSUES.md) xếp là
-"cải thiện lớn nhất từng đo". Phép so có ý nghĩa là jina so với **CLIP + dịch** —
-chưa đo, vì máy dev không có credential FPT.
+⚠️ **Bảng trên đo CLIP KHÔNG DỊCH — đừng dùng để ra quyết định.** Production bọc
+text tower bằng `TranslatingTextEncoder` (VI→EN qua LLM,
+[container.py:238](../online/api/container.py#L238)). Chạy lại với
+`--translate-clip` + `AIC_ENV_FILE=.env.fpt.local`, cùng `norm_max`, cùng gold:
+
+| variant | R@20 | R@50 | R@100 | median | đủ mọi event |
+|---|---:|---:|---:|---:|---:|
+| A baseline (CLIP + dịch) | 62 | 77 | 84 | 6.0 | **10/24** |
+| **B chỉ CLIP + dịch** | **67** | 77 | **87** | **3** | 8/24 |
+| **C chỉ jina-clip-v2** | **67** | 77 | 86 | 4.5 | 9/24 |
+| D baseline thay jina | 64 | 73 | 85 | 6 | 8/24 |
+| E baseline + cả hai | 67 | 76 | 86 | 5.0 | 8/24 |
+
+**Hai kết luận, cả hai đều quan trọng.**
+
+**1. Dịch đưa CLIP từ R@20 = 13 lên 67, và `đủ mọi event` từ 0/24 lên 8/24.**
+Cùng model, cùng vector ảnh, khác đúng một bước tiền xử lý truy vấn. Đây là xác
+nhận định lượng mạnh nhất từ trước tới nay cho dòng "cải thiện lớn nhất từng đo"
+mà [docs/27](27_SYSTEM_ISSUES.md) gán cho `AIC_ENABLE_QUERY_TRANSLATION`.
+
+**2. jina-clip-v2 KHÔNG hơn CLIP + dịch — hoà.** R@20 và R@50 bằng nhau tuyệt
+đối; CLIP nhỉnh ở median (3 so với 4.5) và R@100 (87 so với 86), jina nhỉnh
+đúng 1 ở `đủ mọi event`. → **DROP**, giữ CLIP.
+
+Toàn bộ chênh lệch khổng lồ ở bảng trước (15 so với 66) là **tạo phẩm của phép
+đo**, không phải của model. Ghi lại đây nguyên vẹn cả hai bảng vì bài học nằm ở
+chỗ đó: một phép so hai model, chạy đúng harness đã dùng cho mọi baseline khác,
+vẫn cho kết luận ngược hẳn chỉ vì thiếu một lớp bọc encoder.
+
+Lý do còn lại để cân nhắc jina-clip-v2 là **vận hành, không phải chất lượng**:
+nó đạt cùng kết quả mà không cần lời gọi LLM nào ở đường truy vấn (§ điểm mù 7
+của [docs/33](33_RETRIEVAL_TECHNIQUES.md)). Đổi lại là giấy phép CC-BY-NC-4.0.
 
 Cái *đo được* là mức hỏng của CLIP khi không dịch (10 câu khác nghĩa hẳn nhau,
 cosine GIỮA CÁC CÂU, thấp = phân biệt được):
@@ -2206,15 +2232,17 @@ số trông hoàn toàn hợp lệ.**
 
 ### Việc tiếp theo, theo thứ tự
 
-1. **Đo `dense_visual` ở cấu hình thật.** Bọc `TranslatingTextEncoder` trong
-   `build_service`, hoặc chuyển hẳn các ablation sang `--pipeline container`.
-   Cho tới lúc đó, mọi số nhánh visual đã ghi đều phải đọc kèm dấu sao.
-2. **Chạy lại VISUAL-01 với CLIP + dịch** (cần credential FPT). Đây mới là phép
-   so quyết định việc có thay CLIP hay không.
-3. Truyền `fusion_method` vào `run_dense_text_01.py` rồi đo lại DENSE-TEXT-03
-   dưới `norm_max`.
-4. Nếu (2) cho jina thắng: cân nhắc giấy phép **CC-BY-NC-4.0** của jina-clip-v2
-   trước khi chốt.
+1. **Bọc `TranslatingTextEncoder` trong `build_service`** (hoặc chuyển hẳn các
+   ablation sang `--pipeline container`). Đây là việc gấp nhất: cho tới khi làm,
+   mọi ablation nhánh visual chạy sau này vẫn sẽ sai theo đúng cách cũ.
+   `run_visual_clip_ab.py` đã có `--translate-clip`; các harness khác thì chưa.
+2. Truyền `fusion_method` vào `run_dense_text_01.py` rồi đo lại DENSE-TEXT-03
+   dưới `norm_max` — bảng hiện tại là số `rrf`.
+3. Rà lại các mục cũ trong chính tài liệu này: mục nào đo nhánh visual qua
+   `build_service` thì con số đó là của một CLIP không dịch. Chưa rà.
+4. Nếu sau này muốn bỏ phụ thuộc LLM ở đường truy vấn: jina-clip-v2 đã đo là
+   **hoà** về chất lượng, nên đó là quyết định kiến trúc thuần tuý — cân với
+   giấy phép CC-BY-NC-4.0.
 
 Không thay đổi mặc định nào. `AIC_CAPTION_DENSE_ENCODER=e5`,
 `AIC_VISUAL_EMBEDDING_MODEL=openai/clip-vit-large-patch14` giữ nguyên.

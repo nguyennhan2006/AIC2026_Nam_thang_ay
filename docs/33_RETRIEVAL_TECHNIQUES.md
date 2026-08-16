@@ -85,12 +85,18 @@ bằng `scripts/eval_kis.py --pipeline build_service` đều dưới sức thậ
 `build_service` không bọc `TranslatingTextEncoder` (cảnh báo tại
 [eval_kis.py:313](../scripts/eval_kis.py#L313)).
 
+**Bước dịch đáng giá bao nhiêu:** cùng model, cùng vector ảnh, chỉ khác một
+bước tiền xử lý truy vấn — trên 110 bước TRAKE, R@20 đi từ **13 lên 67** và
+`đủ mọi event` từ **0/24 lên 8/24**.
+
 **Đường thoát khỏi phụ thuộc mạng:** `jina-clip-v2` xử lý tiếng Việt ở cùng mức
 phân biệt với tiếng Anh (0.260 / 0.262) và ghép đúng cặp dịch (0.820), tức
 không cần bước dịch nào. Đó là cách thứ hai giải quyết đúng vấn đề mà
 [docs/32](32_ROUTE2_INPUT_GAP.md) nêu (index sẵn caption EN là cách thứ nhất).
-CHƯA có cơ sở để thay CLIP — phép so cần thiết là jina so với **CLIP + dịch**,
-và nó chưa được đo; xem [docs/20](20_EXPERIMENT_LOG.md) § VISUAL-01.
+Đã đo: nó **hoà** với CLIP + dịch (R@20 67 = 67, R@50 77 = 77; CLIP nhỉnh
+median, jina nhỉnh `đủ mọi event`) → **giữ CLIP**, vì đổi sang jina chỉ là đánh
+đổi kiến trúc (bớt một lời gọi LLM, thêm giấy phép CC-BY-NC-4.0) chứ không được
+thêm chất lượng nào. Xem [docs/20](20_EXPERIMENT_LOG.md) § VISUAL-01.
 
 ### 2.2 Cross-encoder rerank — `bge-reranker-v2-m3`, 100 → 50
 

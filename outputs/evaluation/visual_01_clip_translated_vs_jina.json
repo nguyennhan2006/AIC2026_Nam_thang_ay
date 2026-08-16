@@ -1,0 +1,57 @@
+{
+ "A baseline": {
+  "variant": "A baseline",
+  "steps": 110,
+  "R@20": 62,
+  "R@50": 77,
+  "R@100": 84,
+  "median_rank": 6.0,
+  "all_events": 10,
+  "queries": 24,
+  "pool": 100
+ },
+ "B chi CLIP": {
+  "variant": "B chi CLIP",
+  "steps": 110,
+  "R@20": 67,
+  "R@50": 77,
+  "R@100": 87,
+  "median_rank": 3,
+  "all_events": 8,
+  "queries": 24,
+  "pool": 95.8
+ },
+ "C chi jina-clip-v2": {
+  "variant": "C chi jina-clip-v2",
+  "steps": 110,
+  "R@20": 67,
+  "R@50": 77,
+  "R@100": 86,
+  "median_rank": 4.5,
+  "all_events": 9,
+  "queries": 24,
+  "pool": 93.4
+ },
+ "D baseline thay jina": {
+  "variant": "D baseline thay jina",
+  "steps": 110,
+  "R@20": 64,
+  "R@50": 73,
+  "R@100": 85,
+  "median_rank": 6,
+  "all_events": 8,
+  "queries": 24,
+  "pool": 100
+ },
+ "E baseline + ca hai": {
+  "variant": "E baseline + ca hai",
+  "steps": 110,
+  "R@20": 67,
+  "R@50": 76,
+  "R@100": 86,
+  "median_rank": 5.0,
+  "all_events": 8,
+  "queries": 24,
+  "pool": 100
+ }
+}
