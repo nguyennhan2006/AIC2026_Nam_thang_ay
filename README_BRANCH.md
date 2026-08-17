@@ -172,14 +172,27 @@ python -m scripts.import_competition_pack \
     --merge-embeddings-from storage/exports_multivideo
 ```
 
-Ra 873 video / 87.742 scene / 176.707 keyframe, mất ~6 phút. `--merge-embeddings-from`
-KHÔNG phải tuỳ chọn: pack chỉ có 43/7.790 vector cho batch L21, mà toàn bộ bộ
-gold nằm trên L21_V001..V003 — thiếu cờ đó là corpus có một lỗ hổng dense ngay
-chỗ duy nhất đo được, và không có gì báo lỗi.
+Ra 873 video / 87.742 scene / 176.707 keyframe, mất ~6 phút.
+
+⚠️ Có **hai** bản zip cùng tên. Bản build 07:25 UTC chỉ có 43/7.790 vector cho
+batch L21 — mà toàn bộ bộ gold nằm trên L21_V001..V003, nên nhập bản đó là mất
+tầng dense ngay chỗ duy nhất đo được, và không có gì báo lỗi. Kiểm trước:
+
+```bash
+python -c "import zipfile,json;print(json.loads(zipfile.ZipFile('<zip>').read('index_version.json'))['dense_vector_count'])"
+```
+
+**176707** là bản đúng; 168960 thì tải lại. Chi tiết `docs/34` §3.
 
 **`docs/34_COMPETITION_PACK_IMPORT.md` là tài liệu đầy đủ**: pack thiếu gì
 (OCR 0%, không một file ảnh nào), script quyết định những gì và giá phải trả,
 số đo nạp/RAM/độ trễ, và lệnh chạy server trên corpus này.
+
+Ảnh keyframe lấy riêng từ Kaggle — `docs/35_KAGGLE_MEDIA.md`:
+
+```bash
+python -m scripts.fetch_kaggle_media --what keyframes --batch L23 --pack <zip>
+```
 
 Một cảnh báo không được bỏ qua: ở 87.742 scene, `dense_visual` mất 5,2–11,8 s
 mỗi truy vấn, nên **`AIC_BRANCH_TIMEOUT_MS=8000` mặc định sẽ cắt nhánh đó trong
@@ -209,10 +222,16 @@ tìm thử. Bộ gold `examples/gold_all3.jsonl` có sẵn 120 truy vấn để 
 
 Đây là phần quan trọng nhất của README này. Ba phép kiểm, theo thứ tự:
 
+> **Mọi endpoint nằm dưới `/v1`** (`online/api/routes.py`:
+> `APIRouter(prefix="/v1")`). Và khi `AIC_ONLINE_API_KEY` có giá trị — mặc định
+> trong `.env.fpt.local` là có — thì mọi đường `/v1/*` **trừ `/v1/health`** đòi
+> header `Authorization: Bearer <khoá>`, thiếu thì 401. Bản trước của README này
+> ghi thiếu `/v1`, nên các lệnh curl trong đó trả 404.
+
 **1. Dataset có đúng cái mình tưởng không**
 
 ```bash
-curl -s localhost:8000/health | python -m json.tool
+curl -s localhost:8000/v1/health | python -m json.tool
 ```
 
 `scene_count` phải là **765**, `video_count` **3**, `keyframe_count` **855**.
@@ -221,7 +240,8 @@ Lệch nghĩa là `AIC_METADATA_JSONL` đang trỏ export khác.
 **2. Nhánh dense còn sống không — phép kiểm quan trọng nhất**
 
 ```bash
-curl -s localhost:8000/search/capabilities | python -m json.tool
+curl -s -H "Authorization: Bearer $AIC_ONLINE_API_KEY" \
+    localhost:8000/v1/search/capabilities | python -m json.tool
 ```
 
 Phải thấy `dense_visual` với `backend_kind: "vector"`.
@@ -257,6 +277,7 @@ trông hợp lệ nhưng không phải số của server. Xem `docs/20` § "Lỗ
 |---|---|
 | `docs/08_FILE_GUIDE.md` | file nào làm gì — đọc trước tiên |
 | `docs/34_COMPETITION_PACK_IMPORT.md` | nạp pack thi đấu 873 video, và nó còn thiếu gì |
+| `docs/35_KAGGLE_MEDIA.md` | tải keyframe/video từ Kaggle — và vì sao KHÔNG được chép thẳng |
 | `docs/04_ONLINE_RETRIEVAL.md` | kiến trúc tầng tìm kiếm |
 | `docs/33_RETRIEVAL_TECHNIQUES.md` | mỗi nhánh dùng kỹ thuật gì, và điểm mù của chúng |
 | `docs/20_EXPERIMENT_LOG.md` | mọi thí nghiệm đã chạy, gồm cả những cái **DROP** |

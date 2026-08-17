@@ -22,7 +22,7 @@ python -m scripts.import_competition_pack `
 
 Đọc thẳng trong `.zip`, không cần giải nén (pack nở 570 MB → 2,44 GB, mà 636 MB
 trong đó là ba cặp file trùng byte-for-byte). Khoảng **6 phút**, ghi ra 620 MB
-JSONL + 346 MB vector.
+JSONL + 362 MB vector.
 
 Thử nhanh trước khi chạy thật:
 
@@ -31,7 +31,7 @@ python -m scripts.import_competition_pack --pack ... --limit-videos 5 --dry-run
 python -m scripts.import_competition_pack --pack ... --batch L23 --out storage/exports_pack_L23
 ```
 
-`--merge-embeddings-from` **không phải tuỳ chọn cho lượt chạy đầy đủ** — xem §3.
+Có hai bản zip cùng tên và chỉ một bản đúng — **kiểm §3 trước khi nhập**.
 
 ## 2. Pack có gì, thiếu gì
 
@@ -44,29 +44,41 @@ python -m scripts.import_competition_pack --pack ... --batch L23 --out storage/e
 | Caption tiếng Việt | 95,31% | 168.414 frame |
 | ASR | — | 135.997 đoạn, faster-whisper large-v3 |
 | HSV | 100% | |
-| Dense vector | 95,62% | 168.960 × `jina_clip_v2` 1024 chiều float16 |
+| Dense vector | 100% | 176.707 × `jina_clip_v2` 1024 chiều float16 (bản 08:46, xem §3) |
 | **OCR** | **0,00%** | 0/176.707 |
 | **Ảnh keyframe** | **0** | pack không kèm một file ảnh nào |
 | Events / objects / actions | 0 | không có |
 | width/height | — | không có ở bất kỳ file nào |
 
-## 3. Lỗ hổng L21 — điều khiến `--merge-embeddings-from` là bắt buộc
+## 3. Hai bản pack — kiểm `dense_vector_count` trước khi dùng
 
-| Batch | Video | Frame | Vector |
-|---|---:|---:|---:|
-| **L21** | 29 | 7.790 | **43 (0,6%)** |
-| L22–L30 | 844 | 168.917 | 100% |
+Có hai bản zip cùng mang tên `AIC2026_competition_clean_v3`, khác nhau ở đúng
+một chỗ và chỗ đó quan trọng:
 
-Mọi batch khác đủ 100%; riêng L21 gần như trống. Mà **toàn bộ 120 truy vấn gold
-(`examples/gold_all3.jsonl`) nằm trên L21_V001/V002/V003** — nhập pack không thôi
-thì corpus đầy đủ có đúng một lỗ hổng dense ngay chỗ duy nhất đo được, và không
-có gì báo lỗi: nhánh `dense_visual` vẫn `success`, chỉ là ba video ấy không bao
-giờ xuất hiện qua đường dense.
+| Build (UTC) | Fingerprint | Vector | L21 |
+|---|---|---:|---|
+| 2026-08-17 **07:25** | `362f7558…` | 168.960 (95,62%) | **43/7.790 — hổng** |
+| 2026-08-17 **08:46** | `c8a8435f…` | **176.707 (100%)** | 7.790/7.790 |
 
-Máy này đã có sẵn 855 vector (CLIP + jina) cho đúng ba video đó từ trước.
-`--merge-embeddings-from storage/exports_multivideo` bù chúng vào, **chỉ cho
-`embedding_name` mà pack không có** — không đảo thứ tự ưu tiên giữa hai nguồn
-cùng tên.
+Bản 07:25 có một lỗ hổng dense đúng ở batch L21 — mà **toàn bộ 120 truy vấn gold
+(`examples/gold_all3.jsonl`) nằm trên L21_V001/V002/V003**. Nhập bản đó thì
+corpus mất tầng dense ngay chỗ duy nhất đo được, và không có gì báo lỗi: nhánh
+`dense_visual` vẫn `success`, chỉ là ba video ấy không bao giờ xuất hiện qua
+đường dense.
+
+Kiểm bản mình đang cầm trước khi nhập:
+
+```powershell
+python -c "import zipfile,json;print(json.loads(zipfile.ZipFile(r'<đường dẫn>.zip').read('index_version.json'))['dense_vector_count'])"
+```
+
+**176707** là bản đúng. Ra 168960 thì tải lại.
+
+`--merge-embeddings-from storage/exports_multivideo` giờ không còn cứu lỗ hổng
+ấy nữa, nhưng vẫn nên giữ: nó thêm bộ vector **CLIP** cho 855 keyframe của
+L21_V001..V003, tức mở được profile CLIP+dịch trên đúng ba video có gold. Nó
+**chỉ bù cho `embedding_name` mà pack không có** — không đảo thứ tự ưu tiên giữa
+hai nguồn cùng tên.
 
 ## 4. Script quyết định những gì
 
@@ -108,12 +120,12 @@ chỉ kiểm số chiều) và hàng vượt biên phải **ném lỗi**, không
   keyframe da ghi            176707
     co caption               168414
     co OCR                   0
-    co vector                169810
+    co vector                176707
       trong do bu tu export  855
     co ANH tren dia          855
   doan ASR da ghi            201456
   scene phai noi bien        3713 (toi da 0.0400s)
-  file vector da chep        873 (346.1 MB)
+  file vector da chep        873 (362.0 MB)
   nguon kich thuoc frame     {'measured': 3, 'assumed': 870}
 ```
 
@@ -130,7 +142,7 @@ câu đó.
 | Bước | Thời gian | RSS |
 |---|---:|---:|
 | Nạp + validate 87.742 scene | 51,7 s | 0,95 GB |
-| Đọc 169.810 vector | 41,4 s | 1,78 GB |
+| Đọc vector (đo ở 169.810; bản 100% là 176.707) | 41,4 s | 1,78 GB |
 | Dựng vector store (numpy) | 4,6 s | 1,76 GB |
 | **Dựng container đầy đủ** | **224 s** | **2,66 GB (đỉnh 5,07)** |
 | Sau vài truy vấn | — | 3,94 GB |
@@ -188,11 +200,15 @@ cố hỏi HuggingFace về tokenizer của `jina-embeddings-v3`, mà máy này 
 
 Khởi động mất **~4 phút**. Đợi `Application startup complete.`
 
-Kiểm ngay:
+Kiểm ngay. **Mọi endpoint nằm dưới `/v1`** (`APIRouter(prefix="/v1")`), và mọi
+đường `/v1/*` **trừ `/v1/health`** đòi `Authorization: Bearer <AIC_ONLINE_API_KEY>`
+khi khoá đó có giá trị — mặc định trong `.env.fpt.local` là có:
 
 ```powershell
-curl.exe -s localhost:8000/health | python -m json.tool
-curl.exe -s localhost:8000/search/capabilities | python -m json.tool
+$key = (Select-String -Path .env.fpt.local -Pattern '^AIC_ONLINE_API_KEY=(.+)$').Matches.Groups[1].Value
+
+curl.exe -s localhost:8000/v1/health | python -m json.tool
+curl.exe -s -H "Authorization: Bearer $key" localhost:8000/v1/search/capabilities | python -m json.tool
 ```
 
 Kỳ vọng `scene_count` **87742**, `video_count` **873**, `keyframe_count`
@@ -200,11 +216,14 @@ Kỳ vọng `scene_count` **87742**, `video_count` **873**, `keyframe_count`
 
 ## 8. Còn thiếu gì — theo thứ tự thiệt hại
 
-1. **Ảnh keyframe (176.707 file).** Chưa có thì UI không hiện gì, `/media` 404,
-   VLM rerank không dùng được, và **không sinh lại được embedding hay OCR** —
-   mọi cách vá hai mục dưới đều bắt đầu từ ảnh. Đặt vào
-   `storage/processed/keyframes/<video_id>/frame_%06d.jpg`; `image_path` trong
-   export đã trỏ sẵn tới đó nên không phải convert lại.
+1. **Ảnh keyframe (176.707 file).** Chưa có thì UI không hiện gì, `/v1/media`
+   404, VLM rerank không dùng được, và **không sinh lại được embedding hay OCR**
+   — mọi cách vá hai mục dưới đều bắt đầu từ ảnh.
+
+   Tải bằng `scripts/fetch_kaggle_media.py` (xem `docs/35_KAGGLE_MEDIA.md`).
+   **Đừng chép thẳng thư mục Kaggle**: Kaggle đặt tên ảnh theo số thứ tự
+   keyframe (`002.jpg`) còn export trỏ theo frame index (`frame_000090.jpg`) —
+   chép thẳng là 176.707 ảnh nằm sai chỗ và không có gì báo lỗi.
 2. **OCR — 0% trên cả 873 video.** Cấu hình hiện tại để `bm25_ocr` weight **1.0**
    vì đo được đó là nhánh duy nhất tìm ra tên người trên chyron, và **75/120 truy
    vấn gold khai `required_modalities` có ocr**. Đo trên corpus này mà không có
