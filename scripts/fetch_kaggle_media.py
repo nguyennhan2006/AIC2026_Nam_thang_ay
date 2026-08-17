@@ -533,35 +533,73 @@ def download_archive(arguments: argparse.Namespace) -> int:
 
     session = client._session()
     url = f"{API_ROOT}/datasets/download/{DATASET}"
-    probe = session.get(url, headers={"Range": "bytes=0-0"}, timeout=300, stream=True)
-    probe.raise_for_status()
-    total = int(probe.headers.get("Content-Range", "/0").rsplit("/", 1)[-1])
-    probe.close()
-    print(f"kho: {total/2**30:.2f} GB   da co: {done/2**30:.2f} GB")
-    if done >= total > 0:
-        print("da tai xong tu truoc")
-        return 0
 
-    started = time.time()
-    response = session.get(
-        url, headers={"Range": f"bytes={done}-"}, timeout=3600, stream=True
-    )
-    response.raise_for_status()
-    with destination.open("ab") as sink:
-        for chunk in response.iter_content(8 << 20):
-            sink.write(chunk)
-            done += len(chunk)
-            elapsed = max(time.time() - started, 1e-9)
+    def open_stream(offset: int):
+        """Mở luồng tải từ `offset`, CHỜ qua đợt chặn tốc độ.
+
+        Kaggle trả 404 khi đang chặn (không phải 429), nên không thể phân biệt
+        với "không có file" nếu chỉ nhìn mã. Ở đây thì phân biệt được: đường dẫn
+        này là cố định và đã tải được trước đó, nên 404 chỉ có thể là chặn.
+
+        Chờ đều 60 s thay vì tăng gấp đôi: đo được đợt chặn kéo dài hàng chục
+        phút, mà tăng gấp đôi thì tới lần thứ 8 đã ngủ 2 tiếng và bỏ lỡ lúc mở.
+        """
+
+        for attempt in range(60):
+            response = session.get(
+                url, headers={"Range": f"bytes={offset}-"}, timeout=3600, stream=True
+            )
+            if response.status_code in (200, 206):
+                return response
+            response.close()
+            if response.status_code not in (404, 429, 500, 502, 503, 504):
+                response.raise_for_status()
             print(
-                f"\r  {done/2**30:7.2f}/{total/2**30:.2f} GB "
-                f"({done/total*100:5.1f}%, {(done)/elapsed/2**20:.1f} MB/s)",
+                f"\r  Kaggle dang chan (HTTP {response.status_code}), cho 60s "
+                f"[lan {attempt + 1}/60]   ",
                 end="",
                 flush=True,
             )
+            time.sleep(60)
+        raise SystemExit(
+            "\nKaggle chan lien tuc 60 phut. Thu lai sau, hoac tai bang trinh duyet:\n"
+            f"  https://www.kaggle.com/datasets/{DATASET} -> nut Download\n"
+            f"  roi chay: python -m scripts.fetch_kaggle_media --archive <file.zip> ..."
+        )
+
+    response = open_stream(done)
+    total = done + int(response.headers.get("Content-Length") or 0)
+    print(f"\nkho: {total/2**30:.2f} GB   da co: {done/2**30:.2f} GB")
+
+    started = time.time()
+    started_at = done
+    while True:
+        try:
+            with destination.open("ab") as sink:
+                for chunk in response.iter_content(8 << 20):
+                    sink.write(chunk)
+                    done += len(chunk)
+                    elapsed = max(time.time() - started, 1e-9)
+                    rate = (done - started_at) / elapsed
+                    remaining = (total - done) / rate / 60 if rate else 0
+                    print(
+                        f"\r  {done/2**30:7.2f}/{total/2**30:.2f} GB "
+                        f"({done/total*100:5.1f}%, {rate/2**20:.1f} MB/s, "
+                        f"con ~{remaining:.0f} phut)   ",
+                        end="",
+                        flush=True,
+                    )
+        except Exception as exc:  # noqa: BLE001 — đứt mạng giữa 106 GB là chuyện thường
+            print(f"\n  dut ket noi ({exc!r}), noi tiep tu {done/2**30:.2f} GB")
+        finally:
+            response.close()
+        if done >= total:
+            break
+        # Nối tiếp: `Range` từ đúng số byte đã ghi, nên không tải lại phần cũ.
+        response = open_stream(done)
+        started, started_at = time.time(), done
+
     print()
-    if done < total:
-        print(f"  CHUA XONG ({done}/{total} byte) — chay lai lenh nay de noi tiep")
-        return 1
     return 0
 
 
