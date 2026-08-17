@@ -212,8 +212,21 @@ class KaggleClient:
             "  Cach thay the: chep kaggle.json vao ~/.kaggle/kaggle.json."
         )
 
-    def fetch(self, remote_path: str, *, timeout: int = 120) -> bytes | None:
-        """Nội dung file, hoặc None nếu Kaggle trả 404 (đường dẫn không tồn tại).
+    def fetch(self, remote_path: str, *, timeout: int = 120, retry_404: int = 4) -> bytes | None:
+        """Nội dung file, hoặc None nếu Kaggle trả 404 sau khi đã thử lại.
+
+        **404 của Kaggle KHÔNG có nghĩa là "không có file".** Đo được: khi vượt
+        hạn mức tải, Kaggle trả 404 cho MỌI đường dẫn — kể cả đường vừa tải xong
+        một giây trước — chứ không trả 429. Hạn mức đó dùng chung cho cả endpoint
+        tải-từng-file lẫn tải-cả-kho.
+
+        Hậu quả nếu tin 404 ngay: một video đang bị chặn tạm thời sẽ bị ghi là
+        "không dò được bố cục" và cả lượt tải dừng, dù đường dẫn hoàn toàn đúng.
+        Đã dính đúng lỗi này với L23_V003.
+
+        Nên 404 được thử lại có giãn cách như 429; chỉ khi hết lượt mới coi là
+        thật sự không có. `retry_404=0` cho đường DÒ bố cục, nơi 404 mới đúng là
+        tín hiệu "dạng tên này sai".
 
         Kaggle đóng gói .zip cho một số file — mở luôn ở đây để caller chỉ phải
         nghĩ về nội dung thật.
@@ -222,6 +235,7 @@ class KaggleClient:
         import requests
 
         url = f"{API_ROOT}/datasets/download/{DATASET}"
+        not_found = 0
         for attempt in range(5):
             try:
                 response = self._session().get(
@@ -244,7 +258,11 @@ class KaggleClient:
                 time.sleep(2**attempt)
                 continue
             if response.status_code == 404:
-                return None
+                not_found += 1
+                if not_found > retry_404:
+                    return None
+                time.sleep(min(2**not_found, 30))
+                continue
             if response.status_code in (401, 403):
                 # Không thử lại: sai khoá thì thử 5 lần vẫn sai, mà thông báo
                 # mặc định của requests ("403 Client Error") không nói được là
@@ -325,17 +343,25 @@ class Layout:
 
         parents = [known_parent] if known_parent else _keyframe_parents(batch)
         formats = [known_format] if known_format else list(NAME_FORMATS)
-        for parent in parents:
-            for name_format in formats:
-                remote = f"{parent}/{video_id}/{name_format.format(n=probe_index)}"
-                with self._lock:
-                    self.probes += 1
-                payload = self._client.fetch(remote)
-                if payload is not None and _is_image(payload):
+        for retry_404 in (0, 4):
+            for parent in parents:
+                for name_format in formats:
+                    remote = f"{parent}/{video_id}/{name_format.format(n=probe_index)}"
                     with self._lock:
-                        self._parent[batch] = parent
-                        self._format = name_format
-                    return parent, name_format
+                        self.probes += 1
+                    payload = self._client.fetch(remote, retry_404=retry_404)
+                    if payload is not None and _is_image(payload):
+                        with self._lock:
+                            self._parent[batch] = parent
+                            self._format = name_format
+                        return parent, name_format
+                    if retry_404:
+                        # Lượt hai chỉ để phân biệt chặn-tốc-độ với sai-đường-dẫn.
+                        # Một tổ hợp đã đủ trả lời; thử tiếp 35 tổ hợp nữa với
+                        # giãn cách là đốt hạn mức vô ích.
+                        break
+                if retry_404:
+                    break
         raise SystemExit(
             f"{video_id}: khong do duoc bo cuc tren Kaggle.\n"
             f"  da thu thu muc : {parents}\n"
