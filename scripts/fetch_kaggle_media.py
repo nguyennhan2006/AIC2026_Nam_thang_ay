@@ -45,6 +45,7 @@ import io
 import json
 import os
 from pathlib import Path
+import shutil
 import sys
 import threading
 import time
@@ -56,6 +57,27 @@ API_ROOT = "https://www.kaggle.com/api/v1"
 
 # Dạng tên file được thử, theo thứ tự. AIC phát hành keyframe đánh số từ 1.
 NAME_FORMATS = ("{n:03d}.jpg", "{n:04d}.jpg", "{n}.jpg", "{n:05d}.jpg", "{n:06d}.jpg", "{n:03d}.jpeg")
+
+def load_env_file_from_environ() -> None:
+    """Nạp `AIC_ENV_FILE` như phần còn lại của repo, để khoá Kaggle nằm chung
+    một chỗ với khoá FPT thay vì rải thêm một file ở `~/.kaggle/`.
+
+    Dùng lại `online.config.load_env_file` (`override=False`, tức biến đặt sẵn
+    trên dòng lệnh vẫn thắng file). Trỏ sai đường dẫn là lỗi DỪNG — cùng lý do
+    đã ghi ở `online/config.py`: gõ sai mà vẫn chạy được nghĩa là chạy không có
+    khoá và không ai biết.
+    """
+
+    raw = os.getenv("AIC_ENV_FILE")
+    if not raw:
+        return
+    from online.config import load_env_file
+
+    path = Path(raw)
+    if not path.exists():
+        raise SystemExit(f"AIC_ENV_FILE tro toi {path} nhung file khong ton tai")
+    load_env_file(path)
+
 
 # Thư mục cha ứng với mỗi batch. L26 bị chẻ làm 5 phần trên Kaggle nên phải dò;
 # các batch khác chỉ có một khả năng nhưng vẫn đi qua cùng đường dò để một bản
@@ -70,6 +92,61 @@ def _video_parents(batch: str) -> list[str]:
     return [f"Videos_{batch}{suffix}/video" for suffix in suffixes]
 
 
+def system_ca_bundle(data_root: Path) -> str | None:
+    """Xuất kho chứng chỉ gốc của Windows ra một file PEM, trả về đường dẫn.
+
+    Máy này chặn TLS tới cả `kaggle.com` lẫn `huggingface.co` với
+    `CERTIFICATE_VERIFY_FAILED: unable to get local issuer certificate`, trong
+    khi `curl.exe` của Windows vào cùng địa chỉ đó trả 200. Chênh lệch đó nói
+    đúng một điều: CA đang ký lại kết nối (proxy/antivirus của mạng) CÓ trong
+    kho của hệ điều hành nhưng KHÔNG có trong `certifi`.
+
+    Vì sao xuất ra PEM chứ không dùng `truststore.inject_into_ssl()` — đã thử
+    và nó hỏng ở đúng chỗ script này cần: `truststore` bắt Windows SChannel làm
+    việc bắt tay, và với 8 luồng bắt tay đồng thời nó đổ
+    `SSL record layer failure`. Một luồng thì chạy. Xuất ra PEM giữ phần xác
+    thực ở OpenSSL — vốn an toàn với đa luồng — mà vẫn chỉ tin đúng những gì
+    Windows đã tin.
+
+    KHÔNG dùng `verify=False`: nó tắt xác thực với MỌI host, biến một vấn đề
+    cấu hình thành lỗ hổng thường trực trong script chạy hàng giờ.
+    """
+
+    import ssl
+
+    if not hasattr(ssl, "enum_certificates"):  # không phải Windows
+        return None
+    lines: list[str] = []
+    seen: set[bytes] = set()
+    for store in ("ROOT", "CA"):
+        try:
+            entries = ssl.enum_certificates(store)
+        except OSError:
+            continue
+        for der, encoding, trust in entries:
+            # `trust=True` = tin cho mọi mục đích; set() = tin cho một số OID.
+            # Chỉ lấy chứng chỉ dùng được cho xác thực server.
+            if not (trust is True or (isinstance(trust, set) and trust)):
+                continue
+            if encoding != "x509_asn" or der in seen:
+                continue
+            seen.add(der)
+            lines.append(ssl.DER_cert_to_PEM_cert(der))
+    if not lines:
+        return None
+
+    import certifi
+
+    # Gộp thêm certifi: kho của Windows đủ cho CA nội bộ nhưng có thể thiếu vài
+    # CA công cộng mà máy chưa từng gặp, và thiếu một CA là hỏng cả lượt tải.
+    bundle = Path(certifi.where()).read_text(encoding="utf-8") + "\n" + "".join(lines)
+    destination = data_root / "state" / "ca_bundle_windows.pem"
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    if not destination.exists() or destination.read_text(encoding="utf-8") != bundle:
+        destination.write_text(bundle, encoding="utf-8")
+    return str(destination)
+
+
 class KaggleClient:
     """Tải một file trong dataset qua REST API, dùng lại kết nối.
 
@@ -78,23 +155,45 @@ class KaggleClient:
     `~/.kaggle/kaggle.json` như bình thường.
     """
 
-    def __init__(self, workers: int) -> None:
-        import requests
-        from requests.adapters import HTTPAdapter
+    def __init__(self, workers: int, data_root: Path) -> None:
+        self._auth = self._credentials()
+        self.username = self._auth[0]
+        self._verify = system_ca_bundle(data_root) or True
+        # MỘT Session cho MỖI luồng. `requests.Session` không an toàn đa luồng —
+        # tài liệu của chính requests nói vậy — và dùng chung một Session cho 8
+        # luồng đã đổ `SSL record layer failure` giữa lượt tải, tức hỏng SAU khi
+        # đã tải được vài trăm ảnh chứ không phải hỏng ngay.
+        self._local = threading.local()
 
-        username, key = self._credentials()
-        self._session = requests.Session()
-        self._session.auth = (username, key)
-        adapter = HTTPAdapter(pool_connections=workers + 4, pool_maxsize=workers + 4)
-        self._session.mount("https://", adapter)
-        self.username = username
+    def _session(self):
+        session = getattr(self._local, "session", None)
+        if session is None:
+            import requests
+
+            session = requests.Session()
+            session.auth = self._auth
+            session.verify = self._verify
+            self._local.session = session
+        return session
 
     @staticmethod
     def _credentials() -> tuple[str, str]:
+        """`KAGGLE_USERNAME`/`KAGGLE_KEY` trước, `kaggle.json` sau.
+
+        Biến môi trường thắng vì `AIC_ENV_FILE` đã nạp chúng từ `.env.*.local`
+        vào `os.environ` — cùng một chỗ chứa mọi khoá khác của dự án, thay vì
+        thêm một file khoá thứ hai ở `~/.kaggle/`.
+        """
+
         username = os.getenv("KAGGLE_USERNAME")
         key = os.getenv("KAGGLE_KEY")
         if username and key:
-            return username, key
+            return username.strip(), key.strip()
+        if username or key:
+            raise SystemExit(
+                "chi co MOT trong hai bien KAGGLE_USERNAME / KAGGLE_KEY duoc dat. "
+                "Can ca hai — dien not o file env dang dung (AIC_ENV_FILE)."
+            )
         for candidate in (
             Path(os.getenv("KAGGLE_CONFIG_DIR", "")) / "kaggle.json" if os.getenv("KAGGLE_CONFIG_DIR") else None,
             Path.home() / ".kaggle" / "kaggle.json",
@@ -104,9 +203,13 @@ class KaggleClient:
                 return str(data["username"]), str(data["key"])
         raise SystemExit(
             "khong tim thay khoa Kaggle.\n"
-            "  1. kaggle.com -> Settings -> API -> Create New Token  (tai ve kaggle.json)\n"
-            "  2. chep vao  C:\\Users\\<ten>\\.kaggle\\kaggle.json\n"
-            "  hoac dat bien moi truong KAGGLE_USERNAME / KAGGLE_KEY."
+            "  Cach dang dung — dien vao file env roi tro AIC_ENV_FILE vao no:\n"
+            "      KAGGLE_USERNAME=<username>\n"
+            "      KAGGLE_KEY=<key>\n"
+            "      $env:AIC_ENV_FILE = '.env.fpt.local'\n"
+            "  Lay key: kaggle.com -> Settings -> API -> Create New Token\n"
+            "  (username la truong \"username\" trong kaggle.json tai ve, khong phai email).\n"
+            "  Cach thay the: chep kaggle.json vao ~/.kaggle/kaggle.json."
         )
 
     def fetch(self, remote_path: str, *, timeout: int = 120) -> bytes | None:
@@ -121,9 +224,20 @@ class KaggleClient:
         url = f"{API_ROOT}/datasets/download/{DATASET}"
         for attempt in range(5):
             try:
-                response = self._session.get(
+                response = self._session().get(
                     url, params={"file_name": remote_path}, timeout=timeout, stream=False
                 )
+            except requests.exceptions.SSLError as exc:
+                raise SystemExit(
+                    f"TLS bi tu choi khi noi toi kaggle.com: {exc}\n"
+                    "  May nay co CA ky lai ket noi (proxy/antivirus) — no CO trong kho\n"
+                    "  chung chi cua Windows nhung KHONG co trong certifi.\n"
+                    "  Script da tu xuat kho chung chi Windows ra\n"
+                    "  storage/state/ca_bundle_windows.pem — loi nay nghia la ca cach do\n"
+                    "  cung khong du. Kiem tra proxy/antivirus dang chan.\n"
+                    "  Kiem chung: curl.exe -sS -o NUL -w \"%{http_code}\" https://www.kaggle.com/\n"
+                    "  ra 200 nghia la kho cua Windows dung, chi Python chua thay."
+                ) from exc
             except requests.RequestException:
                 if attempt == 4:
                     raise
@@ -131,6 +245,17 @@ class KaggleClient:
                 continue
             if response.status_code == 404:
                 return None
+            if response.status_code in (401, 403):
+                # Không thử lại: sai khoá thì thử 5 lần vẫn sai, mà thông báo
+                # mặc định của requests ("403 Client Error") không nói được là
+                # sai khoá hay chưa bấm đồng ý điều khoản dataset.
+                raise SystemExit(
+                    f"Kaggle tu choi ({response.status_code}) khi lay {remote_path}.\n"
+                    "  - Sai KAGGLE_USERNAME/KAGGLE_KEY? username la truong \"username\" trong\n"
+                    "    kaggle.json, KHONG phai email dang nhap.\n"
+                    "  - Token cu da bi thu hoi khi tao token moi — dung ban moi nhat.\n"
+                    "  - Chua mo trang dataset va bam dong y dieu khoan bang chinh tai khoan do?"
+                )
             if response.status_code in (429, 500, 502, 503, 504):
                 if attempt == 4:
                     response.raise_for_status()
@@ -220,7 +345,7 @@ class Layout:
 
 
 def fetch_keyframes(arguments: argparse.Namespace) -> int:
-    client = KaggleClient(arguments.workers)
+    client = KaggleClient(arguments.workers, Path(arguments.data_root))
     index_map = load_index_map(Path(arguments.pack))
     layout = Layout(client)
     destination_root = Path(arguments.data_root) / "processed" / "keyframes"
@@ -302,7 +427,7 @@ def fetch_keyframes(arguments: argparse.Namespace) -> int:
 
 
 def fetch_videos(arguments: argparse.Namespace) -> int:
-    client = KaggleClient(arguments.workers)
+    client = KaggleClient(arguments.workers, Path(arguments.data_root))
     destination_root = Path(arguments.data_root) / "raw" / "videos"
     destination_root.mkdir(parents=True, exist_ok=True)
 
@@ -361,6 +486,151 @@ def fetch_videos(arguments: argparse.Namespace) -> int:
     print(f"  da co san   {report['da_co']}")
     print(f"  khong thay  {report['khong_thay']}")
     return 1 if report["khong_thay"] else 0
+
+
+def download_archive(arguments: argparse.Namespace) -> int:
+    """Tải nguyên kho .zip của dataset, nối tiếp được khi đứt.
+
+    Vì sao phải có đường này: endpoint tải-TỪNG-FILE có hạn ngạch rất chặt — đo
+    trên chính tài khoản này, **112 ảnh rồi bị 404 toàn bộ**, không hồi phục sau
+    5 phút. 176.707 ảnh qua đường đó là không khả thi. Endpoint tải-CẢ-BỘ thì
+    tính là MỘT lần tải, và nó hỗ trợ `Range` nên đứt giữa chừng chạy lại được.
+
+    Đổi lại: kho là 106,13 GB vì gói kèm cả video, trong khi riêng keyframe chỉ
+    ~32,5 GB. Không tách được ở phía máy chủ.
+    """
+
+    client = KaggleClient(1, Path(arguments.data_root))
+    destination = Path(arguments.download_archive)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    done = destination.stat().st_size if destination.exists() else 0
+
+    session = client._session()
+    url = f"{API_ROOT}/datasets/download/{DATASET}"
+    probe = session.get(url, headers={"Range": "bytes=0-0"}, timeout=300, stream=True)
+    probe.raise_for_status()
+    total = int(probe.headers.get("Content-Range", "/0").rsplit("/", 1)[-1])
+    probe.close()
+    print(f"kho: {total/2**30:.2f} GB   da co: {done/2**30:.2f} GB")
+    if done >= total > 0:
+        print("da tai xong tu truoc")
+        return 0
+
+    started = time.time()
+    response = session.get(
+        url, headers={"Range": f"bytes={done}-"}, timeout=3600, stream=True
+    )
+    response.raise_for_status()
+    with destination.open("ab") as sink:
+        for chunk in response.iter_content(8 << 20):
+            sink.write(chunk)
+            done += len(chunk)
+            elapsed = max(time.time() - started, 1e-9)
+            print(
+                f"\r  {done/2**30:7.2f}/{total/2**30:.2f} GB "
+                f"({done/total*100:5.1f}%, {(done)/elapsed/2**20:.1f} MB/s)",
+                end="",
+                flush=True,
+            )
+    print()
+    if done < total:
+        print(f"  CHUA XONG ({done}/{total} byte) — chay lai lenh nay de noi tiep")
+        return 1
+    return 0
+
+
+def _archive_members(archive: zipfile.ZipFile) -> tuple[dict[str, dict[int, str]], dict[str, str]]:
+    """`({video_id: {source_index: ten_trong_zip}}, {video_id: duong_dan_mp4})`.
+
+    Chỉ số đọc từ TÊN FILE, không phải thứ tự trong zip — cùng lý do đã ghi ở
+    đầu module.
+    """
+
+    keyframes: dict[str, dict[int, str]] = defaultdict(dict)
+    videos: dict[str, str] = {}
+    for name in archive.namelist():
+        parts = name.split("/")
+        if len(parts) == 4 and parts[0].startswith("Keyframes_") and parts[1] == "keyframes":
+            stem = Path(parts[3]).stem
+            if stem.isdigit():
+                keyframes[parts[2]][int(stem)] = name
+        elif len(parts) == 3 and parts[0].startswith("Videos_") and parts[1] == "video":
+            if parts[2].lower().endswith(".mp4"):
+                videos[Path(parts[2]).stem] = name
+    return dict(keyframes), videos
+
+
+def extract_archive(arguments: argparse.Namespace) -> int:
+    """Giải nén + ĐỔI TÊN từ kho .zip đã tải về. Không cần mạng."""
+
+    archive_path = Path(arguments.archive)
+    if not archive_path.exists():
+        raise SystemExit(f"khong thay kho: {archive_path}")
+    data_root = Path(arguments.data_root)
+    report = Counter()
+
+    with zipfile.ZipFile(archive_path) as archive:
+        in_zip_keyframes, in_zip_videos = _archive_members(archive)
+        print(f"kho co {len(in_zip_keyframes)} video keyframe, {len(in_zip_videos)} file mp4")
+
+        if arguments.what in (None, "keyframes"):
+            index_map = load_index_map(Path(arguments.pack))
+            videos = _selected_videos(sorted(index_map), arguments)
+            for video_id in videos:
+                available = in_zip_keyframes.get(video_id)
+                if not available:
+                    report["video_thieu_trong_kho"] += 1
+                    continue
+                target_dir = data_root / "processed" / "keyframes" / video_id
+                target_dir.mkdir(parents=True, exist_ok=True)
+                for source_index, frame_idx in sorted(index_map[video_id].items()):
+                    member = available.get(source_index)
+                    if member is None:
+                        report["thieu_trong_kho"] += 1
+                        continue
+                    destination = target_dir / f"frame_{frame_idx:06d}.jpg"
+                    if destination.exists():
+                        report["da_co"] += 1
+                        continue
+                    payload = archive.read(member)
+                    if not _is_image(payload):
+                        report["khong_phai_anh"] += 1
+                        continue
+                    temporary = destination.with_suffix(".part")
+                    temporary.write_bytes(payload)
+                    temporary.replace(destination)
+                    report["da_giai_nen"] += 1
+                    report["byte"] += len(payload)
+                if report["da_giai_nen"] % 2000 < len(index_map[video_id]):
+                    print(
+                        f"\r  {report['da_giai_nen']} anh ({report['byte']/2**30:.2f} GB)",
+                        end="",
+                        flush=True,
+                    )
+            print()
+
+        if arguments.what == "videos":
+            wanted = _selected_videos(sorted(in_zip_videos), arguments)
+            target_dir = data_root / "raw" / "videos"
+            target_dir.mkdir(parents=True, exist_ok=True)
+            for video_id in wanted:
+                destination = target_dir / f"{video_id}.mp4"
+                if destination.exists() and destination.stat().st_size > 0:
+                    report["da_co"] += 1
+                    continue
+                with archive.open(in_zip_videos[video_id]) as source, destination.open("wb") as sink:
+                    shutil.copyfileobj(source, sink, 8 << 20)
+                report["da_giai_nen"] += 1
+                report["byte"] += destination.stat().st_size
+                print(f"  {video_id} ({report['byte']/2**30:.1f} GB)", flush=True)
+
+    print()
+    print(f"  da giai nen        {report['da_giai_nen']}  ({report['byte']/2**30:.2f} GB)")
+    print(f"  da co san          {report['da_co']}")
+    print(f"  thieu trong kho    {report['thieu_trong_kho']}")
+    print(f"  video thieu han    {report['video_thieu_trong_kho']}")
+    print(f"  khong phai anh     {report['khong_phai_anh']}")
+    return 1 if report["thieu_trong_kho"] or report["video_thieu_trong_kho"] else 0
 
 
 def verify(arguments: argparse.Namespace) -> int:
@@ -436,8 +706,24 @@ def main() -> None:
     parser.add_argument("--limit-videos", type=int, default=0)
     parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--dry-run", action="store_true", help="chi do bo cuc va in ke hoach")
+    parser.add_argument(
+        "--download-archive",
+        help="tai NGUYEN kho .zip cua dataset ve duong dan nay (106 GB, noi tiep duoc). "
+        "Duong nay ton tai vi endpoint tai-tung-file co han ngach rat chat — xem docs/35 §4",
+    )
+    parser.add_argument(
+        "--archive",
+        help="giai nen + doi ten TU kho .zip da tai ve, khong can mang",
+    )
     arguments = parser.parse_args()
+    load_env_file_from_environ()
 
+    if arguments.download_archive:
+        sys.exit(download_archive(arguments))
+    if arguments.archive:
+        if arguments.what in (None, "keyframes") and not arguments.pack:
+            raise SystemExit("--archive voi keyframes can --pack (bang doi ten)")
+        sys.exit(extract_archive(arguments))
     if arguments.verify:
         sys.exit(verify(arguments))
     if arguments.what == "keyframes":

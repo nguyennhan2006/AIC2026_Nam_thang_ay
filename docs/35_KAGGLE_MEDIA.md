@@ -1,39 +1,42 @@
 # 35 — Tải keyframe và video từ Kaggle
 
 Nguồn: [`trongnhantran25/aic-nam-thang-ay`](https://www.kaggle.com/datasets/trongnhantran25/aic-nam-thang-ay)
-— 115,75 GB, `Keyframes_L21..L30` (L26 chẻ làm 5 phần) và `Videos_L**_a/video/*.mp4`.
+— `Keyframes_L21..L30` (L26 chẻ làm 5 phần) và `Videos_L**_a/video/*.mp4`.
+Kho `.zip` đo được là **106,13 GB**.
 
 Pack thi đấu (`docs/34`) mang caption, ASR và vector nhưng **không kèm một file
 ảnh nào**. Đây là bước lấy ảnh về.
+
+Đã chạy thật ngày **2026-08-17**, kể cả phần hỏng. Đọc §4 trước khi bắt đầu —
+đường hiển nhiên nhất là đường không đi được.
 
 ---
 
 ## 1. Khoá Kaggle
 
 `kaggle.com` → ảnh đại diện → **Settings** → mục **API** → **Create New Token**.
-Trình duyệt tải về `kaggle.json`. Chép vào:
+Trình duyệt tải về `kaggle.json`. Mở nó ra, chép hai giá trị vào file env đang
+dùng (`.env.fpt.local`), cùng chỗ với mọi khoá khác của dự án:
 
-```
-C:\Users\ASUS\.kaggle\kaggle.json
+```ini
+KAGGLE_USERNAME=<truong "username" trong kaggle.json — KHONG phai email>
+KAGGLE_KEY=<truong "key">
 ```
 
-Thư mục `.kaggle` chưa có thì tạo:
+Rồi trỏ `AIC_ENV_FILE` vào file đó khi chạy:
 
 ```powershell
-New-Item -ItemType Directory -Force "$env:USERPROFILE\.kaggle"
-Move-Item "$env:USERPROFILE\Downloads\kaggle.json" "$env:USERPROFILE\.kaggle\kaggle.json"
+$env:AIC_ENV_FILE = ".env.fpt.local"
 ```
 
-Hoặc không dùng file, đặt biến môi trường:
+Script đọc `AIC_ENV_FILE` bằng đúng cơ chế của `online/config.py`, nên khoá
+Kaggle nằm chung một file đã được `.gitignore` chặn và `check_secret_leak.py`
+chặn lần hai — thay vì rải thêm một file khoá thứ hai ở `~/.kaggle/`.
 
-```powershell
-$env:KAGGLE_USERNAME = "<username>"
-$env:KAGGLE_KEY      = "<key>"
-```
+`.env.example` có sẵn hai dòng trống để điền. Ai quen `~/.kaggle/kaggle.json`
+thì vẫn dùng được, script đọc nó khi không thấy biến môi trường.
 
-Script **không** cần gói `kaggle` — nó gọi thẳng REST API, chỉ mượn đúng định
-dạng khoá đó. `kaggle.json` không được commit (`.gitignore` đã chặn `*.json`
-trong thư mục người dùng vì nó nằm ngoài repo, nhưng vẫn đừng chép vào repo).
+Không cần cài gói `kaggle`.
 
 ## 2. Vì sao không chép thẳng thư mục Kaggle
 
@@ -67,40 +70,62 @@ Ghép theo thứ tự thì mọi ảnh sau chỗ khuyết lệch một nấc —
 thường, chỉ là **sai ảnh**, nên không cách nào phát hiện từ giao diện.
 `tests/test_fetch_kaggle_media.py` khoá đúng ca này lại.
 
-## 3. Lệnh
+## 3. Bố cục được DÒ, không đoán
 
-Dò bố cục và in kế hoạch trước, không tải gì:
+Script thử lần lượt `001.jpg`, `0001.jpg`, `1.jpg`, `00001.jpg`, `000001.jpg`,
+`001.jpeg` trên một ảnh thật, và thử các thư mục cha `Keyframes_L26`,
+`Keyframes_L26_a`, … cho tới khi nhận về đúng một JPEG (kiểm bằng magic byte,
+không tin `Content-Type`). Tìm được thì khoá lại cho cả lượt chạy.
+
+Kết quả dò thật: **`Keyframes_L23/keyframes/<video_id>/{n:03d}.jpg`**, ảnh
+1280×720 — trùng đúng mặc định `--assume-frame-size` của
+`import_competition_pack.py`.
+
+## 4. ⚠️ Endpoint tải-từng-file có hạn ngạch rất chặt
+
+**Đo được trên chính tài khoản này: tải được 112 ảnh rồi Kaggle trả 404 cho
+MỌI đường dẫn, kể cả đường vừa tải xong. Không hồi phục sau 5 phút.**
+
+404 chứ không phải 429, nên nhìn hệt như "sai đường dẫn" — mất khá lâu mới phân
+biệt được. Bằng chứng nó là hạn ngạch chứ không phải lỗi cấu hình: cùng lúc đó
+`GET /api/v1/datasets/list` vẫn trả 200 (khoá còn hợp lệ) và endpoint tải-cả-bộ
+vẫn trả 206.
+
+Nghĩa là **176.707 ảnh qua đường tải-từng-file là không khả thi**. Đường đó vẫn
+giữ trong script vì nó tiện cho vài chục ảnh (thử một video, vá vài ảnh thiếu),
+nhưng cho cả bộ thì phải đi đường kho.
+
+### Đường khả thi: tải một lần cả kho rồi giải nén tại chỗ
 
 ```powershell
-python -m scripts.fetch_kaggle_media --what keyframes --batch L21 --limit-videos 2 `
-    --pack "D:\Sinh viên CNhan\download\AIC2026_competition_clean_v3 (1).zip" --dry-run
+$env:AIC_ENV_FILE = ".env.fpt.local"
+
+# 1. Tai nguyen kho (106,13 GB). Dut giua chung thi chay lai lenh nay — noi tiep.
+python -m scripts.fetch_kaggle_media --download-archive D:\aic\aic-nam-thang-ay.zip
+
+# 2. Giai nen + doi ten. KHONG can mang.
+python -m scripts.fetch_kaggle_media --archive D:\aic\aic-nam-thang-ay.zip `
+    --what keyframes --pack "D:\...\AIC2026_competition_clean_v3 (1).zip"
+
+# 3. Video (tuy chon, nang) — chi nhung video can xem lai
+python -m scripts.fetch_kaggle_media --archive D:\aic\aic-nam-thang-ay.zip `
+    --what videos --batch L21
 ```
 
-Tải một batch (bắt đầu từ L23 — nhỏ nhất, 25 video / 2.326 ảnh):
+Bước 1 tính là MỘT lần tải nên không dính hạn ngạch, và hỗ trợ `Range` nên nối
+tiếp được. Bước 2 đọc thẳng trong `.zip`, chỉ ghi ra những ảnh export cần.
+
+Chỗ trên đĩa: 106 GB cho kho + ~32,5 GB ảnh giải nén. Xong bước 2 thì xoá kho
+được — nhưng giữ lại thì lần sau khỏi tải.
+
+Nếu chỉ muốn xem UI chạy chứ chưa cần cả bộ, dùng đường từng-file cho một video:
 
 ```powershell
-python -m scripts.fetch_kaggle_media --what keyframes --batch L23 `
-    --pack "D:\Sinh viên CNhan\download\AIC2026_competition_clean_v3 (1).zip" --workers 8
+python -m scripts.fetch_kaggle_media --what keyframes --video L23_V001 `
+    --pack "D:\...\AIC2026_competition_clean_v3 (1).zip" --workers 4
 ```
 
-Toàn bộ 176.707 ảnh:
-
-```powershell
-python -m scripts.fetch_kaggle_media --what keyframes `
-    --pack "D:\Sinh viên CNhan\download\AIC2026_competition_clean_v3 (1).zip" --workers 12
-```
-
-Video (chỉ cần cho xem lại và TRAKE refinement — nặng, tải chọn lọc):
-
-```powershell
-python -m scripts.fetch_kaggle_media --what videos --batch L21 `
-    --pack "D:\Sinh viên CNhan\download\AIC2026_competition_clean_v3 (1).zip"
-```
-
-Chạy lại bao nhiêu lần cũng được: ảnh đã có trên đĩa thì bỏ qua, nên đứt giữa
-chừng chỉ cần chạy lại.
-
-## 4. Xác nhận
+## 5. Xác nhận
 
 Đếm số file trong thư mục **không phải** phép kiểm đúng — export chỉ dùng một
 tập con, và cái cần bắt là ảnh nằm SAI TÊN chứ không phải thiếu ảnh:
@@ -112,34 +137,27 @@ python -m scripts.fetch_kaggle_media --verify --export storage/exports_competiti
 Nó đối chiếu từng `image_path` mà export đang trỏ tới với file thật trên đĩa, và
 liệt kê video nào thiếu bao nhiêu.
 
-## 5. Bố cục được DÒ, không đoán
-
-Script không giả định trước tên file. Nó thử lần lượt `001.jpg`, `0001.jpg`,
-`1.jpg`, `00001.jpg`, `000001.jpg`, `001.jpeg` trên một ảnh thật, và thử các thư
-mục cha `Keyframes_L26`, `Keyframes_L26_a`, … cho tới khi nhận về đúng một JPEG
-(kiểm bằng magic byte, không tin `Content-Type`). Tìm được thì khoá lại cho cả
-lượt chạy. Không dạng nào chạy thì **dừng** và in ra đã thử những gì.
-
-Bằng chứng gián tiếp cho quy ước đánh số từ 1: số file mà Data Explorer hiển thị
-khớp `max(source_keyframe_index)` của pack ở **15/15 video** đối chiếu được.
-
 ## 6. Đã kiểm được tới đâu
 
 | Phần | Trạng thái |
 |---|---|
-| Bảng đổi tên | **Đã kiểm trên dữ liệu thật** — sinh lại đúng tuyệt đối 855 tên file của L21_V001/V002/V003 (307/262/286) |
-| Ca chỉ số không liên tục | Có test (`tests/test_fetch_kaggle_media.py`) |
-| Thiếu khoá → báo lỗi đọc được | Đã chạy |
-| Dò bố cục, tải, `--verify` | **Chưa chạy được** — máy viết script không có khoá Kaggle |
+| Bảng đổi tên | **Đã chạy thật** — sinh lại đúng tuyệt đối 855 tên file của L21_V001/V002/V003 (307/262/286) |
+| Ca chỉ số không liên tục | Có test |
+| Dò bố cục trên Kaggle | **Đã chạy thật** — ra `Keyframes_L23/keyframes/<id>/{n:03d}.jpg` |
+| Tải từng file | **Đã chạy thật** — 112 ảnh về đĩa, `--verify` xác nhận **112/112 nằm đúng chỗ export trỏ tới**; rồi dính hạn ngạch (§4) |
+| Giải nén từ kho (`--archive`) | **Đã chạy thật** trên kho dựng lại từ 855 ảnh có sẵn — ra đúng 855 tên VÀ nội dung giống byte-for-byte |
+| `--download-archive` 106 GB | **Chưa chạy hết** — mới xác nhận endpoint trả 206 và `Content-Range` đúng 106,13 GB |
+| `--verify` | Đã chạy trên 967 ảnh |
 
-Phần cuối là phần duy nhất chưa chạy thật. Chạy `--dry-run` trước: nếu nó in ra
-được bố cục và vài dòng ánh xạ thì đường mạng và khoá đều đúng.
+Chỉ dòng áp chót là chưa chạy trọn vẹn. Phần logic của nó (nối tiếp theo kích
+thước file hiện có) không phụ thuộc quy mô.
 
-## 7. Dung lượng và thời gian
+## 7. Dung lượng
 
-Ước lượng, chưa đo: 176.707 ảnh × ~150 KB ≈ **26 GB**. Mỗi ảnh là một lượt HTTP
-riêng nên tốc độ phụ thuộc độ trễ chứ không phải băng thông — với 12 luồng,
-khoảng vài giờ. Video là phần còn lại của 115,75 GB.
+| | |
+|---|---:|
+| Kho `.zip` cả dataset | 106,13 GB |
+| Ảnh keyframe sau giải nén | ~32,5 GB (đo: 193 KB/ảnh × 176.707) |
+| Ảnh cho một batch nhỏ (L23) | ~450 MB |
 
-Tải một batch trước, chạy `--verify`, xem UI hiện ảnh đúng chưa, rồi mới thả cả
-bộ. Ổ D còn ~500 GB nên chỗ không phải vấn đề.
+Ổ D còn ~500 GB nên chỗ không phải vấn đề; băng thông mới là.

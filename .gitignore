@@ -67,6 +67,12 @@ storage/cache/
 storage/processed/keyframes/L21_V001/
 storage/processed/keyframes/L21_V002/
 storage/processed/keyframes/L21_V003/
+# Ảnh keyframe của toàn bộ corpus thi đấu (~32,5 GB, 176.707 file) — tải bằng
+# scripts/fetch_kaggle_media.py, xem docs/35_KAGGLE_MEDIA.md. Giữ track riêng
+# L01_V001/L16_V001 phía trên vì đó là fixture của test.
+storage/processed/keyframes/L2[1-9]_V*/
+storage/processed/keyframes/L30_V*/
+storage/state/ca_bundle_windows.pem
 storage/processed/embeddings/
 storage/processed/clip_embeddings/
 storage/raw/videos/L21_V001.mp4
