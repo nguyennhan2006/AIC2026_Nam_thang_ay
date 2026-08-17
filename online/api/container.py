@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 
 from online.adapters.bm25 import LexicalRetriever
+from online.adapters.object_lexicon import ObjectQueryTransform
 from online.adapters.color_search import ColorSearchRetriever
 from online.adapters.dense_retriever import DenseRetriever
 from online.adapters.dense_text import CaptionDenseRetriever, build_text_encoder
@@ -430,7 +431,15 @@ async def build_container(settings: Settings) -> AppContainer:
     if settings.enable_ocr_fuzzy:
         retrievers.append(await OcrFuzzyRetriever.build(repository))
     if settings.enable_object_search:
-        retrievers.append(await LexicalRetriever.build("object", repository))
+        # Nhãn Open Images là tiếng Anh, truy vấn thi đấu là tiếng Việt, nên
+        # không có bước dịch này nhánh khớp đúng 0 token — đo được 0,0% trên
+        # 96/120 truy vấn gold. Tra bảng dựng sẵn, không gọi LLM lúc truy vấn.
+        # Thiếu từ điển thì `load()` trả None và nhánh giữ nguyên hành vi cũ.
+        retrievers.append(
+            await LexicalRetriever.build(
+                "object", repository, query_transform=ObjectQueryTransform.load()
+            )
+        )
     if settings.enable_action_search:
         retrievers.append(await LexicalRetriever.build("action", repository))
     if settings.enable_color_search:

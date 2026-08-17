@@ -1,0 +1,1728 @@
+{
+ "_meta": {
+  "label_count": 514,
+  "model": "gemma-4-31B-it",
+  "tokens_in": 4901,
+  "tokens_out": 6174,
+  "translated": 514
+ },
+ "labels": {
+  "Accordion": [
+   "đàn accordion",
+   "đàn phong cầm"
+  ],
+  "Adhesive tape": [
+   "băng keo",
+   "băng dính"
+  ],
+  "Aircraft": [
+   "phi cơ",
+   "máy bay"
+  ],
+  "Airplane": [
+   "máy bay"
+  ],
+  "Alarm clock": [
+   "đồng hồ báo thức"
+  ],
+  "Alpaca": [
+   "lạc đà alpaca"
+  ],
+  "Ambulance": [
+   "xe cấp cứu"
+  ],
+  "Animal": [
+   "động vật",
+   "con vật"
+  ],
+  "Ant": [
+   "con kiến"
+  ],
+  "Antelope": [
+   "linh dương"
+  ],
+  "Apple": [
+   "quả táo",
+   "trái táo"
+  ],
+  "Artichoke": [
+   "atisô"
+  ],
+  "Asparagus": [
+   "măng tây"
+  ],
+  "Auto part": [
+   "phụ tùng ô tô"
+  ],
+  "Axe": [
+   "cái rìu",
+   "chiếc rìu"
+  ],
+  "Backpack": [
+   "ba lô"
+  ],
+  "Bagel": [
+   "bánh mì vòng"
+  ],
+  "Baked goods": [
+   "bánh nướng"
+  ],
+  "Ball": [
+   "quả bóng",
+   "trái bóng"
+  ],
+  "Balloon": [
+   "bong bóng"
+  ],
+  "Banana": [
+   "quả chuối",
+   "trái chuối"
+  ],
+  "Banjo": [
+   "đàn banjo"
+  ],
+  "Barge": [
+   "sà lan"
+  ],
+  "Barrel": [
+   "thùng gỗ",
+   "thùng phi"
+  ],
+  "Baseball bat": [
+   "gậy bóng chày"
+  ],
+  "Baseball glove": [
+   "găng tay bóng chày"
+  ],
+  "Bat": [
+   "con dơi"
+  ],
+  "Bathroom accessory": [
+   "phụ kiện nhà tắm"
+  ],
+  "Bathtub": [
+   "bồn tắm"
+  ],
+  "Beaker": [
+   "cốc thí nghiệm",
+   "beaker"
+  ],
+  "Bear": [
+   "con gấu"
+  ],
+  "Bed": [
+   "cái giường",
+   "chiếc giường"
+  ],
+  "Bee": [
+   "con ong"
+  ],
+  "Beehive": [
+   "tổ ong"
+  ],
+  "Beer": [
+   "bia"
+  ],
+  "Beetle": [
+   "con bọ cánh cứng"
+  ],
+  "Bell pepper": [
+   "ớt chuông"
+  ],
+  "Belt": [
+   "thắt lưng",
+   "dây nịt"
+  ],
+  "Bench": [
+   "ghế dài",
+   "ghế công viên"
+  ],
+  "Bicycle": [
+   "xe đạp"
+  ],
+  "Bicycle helmet": [
+   "mũ bảo hiểm xe đạp"
+  ],
+  "Bicycle wheel": [
+   "bánh xe đạp"
+  ],
+  "Bidet": [
+   "vòi xịt vệ sinh",
+   "bồn rửa vệ sinh"
+  ],
+  "Billboard": [
+   "biển quảng cáo",
+   "biển hiệu"
+  ],
+  "Billiard table": [
+   "bàn bi-a"
+  ],
+  "Binoculars": [
+   "ống nhòm"
+  ],
+  "Bird": [
+   "con chim"
+  ],
+  "Blender": [
+   "máy xay sinh tố"
+  ],
+  "Boat": [
+   "con thuyền",
+   "chiếc ghe"
+  ],
+  "Book": [
+   "quyển sách",
+   "cuốn sách"
+  ],
+  "Bookcase": [
+   "tủ sách",
+   "kệ sách"
+  ],
+  "Boot": [
+   "giày boot",
+   "ủng"
+  ],
+  "Bottle": [
+   "cái chai",
+   "chai nước"
+  ],
+  "Bow and arrow": [
+   "cung tên"
+  ],
+  "Bowl": [
+   "cái bát",
+   "cái tô"
+  ],
+  "Bowling equipment": [
+   "dụng cụ bowling"
+  ],
+  "Box": [
+   "cái hộp",
+   "thùng giấy"
+  ],
+  "Boy": [
+   "cậu bé",
+   "bé trai"
+  ],
+  "Brassiere": [
+   "áo ngực",
+   "áo lót"
+  ],
+  "Bread": [
+   "bánh mì"
+  ],
+  "Briefcase": [
+   "cặp táp",
+   "cặp đựng tài liệu"
+  ],
+  "Broccoli": [
+   "súp lơ xanh",
+   "bông cải xanh"
+  ],
+  "Bronze sculpture": [
+   "tượng đồng"
+  ],
+  "Building": [
+   "tòa nhà",
+   "công trình"
+  ],
+  "Bull": [
+   "con bò tót",
+   "bò đực"
+  ],
+  "Burrito": [
+   "bánh burrito"
+  ],
+  "Bus": [
+   "xe buýt"
+  ],
+  "Bust": [
+   "tượng bán thân"
+  ],
+  "Butterfly": [
+   "con bướm"
+  ],
+  "Cabbage": [
+   "bắp cải"
+  ],
+  "Cabinetry": [
+   "tủ kệ",
+   "hệ tủ"
+  ],
+  "Cake": [
+   "bánh ngọt",
+   "bánh kem"
+  ],
+  "Cake stand": [
+   "khay để bánh",
+   "đế bánh"
+  ],
+  "Calculator": [
+   "máy tính bỏ túi"
+  ],
+  "Camel": [
+   "con lạc đà"
+  ],
+  "Camera": [
+   "máy ảnh",
+   "camera"
+  ],
+  "Canary": [
+   "chim yến phụng",
+   "chim canary"
+  ],
+  "Candle": [
+   "cây nến",
+   "đèn cầy"
+  ],
+  "Candy": [
+   "kẹo"
+  ],
+  "Cannon": [
+   "khẩu pháo"
+  ],
+  "Canoe": [
+   "ca nô"
+  ],
+  "Cantaloupe": [
+   "dưa lưới"
+  ],
+  "Car": [
+   "xe hơi",
+   "ô tô"
+  ],
+  "Carnivore": [],
+  "Carrot": [
+   "cà rốt"
+  ],
+  "Cart": [
+   "xe đẩy",
+   "xe kéo"
+  ],
+  "Cassette deck": [
+   "đầu băng cassette"
+  ],
+  "Castle": [
+   "lâu đài"
+  ],
+  "Cat": [
+   "con mèo",
+   "mèo"
+  ],
+  "Caterpillar": [
+   "con sâu",
+   "sâu bướm"
+  ],
+  "Cattle": [
+   "gia súc",
+   "đàn bò"
+  ],
+  "Ceiling fan": [
+   "quạt trần"
+  ],
+  "Cello": [
+   "đàn cello"
+  ],
+  "Chair": [
+   "cái ghế",
+   "ghế"
+  ],
+  "Cheese": [
+   "phô mai"
+  ],
+  "Chest of drawers": [
+   "tủ ngăn kéo"
+  ],
+  "Chicken": [
+   "con gà",
+   "gà"
+  ],
+  "Chopsticks": [
+   "đôi đũa",
+   "đũa"
+  ],
+  "Christmas tree": [
+   "cây thông Noel"
+  ],
+  "Clock": [
+   "đồng hồ"
+  ],
+  "Closet": [
+   "tủ quần áo"
+  ],
+  "Clothing": [
+   "quần áo",
+   "trang phục"
+  ],
+  "Coat": [
+   "áo khoác"
+  ],
+  "Cocktail": [
+   "cocktail",
+   "rượu cocktail"
+  ],
+  "Coffee": [
+   "cà phê"
+  ],
+  "Coffee cup": [
+   "tách cà phê",
+   "ly cà phê"
+  ],
+  "Coffee table": [
+   "bàn trà",
+   "bàn khách"
+  ],
+  "Coffeemaker": [
+   "máy pha cà phê"
+  ],
+  "Coin": [
+   "đồng xu"
+  ],
+  "Common fig": [
+   "quả sung"
+  ],
+  "Computer keyboard": [
+   "bàn phím máy tính"
+  ],
+  "Computer monitor": [
+   "màn hình máy tính"
+  ],
+  "Computer mouse": [
+   "chuột máy tính"
+  ],
+  "Convenience store": [
+   "cửa hàng tiện lợi"
+  ],
+  "Cookie": [
+   "bánh quy"
+  ],
+  "Corded phone": [
+   "điện thoại có dây"
+  ],
+  "Cosmetics": [
+   "mỹ phẩm"
+  ],
+  "Couch": [
+   "ghế sofa",
+   "ghế trường kỷ"
+  ],
+  "Countertop": [
+   "mặt bàn bếp",
+   "quầy"
+  ],
+  "Cowboy hat": [
+   "mũ cao bồi"
+  ],
+  "Crab": [
+   "con cua"
+  ],
+  "Cream": [
+   "kem"
+  ],
+  "Crocodile": [
+   "con cá sấu"
+  ],
+  "Croissant": [
+   "bánh sừng bò"
+  ],
+  "Crown": [
+   "vương miện"
+  ],
+  "Cucumber": [
+   "dưa chuột",
+   "dưa leo"
+  ],
+  "Cupboard": [
+   "tủ chén",
+   "tủ ly"
+  ],
+  "Curtain": [
+   "rèm cửa",
+   "màn cửa"
+  ],
+  "Cutting board": [
+   "thớt"
+  ],
+  "Dagger": [
+   "dao găm"
+  ],
+  "Dairy": [
+   "sản phẩm sữa"
+  ],
+  "Deer": [
+   "con nai"
+  ],
+  "Desk": [
+   "bàn làm việc",
+   "bàn học"
+  ],
+  "Dessert": [
+   "món tráng miệng",
+   "đồ tráng miệng"
+  ],
+  "Dice": [
+   "xúc xắc",
+   "xí ngầu"
+  ],
+  "Digital clock": [
+   "đồng hồ số"
+  ],
+  "Dinosaur": [
+   "khủng long"
+  ],
+  "Dog": [
+   "con chó"
+  ],
+  "Dog bed": [
+   "nệm cho chó",
+   "ổ chó"
+  ],
+  "Doll": [
+   "búp bê"
+  ],
+  "Dolphin": [
+   "cá heo"
+  ],
+  "Door": [
+   "cửa",
+   "cánh cửa"
+  ],
+  "Door handle": [
+   "tay nắm cửa"
+  ],
+  "Doughnut": [
+   "bánh donut"
+  ],
+  "Dragonfly": [
+   "chuồn chuồn"
+  ],
+  "Drawer": [
+   "ngăn kéo"
+  ],
+  "Dress": [
+   "váy",
+   "đầm"
+  ],
+  "Drill": [
+   "máy khoan"
+  ],
+  "Drink": [
+   "đồ uống",
+   "thức uống"
+  ],
+  "Drinking straw": [
+   "ống hút"
+  ],
+  "Drum": [
+   "cái trống"
+  ],
+  "Duck": [
+   "con vịt"
+  ],
+  "Dumbbell": [
+   "tạ đơn"
+  ],
+  "Eagle": [
+   "chim đại bàng"
+  ],
+  "Earrings": [
+   "bông tai",
+   "hoa tai"
+  ],
+  "Egg": [
+   "quả trứng"
+  ],
+  "Elephant": [
+   "con voi"
+  ],
+  "Envelope": [
+   "phong bì"
+  ],
+  "Falcon": [
+   "chim ưng"
+  ],
+  "Fashion accessory": [
+   "phụ kiện thời trang"
+  ],
+  "Fast food": [
+   "đồ ăn nhanh"
+  ],
+  "Fedora": [
+   "mũ phớt"
+  ],
+  "Filing cabinet": [
+   "tủ hồ sơ"
+  ],
+  "Fire hydrant": [
+   "trụ cứu hỏa",
+   "vòi chữa cháy"
+  ],
+  "Fireplace": [
+   "lò sưởi"
+  ],
+  "Fish": [
+   "con cá",
+   "cá"
+  ],
+  "Flag": [
+   "lá cờ",
+   "cờ"
+  ],
+  "Flower": [
+   "bông hoa",
+   "hoa"
+  ],
+  "Flowerpot": [
+   "chậu hoa",
+   "chậu cây"
+  ],
+  "Flying disc": [
+   "đĩa bay"
+  ],
+  "Food": [
+   "thức ăn",
+   "đồ ăn"
+  ],
+  "Food processor": [
+   "máy xay thực phẩm",
+   "máy chế biến thực phẩm"
+  ],
+  "Football": [
+   "quả bóng đá",
+   "bóng đá"
+  ],
+  "Football helmet": [
+   "mũ bảo hiểm bóng đá"
+  ],
+  "Footwear": [
+   "giày dép"
+  ],
+  "Fork": [
+   "cái nĩa",
+   "dĩa"
+  ],
+  "Fountain": [
+   "đài phun nước"
+  ],
+  "Frog": [
+   "con ếch",
+   "ếch"
+  ],
+  "Fruit": [
+   "trái cây",
+   "hoa quả"
+  ],
+  "Frying pan": [
+   "chảo rán",
+   "chảo chiên"
+  ],
+  "Furniture": [
+   "nội thất",
+   "đồ đạc"
+  ],
+  "Gas stove": [
+   "bếp ga"
+  ],
+  "Giraffe": [
+   "hươu cao cổ"
+  ],
+  "Girl": [
+   "bé gái",
+   "cô gái"
+  ],
+  "Glasses": [
+   "mắt kính",
+   "kính"
+  ],
+  "Glove": [
+   "găng tay",
+   "bao tay"
+  ],
+  "Goat": [
+   "con dê",
+   "dê"
+  ],
+  "Goggles": [
+   "kính bơi",
+   "kính bảo hộ"
+  ],
+  "Goldfish": [
+   "cá vàng"
+  ],
+  "Golf ball": [
+   "bóng golf"
+  ],
+  "Golf cart": [
+   "xe golf"
+  ],
+  "Gondola": [
+   "thuyền gondola"
+  ],
+  "Goose": [
+   "con ngỗng",
+   "ngỗng"
+  ],
+  "Grapefruit": [
+   "bưởi"
+  ],
+  "Guacamole": [
+   "sốt bơ"
+  ],
+  "Guitar": [
+   "đàn guitar",
+   "ghi ta"
+  ],
+  "Hamburger": [
+   "bánh hamburger",
+   "hamburger"
+  ],
+  "Hammer": [
+   "cái búa",
+   "búa"
+  ],
+  "Hand dryer": [
+   "máy sấy tay"
+  ],
+  "Handbag": [
+   "túi xách",
+   "ví xách tay"
+  ],
+  "Handgun": [
+   "súng ngắn",
+   "súng lục"
+  ],
+  "Harbor seal": [
+   "hải cẩu"
+  ],
+  "Harp": [
+   "đàn hạc"
+  ],
+  "Harpsichord": [],
+  "Hat": [
+   "mũ",
+   "nón"
+  ],
+  "Headphones": [
+   "tai nghe"
+  ],
+  "Heater": [
+   "máy sưởi",
+   "lò sưởi"
+  ],
+  "Helicopter": [
+   "trực thăng"
+  ],
+  "Helmet": [
+   "mũ bảo hiểm",
+   "nón bảo hiểm"
+  ],
+  "High heels": [
+   "giày cao gót"
+  ],
+  "Hiking equipment": [
+   "đồ leo núi"
+  ],
+  "Hippopotamus": [
+   "hà mã"
+  ],
+  "Home appliance": [
+   "thiết bị gia dụng",
+   "đồ điện gia dụng"
+  ],
+  "Honeycomb": [
+   "tổ ong"
+  ],
+  "Horn": [
+   "cái sừng",
+   "còi xe"
+  ],
+  "Horse": [
+   "con ngựa"
+  ],
+  "Hot dog": [
+   "bánh mì hot dog"
+  ],
+  "House": [
+   "ngôi nhà",
+   "căn nhà"
+  ],
+  "Houseplant": [
+   "cây cảnh trong nhà"
+  ],
+  "Human arm": [
+   "cánh tay"
+  ],
+  "Human beard": [
+   "râu"
+  ],
+  "Human ear": [
+   "tai"
+  ],
+  "Human eye": [
+   "mắt"
+  ],
+  "Human face": [
+   "khuôn mặt"
+  ],
+  "Human foot": [
+   "bàn chân"
+  ],
+  "Human hair": [
+   "tóc"
+  ],
+  "Human hand": [
+   "bàn tay"
+  ],
+  "Human head": [
+   "đầu"
+  ],
+  "Human leg": [
+   "chân"
+  ],
+  "Human mouth": [
+   "miệng"
+  ],
+  "Human nose": [
+   "mũi"
+  ],
+  "Ice cream": [
+   "kem"
+  ],
+  "Infant bed": [
+   "nôi",
+   "cũi"
+  ],
+  "Insect": [
+   "côn trùng"
+  ],
+  "Invertebrate": [
+   "động vật không xương sống"
+  ],
+  "Ipod": [
+   "máy nghe nhạc"
+  ],
+  "Jacket": [
+   "áo khoác"
+  ],
+  "Jeans": [
+   "quần jean",
+   "quần bò"
+  ],
+  "Jellyfish": [
+   "con sứa"
+  ],
+  "Jet ski": [
+   "mô tô nước"
+  ],
+  "Jug": [
+   "bình",
+   "ca"
+  ],
+  "Juice": [
+   "nước ép",
+   "nước trái cây"
+  ],
+  "Kettle": [
+   "ấm đun nước",
+   "ấm siêu tốc"
+  ],
+  "Kitchen & dining room table": [
+   "bàn ăn"
+  ],
+  "Kitchen appliance": [
+   "thiết bị nhà bếp"
+  ],
+  "Kitchen knife": [
+   "dao làm bếp"
+  ],
+  "Kitchen utensil": [
+   "dụng cụ nhà bếp"
+  ],
+  "Kite": [
+   "con diều"
+  ],
+  "Knife": [
+   "con dao"
+  ],
+  "Koala": [
+   "gấu koala"
+  ],
+  "Ladder": [
+   "cái thang"
+  ],
+  "Lamp": [
+   "đèn",
+   "đèn bàn"
+  ],
+  "Land vehicle": [
+   "xe",
+   "phương tiện giao thông"
+  ],
+  "Lantern": [
+   "đèn lồng"
+  ],
+  "Laptop": [
+   "máy tính xách tay",
+   "laptop"
+  ],
+  "Lavender": [
+   "hoa oải hương"
+  ],
+  "Lemon": [
+   "quả chanh"
+  ],
+  "Lifejacket": [
+   "áo phao"
+  ],
+  "Light bulb": [
+   "bóng đèn"
+  ],
+  "Lighthouse": [
+   "ngọn hải đăng"
+  ],
+  "Lily": [
+   "hoa ly",
+   "hoa loa kèn"
+  ],
+  "Limousine": [
+   "xe limousine"
+  ],
+  "Lion": [
+   "sư tử"
+  ],
+  "Lipstick": [
+   "son môi"
+  ],
+  "Lizard": [
+   "con thằn lằn"
+  ],
+  "Lobster": [
+   "tôm hùm"
+  ],
+  "Luggage and bags": [
+   "hành lý",
+   "túi xách"
+  ],
+  "Mammal": [
+   "động vật có vú"
+  ],
+  "Man": [
+   "người đàn ông",
+   "đàn ông"
+  ],
+  "Mango": [
+   "quả xoài"
+  ],
+  "Maple": [
+   "cây phong"
+  ],
+  "Marine invertebrates": [
+   "động vật biển không xương sống"
+  ],
+  "Marine mammal": [
+   "động vật biển có vú"
+  ],
+  "Measuring cup": [
+   "cốc đo"
+  ],
+  "Mechanical fan": [
+   "quạt điện"
+  ],
+  "Medical equipment": [
+   "thiết bị y tế"
+  ],
+  "Microphone": [
+   "micro"
+  ],
+  "Microwave oven": [
+   "lò vi sóng"
+  ],
+  "Milk": [
+   "sữa"
+  ],
+  "Mirror": [
+   "cái gương"
+  ],
+  "Missile": [
+   "tên lửa"
+  ],
+  "Mixer": [
+   "máy trộn",
+   "máy đánh trứng"
+  ],
+  "Mixing bowl": [
+   "tô trộn",
+   "bát trộn"
+  ],
+  "Mobile phone": [
+   "điện thoại",
+   "điện thoại di động"
+  ],
+  "Monkey": [
+   "con khỉ"
+  ],
+  "Moths and butterflies": [
+   "bướm"
+  ],
+  "Motorcycle": [
+   "xe máy",
+   "xe mô tô"
+  ],
+  "Mouse": [
+   "con chuột"
+  ],
+  "Muffin": [
+   "bánh muffin"
+  ],
+  "Mug": [
+   "cái ly",
+   "cái ca"
+  ],
+  "Mule": [
+   "con la"
+  ],
+  "Mushroom": [
+   "nấm"
+  ],
+  "Musical instrument": [
+   "nhạc cụ"
+  ],
+  "Musical keyboard": [
+   "đàn keyboard",
+   "phím đàn"
+  ],
+  "Nail": [
+   "cái đinh",
+   "móng tay"
+  ],
+  "Necklace": [
+   "vòng cổ",
+   "dây chuyền"
+  ],
+  "Oboe": [
+   "kèn oboe"
+  ],
+  "Office building": [
+   "tòa nhà văn phòng",
+   "cao ốc văn phòng"
+  ],
+  "Office supplies": [
+   "văn phòng phẩm"
+  ],
+  "Orange": [
+   "quả cam",
+   "màu cam"
+  ],
+  "Organ": [
+   "đàn organ",
+   "nội tạng"
+  ],
+  "Ostrich": [
+   "đà điểu"
+  ],
+  "Oven": [
+   "lò nướng"
+  ],
+  "Owl": [
+   "con cú"
+  ],
+  "Oyster": [
+   "con hàu"
+  ],
+  "Paddle": [
+   "mái chèo"
+  ],
+  "Palm tree": [
+   "cây cọ",
+   "cây dừa"
+  ],
+  "Pancake": [
+   "bánh pancake",
+   "bánh rán"
+  ],
+  "Panda": [
+   "gấu trúc"
+  ],
+  "Paper towel": [
+   "khăn giấy"
+  ],
+  "Parachute": [
+   "dù",
+   "cái dù"
+  ],
+  "Parrot": [
+   "con vẹt"
+  ],
+  "Pasta": [
+   "mì Ý",
+   "pasta"
+  ],
+  "Pastry": [
+   "bánh ngọt"
+  ],
+  "Peach": [
+   "quả đào"
+  ],
+  "Pear": [
+   "quả lê"
+  ],
+  "Pen": [
+   "cái bút",
+   "bút viết"
+  ],
+  "Penguin": [
+   "chim cánh cụt"
+  ],
+  "Perfume": [
+   "nước hoa"
+  ],
+  "Person": [
+   "người",
+   "một người"
+  ],
+  "Personal care": [
+   "đồ vệ sinh cá nhân",
+   "mỹ phẩm"
+  ],
+  "Piano": [
+   "đàn piano",
+   "đàn dương cầm"
+  ],
+  "Picnic basket": [
+   "giỏ dã ngoại"
+  ],
+  "Picture frame": [
+   "khung ảnh",
+   "khung hình"
+  ],
+  "Pig": [
+   "con lợn",
+   "con heo"
+  ],
+  "Pillow": [
+   "cái gối",
+   "chiếc gối"
+  ],
+  "Pineapple": [
+   "quả dứa",
+   "trái thơm"
+  ],
+  "Pitcher": [
+   "bình nước",
+   "ca nước"
+  ],
+  "Pizza": [
+   "bánh pizza"
+  ],
+  "Plant": [
+   "cây cảnh",
+   "cây cối"
+  ],
+  "Plastic bag": [
+   "túi nilon",
+   "túi nhựa"
+  ],
+  "Plate": [
+   "cái đĩa",
+   "chiếc đĩa"
+  ],
+  "Platter": [
+   "đĩa lớn",
+   "khay thức ăn"
+  ],
+  "Plumbing fixture": [
+   "thiết bị vệ sinh",
+   "vòi nước"
+  ],
+  "Polar bear": [
+   "gấu bắc cực"
+  ],
+  "Pomegranate": [
+   "quả lựu"
+  ],
+  "Popcorn": [
+   "bắp rang bơ"
+  ],
+  "Porch": [
+   "hiên nhà",
+   "hành lang"
+  ],
+  "Poster": [
+   "áp phích",
+   "poster"
+  ],
+  "Potato": [
+   "khoai tây"
+  ],
+  "Power plugs and sockets": [
+   "ổ cắm điện",
+   "phích cắm"
+  ],
+  "Pretzel": [
+   "bánh pretzel"
+  ],
+  "Printer": [
+   "máy in"
+  ],
+  "Pumpkin": [
+   "bí ngô",
+   "bí đỏ"
+  ],
+  "Punching bag": [
+   "bao cát"
+  ],
+  "Rabbit": [
+   "con thỏ"
+  ],
+  "Raccoon": [
+   "gấu mèo"
+  ],
+  "Racket": [
+   "vợt"
+  ],
+  "Raven": [
+   "con quạ"
+  ],
+  "Rays and skates": [
+   "cá đuối"
+  ],
+  "Refrigerator": [
+   "tủ lạnh"
+  ],
+  "Remote control": [
+   "điều khiển",
+   "remote"
+  ],
+  "Reptile": [
+   "loài bò sát"
+  ],
+  "Rhinoceros": [
+   "con tê giác"
+  ],
+  "Rifle": [
+   "súng trường"
+  ],
+  "Rocket": [
+   "tên lửa"
+  ],
+  "Roller skates": [
+   "giày trượt patin"
+  ],
+  "Rose": [
+   "hoa hồng"
+  ],
+  "Rugby ball": [
+   "bóng bầu dục"
+  ],
+  "Ruler": [
+   "thước kẻ"
+  ],
+  "Salad": [
+   "salad",
+   "xà lách"
+  ],
+  "Salt and pepper shakers": [
+   "lọ muối tiêu"
+  ],
+  "Sandal": [
+   "dép",
+   "sandal"
+  ],
+  "Sandwich": [
+   "sandwich",
+   "bánh mì kẹp"
+  ],
+  "Saucer": [
+   "đĩa lót ly"
+  ],
+  "Saxophone": [
+   "kèn saxophone"
+  ],
+  "Scale": [
+   "cân"
+  ],
+  "Scarf": [
+   "khăn quàng"
+  ],
+  "Scissors": [
+   "kéo"
+  ],
+  "Scoreboard": [
+   "bảng điểm"
+  ],
+  "Scorpion": [
+   "bọ cạp"
+  ],
+  "Screwdriver": [
+   "tua vít"
+  ],
+  "Sculpture": [
+   "tác phẩm điêu khắc",
+   "tượng"
+  ],
+  "Sea lion": [
+   "sư tử biển"
+  ],
+  "Sea turtle": [
+   "rùa biển"
+  ],
+  "Seafood": [
+   "hải sản"
+  ],
+  "Seahorse": [
+   "cá ngựa"
+  ],
+  "Seat belt": [
+   "dây an toàn"
+  ],
+  "Segway": [
+   "xe Segway"
+  ],
+  "Sewing machine": [
+   "máy may"
+  ],
+  "Shark": [
+   "cá mập"
+  ],
+  "Sheep": [
+   "con cừu"
+  ],
+  "Shelf": [
+   "kệ",
+   "giá sách"
+  ],
+  "Shellfish": [
+   "động vật có vỏ",
+   "hải sản vỏ"
+  ],
+  "Shirt": [
+   "áo sơ mi",
+   "áo"
+  ],
+  "Shorts": [
+   "quần đùi",
+   "quần short"
+  ],
+  "Shotgun": [
+   "súng săn"
+  ],
+  "Shower": [
+   "vòi hoa sen",
+   "phòng tắm"
+  ],
+  "Shrimp": [
+   "tôm"
+  ],
+  "Sink": [
+   "bồn rửa"
+  ],
+  "Skateboard": [
+   "ván trượt"
+  ],
+  "Ski": [
+   "ván trượt tuyết"
+  ],
+  "Skirt": [
+   "chân váy",
+   "váy"
+  ],
+  "Skull": [
+   "hộp sọ",
+   "đầu lâu"
+  ],
+  "Skyscraper": [
+   "nhà chọc trời"
+  ],
+  "Slow cooker": [
+   "nồi nấu chậm"
+  ],
+  "Snack": [
+   "đồ ăn vặt",
+   "quà vặt"
+  ],
+  "Snail": [
+   "ốc sên"
+  ],
+  "Snake": [
+   "con rắn"
+  ],
+  "Snowboard": [
+   "ván trượt tuyết"
+  ],
+  "Snowman": [
+   "người tuyết"
+  ],
+  "Snowmobile": [
+   "xe trượt tuyết"
+  ],
+  "Snowplow": [
+   "xe dọn tuyết"
+  ],
+  "Soap dispenser": [
+   "bình đựng xà phòng",
+   "máy xịt xà phòng"
+  ],
+  "Sock": [
+   "tất",
+   "vớ"
+  ],
+  "Sofa bed": [
+   "ghế sofa giường",
+   "sofa kéo"
+  ],
+  "Sombrero": [
+   "mũ rộng vành"
+  ],
+  "Sparrow": [
+   "chim sẻ"
+  ],
+  "Spatula": [
+   "xẻng lật",
+   "phới"
+  ],
+  "Spider": [
+   "con nhện"
+  ],
+  "Spoon": [
+   "cái thìa",
+   "cái muỗng"
+  ],
+  "Sports equipment": [
+   "dụng cụ thể thao"
+  ],
+  "Sports uniform": [
+   "đồng phục thể thao",
+   "đồ thể thao"
+  ],
+  "Squash": [
+   "bí ngô",
+   "trái bí"
+  ],
+  "Squid": [
+   "con mực"
+  ],
+  "Squirrel": [
+   "con sóc"
+  ],
+  "Stairs": [
+   "cầu thang"
+  ],
+  "Starfish": [
+   "sao biển"
+  ],
+  "Stationary bicycle": [
+   "xe đạp tập thể dục"
+  ],
+  "Stool": [
+   "ghế đẩu"
+  ],
+  "Stop sign": [
+   "biển báo dừng"
+  ],
+  "Strawberry": [
+   "dâu tây"
+  ],
+  "Street light": [
+   "đèn đường"
+  ],
+  "Submarine sandwich": [
+   "bánh mì sandwich"
+  ],
+  "Suit": [
+   "bộ com lê",
+   "vest"
+  ],
+  "Suitcase": [
+   "vali"
+  ],
+  "Sun hat": [
+   "mũ chống nắng",
+   "nón rộng vành"
+  ],
+  "Sunflower": [
+   "hoa hướng dương"
+  ],
+  "Sunglasses": [
+   "kính râm",
+   "kính mát"
+  ],
+  "Surfboard": [
+   "ván lướt sóng"
+  ],
+  "Sushi": [
+   "sushi"
+  ],
+  "Swan": [
+   "con thiên nga"
+  ],
+  "Swim cap": [
+   "mũ bơi"
+  ],
+  "Swimming pool": [
+   "hồ bơi"
+  ],
+  "Swimwear": [
+   "đồ bơi"
+  ],
+  "Sword": [
+   "thanh kiếm"
+  ],
+  "Syringe": [
+   "ống tiêm",
+   "xi lanh"
+  ],
+  "Table": [
+   "cái bàn"
+  ],
+  "Table tennis racket": [
+   "vợt bóng bàn"
+  ],
+  "Tablet computer": [
+   "máy tính bảng"
+  ],
+  "Tableware": [
+   "bát đĩa",
+   "dụng cụ ăn uống"
+  ],
+  "Taco": [
+   "bánh taco"
+  ],
+  "Tank": [
+   "xe tăng"
+  ],
+  "Tap": [
+   "vòi nước"
+  ],
+  "Tart": [
+   "bánh tart"
+  ],
+  "Taxi": [
+   "xe taxi",
+   "xe taxi"
+  ],
+  "Tea": [
+   "trà",
+   "tách trà"
+  ],
+  "Teapot": [
+   "ấm trà"
+  ],
+  "Teddy bear": [
+   "gấu bông"
+  ],
+  "Telephone": [
+   "điện thoại"
+  ],
+  "Television": [
+   "tivi",
+   "truyền hình"
+  ],
+  "Tennis ball": [
+   "bóng tennis"
+  ],
+  "Tennis racket": [
+   "vợt tennis"
+  ],
+  "Tent": [
+   "lều"
+  ],
+  "Tiara": [
+   "vương miện"
+  ],
+  "Tie": [
+   "cà vạt"
+  ],
+  "Tiger": [
+   "con hổ"
+  ],
+  "Tin can": [
+   "lon thiếc",
+   "vỏ lon"
+  ],
+  "Tire": [
+   "lốp xe"
+  ],
+  "Toilet": [
+   "nhà vệ sinh",
+   "bồn cầu"
+  ],
+  "Toilet paper": [
+   "giấy vệ sinh"
+  ],
+  "Tomato": [
+   "cà chua"
+  ],
+  "Tool": [
+   "dụng cụ",
+   "đồ nghề"
+  ],
+  "Toothbrush": [
+   "bàn chải đánh răng"
+  ],
+  "Tortoise": [
+   "con rùa"
+  ],
+  "Towel": [
+   "khăn tắm",
+   "khăn lau"
+  ],
+  "Tower": [
+   "tòa tháp",
+   "cột tháp"
+  ],
+  "Toy": [
+   "đồ chơi"
+  ],
+  "Traffic light": [
+   "đèn giao thông",
+   "đèn xanh đèn đỏ"
+  ],
+  "Traffic sign": [
+   "biển báo giao thông"
+  ],
+  "Train": [
+   "tàu hỏa",
+   "xe lửa"
+  ],
+  "Treadmill": [
+   "máy chạy bộ"
+  ],
+  "Tree": [
+   "cái cây"
+  ],
+  "Tree house": [
+   "nhà trên cây"
+  ],
+  "Tripod": [
+   "chân máy"
+  ],
+  "Trombone": [
+   "kèn trombone"
+  ],
+  "Trousers": [
+   "quần dài"
+  ],
+  "Truck": [
+   "xe tải"
+  ],
+  "Trumpet": [
+   "kèn trumpet"
+  ],
+  "Turkey": [
+   "gà tây"
+  ],
+  "Turtle": [
+   "con rùa"
+  ],
+  "Umbrella": [
+   "cái ô",
+   "cái dù"
+  ],
+  "Unicycle": [
+   "xe một bánh"
+  ],
+  "Van": [
+   "xe tải nhỏ",
+   "xe van"
+  ],
+  "Vase": [
+   "bình hoa",
+   "lọ hoa"
+  ],
+  "Vegetable": [
+   "rau củ",
+   "rau"
+  ],
+  "Vehicle": [
+   "phương tiện",
+   "xe cộ"
+  ],
+  "Vehicle registration plate": [
+   "biển số xe"
+  ],
+  "Violin": [
+   "đàn violin",
+   "đàn vĩ cầm"
+  ],
+  "Volleyball": [
+   "bóng chuyền"
+  ],
+  "Waffle": [
+   "bánh waffle"
+  ],
+  "Wall clock": [
+   "đồng hồ treo tường"
+  ],
+  "Wardrobe": [
+   "tủ quần áo"
+  ],
+  "Washing machine": [
+   "máy giặt"
+  ],
+  "Waste container": [
+   "thùng rác"
+  ],
+  "Watch": [
+   "đồng hồ đeo tay"
+  ],
+  "Watercraft": [
+   "tàu thuyền",
+   "phương tiện thủy"
+  ],
+  "Watermelon": [
+   "dưa hấu"
+  ],
+  "Weapon": [
+   "vũ khí"
+  ],
+  "Whale": [
+   "cá voi"
+  ],
+  "Wheel": [
+   "bánh xe"
+  ],
+  "Wheelchair": [
+   "xe lăn"
+  ],
+  "Whisk": [
+   "phới đánh trứng",
+   "cây đánh trứng"
+  ],
+  "Whiteboard": [
+   "bảng trắng"
+  ],
+  "Window": [
+   "cửa sổ"
+  ],
+  "Window blind": [
+   "rèm sáo",
+   "rèm cuốn"
+  ],
+  "Wine": [
+   "rượu vang"
+  ],
+  "Wine glass": [
+   "ly rượu vang"
+  ],
+  "Winter melon": [
+   "bí đông"
+  ],
+  "Wok": [
+   "chảo lòng sâu",
+   "cái chảo"
+  ],
+  "Woman": [
+   "phụ nữ",
+   "người phụ nữ"
+  ],
+  "Wood-burning stove": [
+   "bếp củi"
+  ],
+  "Woodpecker": [
+   "chim gõ kiến"
+  ],
+  "Zucchini": [
+   "bí ngòi"
+  ]
+ }
+}
