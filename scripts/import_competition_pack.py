@@ -61,7 +61,7 @@ from __future__ import annotations
 
 import argparse
 import csv
-from collections import Counter
+from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 import hashlib
@@ -226,6 +226,8 @@ class Report:
     keyframes_written: int = 0
     keyframes_with_caption: int = 0
     keyframes_with_ocr: int = 0
+    keyframes_with_objects: int = 0
+    object_instances: int = 0
     keyframes_with_vector: int = 0
     keyframes_vector_from_donor: int = 0
     keyframes_image_on_disk: int = 0
@@ -295,6 +297,104 @@ def _load_donor_embeddings(path: Path) -> dict[tuple[str, int], list[dict[str, A
     return donor
 
 
+class ObjectSource:
+    """Phát hiện vật thể Open Images, đọc THẲNG trong `objects-aic25-b1.zip`.
+
+    Không bung ra đĩa: 178.195 file JSON rời chỉ để đọc một lần là thêm chừng ấy
+    lần mở file trên NTFS, mà nội dung đã nằm sẵn trong một zip 610 MB.
+
+    Đánh số theo `source_keyframe_index` giống hệt ảnh (`objects/L21_V001/002.json`
+    ứng với `002.jpg`), nên dùng lại đúng chỉ số mà mapping CSV đã cho.
+
+    NGƯỠNG ĐIỂM là bắt buộc, không phải tinh chỉnh. Mỗi ảnh có đúng 100 phát
+    hiện, và đo trên 300 ảnh ngẫu nhiên thì **trung vị điểm chỉ 0,017** — tức
+    quá nửa là rác:
+
+        nguong   nhan/anh   tu vung   nhan pho bien nhat
+          0.0       32.5       445    Clothing, Person, Man, Human face
+          0.2        5.3       183    Clothing, Person, Human face, Man
+          0.3        4.0       150    Clothing, Person, Human face, Man
+          0.5        2.5       111    Clothing, Person, Human face, Food
+          0.7        1.3        68    Clothing, Human face, Person, Food
+
+    Lấy hết là nhét 32 nhãn/ảnh vào BM25, trong đó "Clothing"/"Person" có mặt ở
+    gần như mọi khung hình tin tức — cùng loại tín hiệu vô dụng mà
+    `AIC_OCR_OVERLAY_DF` và `_COLOR_MIN_RATIO` đã phải lọc.
+
+    CHƯA ĐO trên bộ gold. 0.3 là lựa chọn có cơ sở (giữ được đuôi hữu ích mà
+    không nổ từ vựng), KHÔNG phải con số đã chứng minh. Bật `object_search` với
+    dữ liệu thật sẽ đổi thứ hạng, nên phải đo lại 4 task trước/sau — xem
+    `docs/34` §9.
+    """
+
+    def __init__(self, archive_path: Path, min_score: float) -> None:
+        self._archive = zipfile.ZipFile(archive_path)
+        self._min_score = min_score
+        self._members: dict[str, dict[int, str]] = defaultdict(dict)
+        for name in self._archive.namelist():
+            parts = name.split("/")
+            if len(parts) < 3 or parts[-3] != "objects" or not parts[-1].endswith(".json"):
+                continue
+            stem = Path(parts[-1]).stem
+            if stem.isdigit():
+                self._members[parts[-2]][int(stem)] = name
+
+    def videos(self) -> int:
+        return len(self._members)
+
+    def for_frame(
+        self, video_id: str, source_index: int, provenance: dict[str, Any]
+    ) -> list[dict[str, Any]]:
+        member = self._members.get(video_id, {}).get(source_index)
+        if member is None:
+            return []
+        raw = json.loads(self._archive.read(member))
+        scores = raw.get("detection_scores") or []
+        labels = raw.get("detection_class_entities") or []
+        boxes = raw.get("detection_boxes") or []
+        # MỘT bản ghi cho mỗi NHÃN, giữ hộp có điểm cao nhất; số hộp còn lại ghi
+        # vào `attributes.instances`.
+        #
+        # Vì sao không giữ nguyên mọi hộp: `project_frame()` đổ thẳng
+        # `objects[].label` vào `object_labels` mà KHÔNG khử trùng lặp, rồi
+        # `kis.py` ghép danh sách đó thành văn bản cho BM25. Giữ nguyên thì một
+        # khung hình có 5 hộp "Person" đóng góp "Person" 5 lần — thổi tần suất
+        # cho đúng những nhãn vốn đã có mặt ở khắp nơi. Đo được: 13,5 hộp/ảnh so
+        # với 4,0 nhãn khác nhau/ảnh, tức hơn ba lần lạm phát.
+        #
+        # Số lượng KHÔNG bị vứt: bộ gold có truy vấn đếm ("counting"), nên
+        # `instances` giữ lại con số để tầng sau dùng khi cần.
+        best: dict[str, dict[str, Any]] = {}
+        for index, score in enumerate(scores):
+            confidence = float(score)
+            if confidence < self._min_score or index >= len(labels) or index >= len(boxes):
+                continue
+            label = str(labels[index]).strip()
+            if not label:
+                continue
+            # Open Images/TF Hub trả [ymin, xmin, ymax, xmax]; contract dùng
+            # XYXY. Hoán vị sai thì bbox VẪN hợp lệ và VẪN vẽ ra được — chỉ là
+            # vẽ nhầm chỗ, và không có gì báo lỗi.
+            ymin, xmin, ymax, xmax = (float(value) for value in boxes[index])
+            if not (0.0 <= xmin < xmax <= 1.0 and 0.0 <= ymin < ymax <= 1.0):
+                continue
+            existing = best.get(label)
+            if existing is None:
+                best[label] = {
+                    "label": label,
+                    "confidence": min(confidence, 1.0),
+                    "bbox": {"x1": xmin, "y1": ymin, "x2": xmax, "y2": ymax},
+                    "attributes": {"instances": 1},
+                    "provenance": provenance,
+                }
+                continue
+            existing["attributes"]["instances"] += 1
+            if confidence > existing["confidence"]:
+                existing["confidence"] = min(confidence, 1.0)
+                existing["bbox"] = {"x1": xmin, "y1": ymin, "x2": xmax, "y2": ymax}
+        return sorted(best.values(), key=lambda item: -item["confidence"])
+
+
 def _provenance(model_name: str, revision: str | None, **parameters: Any) -> dict[str, Any]:
     return {
         "model_name": model_name,
@@ -318,6 +418,7 @@ def _build_keyframe(
     frame_size_source: str,
     caption_provenance: dict[str, Any],
     ocr_provenance: dict[str, Any],
+    objects: list[dict[str, Any]],
     keep_hsv: bool,
 ) -> dict[str, Any]:
     captions: list[dict[str, Any]] = []
@@ -373,7 +474,7 @@ def _build_keyframe(
         "roles": ["representative"],
         "captions": captions,
         "ocr_instances": ocr_instances,
-        "objects": [],
+        "objects": objects,
         "action_tags": [],
         "color": None,
         "embedding_refs": embedding_refs,
@@ -468,6 +569,18 @@ def convert(arguments: argparse.Namespace) -> Report:
 
     batches = {item.upper() for item in (arguments.batch or [])}
     wanted_videos = set(arguments.video or [])
+
+    object_source: ObjectSource | None = None
+    if arguments.objects_zip:
+        object_source = ObjectSource(Path(arguments.objects_zip), arguments.object_min_score)
+        print(
+            f"  nap phat hien vat the: {object_source.videos()} video, "
+            f"nguong diem {arguments.object_min_score}"
+        )
+    object_provenance = _provenance(
+        "openimages:faster-rcnn-inception-resnet-v2", fingerprint,
+        min_score=arguments.object_min_score,
+    )
 
     donor_embeddings: dict[tuple[str, int], list[dict[str, Any]]] = {}
     if arguments.merge_embeddings_from:
@@ -591,6 +704,8 @@ def convert(arguments: argparse.Namespace) -> Report:
                 keep_hsv=arguments.keep_hsv,
                 pack_version=pack_version,
                 donor_embeddings=donor_embeddings,
+                object_source=object_source,
+                object_provenance=object_provenance,
             )
             if not written:
                 continue
@@ -692,6 +807,8 @@ def _convert_video(
     keep_hsv: bool,
     pack_version: str,
     donor_embeddings: dict[tuple[str, int], list[dict[str, Any]]],
+    object_source: "ObjectSource | None",
+    object_provenance: dict[str, Any],
 ) -> bool:
     if not mapping_rows or not scene_rows:
         return False
@@ -793,6 +910,14 @@ def _convert_video(
                     embedding_refs.extend(extra)
                     report.keyframes_vector_from_donor += 1
 
+            objects: list[dict[str, Any]] = []
+            if object_source is not None:
+                source_index = mapping.get("source_keyframe_index")
+                if source_index is not None and str(source_index).isdigit():
+                    objects = object_source.for_frame(
+                        video_id, int(source_index), object_provenance
+                    )
+
             keyframe = _build_keyframe(
                 video_id=video_id,
                 scene_id=scene_id,
@@ -805,6 +930,7 @@ def _convert_video(
                 frame_size_source=frame_size_source,
                 caption_provenance=caption_provenance,
                 ocr_provenance=ocr_provenance,
+                objects=objects,
                 keep_hsv=keep_hsv,
             )
             keyframes.append(keyframe)
@@ -812,6 +938,9 @@ def _convert_video(
                 report.keyframes_with_caption += 1
             if keyframe["ocr_instances"]:
                 report.keyframes_with_ocr += 1
+            if objects:
+                report.keyframes_with_objects += 1
+                report.object_instances += len(objects)
             if embedding_refs:
                 report.keyframes_with_vector += 1
             if (data_root / keyframe["image_path"]).exists():
@@ -931,6 +1060,17 @@ def main() -> None:
         action="store_true",
         help="chep hsv_features vao extensions (nang them ~100MB, pack van con ban goc)",
     )
+    parser.add_argument(
+        "--objects-zip",
+        help="objects-aic25-b1.zip — nap phat hien vat the vao keyframe.objects",
+    )
+    parser.add_argument(
+        "--object-min-score",
+        type=float,
+        default=0.3,
+        help="bo phat hien duoi nguong nay. Mac dinh 0.3 (~4 nhan/anh); "
+        "0.0 la 32 nhan/anh va gan het la rac — xem ObjectSource",
+    )
     parser.add_argument("--dry-run", action="store_true", help="chi dem, khong ghi file")
     arguments = parser.parse_args()
 
@@ -944,6 +1084,8 @@ def main() -> None:
     print(f"  keyframe da ghi            {report.keyframes_written}")
     print(f"    co caption               {report.keyframes_with_caption}")
     print(f"    co OCR                   {report.keyframes_with_ocr}")
+    print(f"    co vat the               {report.keyframes_with_objects}"
+          f"  ({report.object_instances} phat hien)")
     print(f"    co vector                {report.keyframes_with_vector}")
     print(f"      trong do bu tu export  {report.keyframes_vector_from_donor}")
     print(f"    co ANH tren dia          {report.keyframes_image_on_disk}")
