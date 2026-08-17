@@ -221,6 +221,16 @@ class Settings:
     # khi export có embedding thật (online/adapters/frame_vector_store.py);
     # không có thì container vẫn dùng lexical_hash_fallback như trước.
     visual_embedding_model: str = "openai/clip-vit-large-patch14"
+    # `embedding_name` nao trong export nuoi nhanh `dense_visual`. Rong = lay
+    # ref DAU TIEN co vector — dung y cu, va dung khi export chi mang mot bo.
+    #
+    # Can khai bao khi export mang NHIEU bo song song (vd clip_vit_l14_v1 +
+    # jina_clip_v2): khong khai thi thu tu ref trong file quyet dinh model nao
+    # thuc su chay, tuc doi model bang cach sua mot file du lieu — im lang va
+    # khong reproduce duoc. Khac AIC_DENSE_INDEXES o cho nhanh VAN ten
+    # `dense_visual`, nen `visual_score`/`_SORT_KEYS`, LOCKED_BASELINE va moi
+    # so da do van doc duoc; AIC_DENSE_INDEXES doi ten thanh `dense_<name>`.
+    visual_embedding_name: str = ""
     # Nhieu index dense chay song song. Dinh dang, ngan cach bang dau phay:
     #     <embedding_name>:<model_path>[:<kind>]
     # vd  clip_vit_l14_v1:storage/models/clip-vit-large-patch14,jina_v2:jinaai/jina-clip-v2:jina
@@ -374,6 +384,7 @@ class Settings:
                 if os.getenv("AIC_TRAKE_GAP_PENALTY") else None
             ),
             visual_embedding_model=os.getenv("AIC_VISUAL_EMBEDDING_MODEL", "openai/clip-vit-large-patch14"),
+            visual_embedding_name=os.getenv("AIC_VISUAL_EMBEDDING_NAME", "").strip(),
             dense_indexes=os.getenv("AIC_DENSE_INDEXES", "").strip(),
             caption_dense_index=os.getenv("AIC_CAPTION_DENSE_INDEX", "").strip(),
             caption_dense_model=os.getenv(

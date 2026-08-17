@@ -108,7 +108,9 @@ def parse_branch_weights(spec: str) -> dict[str, float]:
     return out
 
 
-def _assert_dimension_matches(name: str, probe: list[float], rows: list) -> None:
+def _assert_dimension_matches(
+    name: str, probe: list[float], rows: list, *, hint: str = "AIC_DENSE_INDEXES"
+) -> None:
     """Vector text và vector ảnh phải cùng chiều, nếu không cosine là rác.
 
     Đây đúng loại lỗi hệ này hay dính: sai model thì phép nhân VẪN chạy, VẪN ra
@@ -123,7 +125,7 @@ def _assert_dimension_matches(name: str, probe: list[float], rows: list) -> None
         raise ValueError(
             f"index dense {name!r}: text encoder cho vector {len(probe)} chiều nhưng "
             f"vector ảnh trong export là {stored} chiều. Gần như chắc chắn là khai "
-            f"sai model trong AIC_DENSE_INDEXES — phải ĐÚNG model đã sinh vector ảnh."
+            f"sai model trong {hint} — phải ĐÚNG model đã sinh vector ảnh."
         )
 
 
@@ -203,6 +205,9 @@ async def build_container(settings: Settings) -> AppContainer:
 
     local_frame_rows: list[tuple[str, str, list[float], dict]] = []
     has_real_embeddings = False
+    # Chỉ khác None ở đường local + có embedding thật; backend qdrant không có
+    # vector nào tại chỗ để so chiều.
+    visual_encoder: LocalTextEncoder | None = None
     if settings.backend == "qdrant":
         encoder = RemoteTextEncoder(
             settings.embedding_url or "", settings.request_timeout_sec, settings.embedding_api_key
@@ -216,8 +221,23 @@ async def build_container(settings: Settings) -> AppContainer:
         )
     else:
         local_frame_rows, has_real_embeddings = await build_frame_vector_rows(
-            repository, settings.data_root
+            repository, settings.data_root, embedding_name=settings.visual_embedding_name or None
         )
+        # Khai tên mà lọc ra RỖNG là lỗi cấu hình, không phải "không có
+        # embedding": `has_real_embeddings` xét trước khi lọc nên vẫn True, và
+        # để chạy tiếp thì `dense_visual` được đăng ký với vector store rỗng —
+        # /capabilities quảng cáo `backend_kind: vector`, nhánh trả `empty` ở
+        # MỌI truy vấn, không có gì báo lỗi. Đúng kiểu hỏng âm thầm mà
+        # AIC_DENSE_INDEXES đã chặn sẵn; chặn ở đây cùng cách.
+        if settings.visual_embedding_name and has_real_embeddings and not local_frame_rows:
+            available = sorted(
+                await build_frame_vector_rows_by_index(repository, settings.data_root)
+            )
+            raise ValueError(
+                f"AIC_VISUAL_EMBEDDING_NAME={settings.visual_embedding_name!r} nhưng export không "
+                f"có vector nào mang tên đó. Tên CÓ trong export: {available or '(không có)'}. "
+                "Sinh vector bằng scripts/embed_export_keyframes.py, hoặc sửa tên cho khớp."
+            )
         if has_real_embeddings:
             # Export có embedding thật (PR-13, scripts/embed_keyframes_local.py):
             # text encoder PHẢI cùng model CLIP để chung không gian embedding
@@ -225,11 +245,18 @@ async def build_container(settings: Settings) -> AppContainer:
             encoder = LocalTextEncoder(
                 settings.visual_embedding_model, revision=settings.visual_embedding_model_revision
             )
+            # Giữ tham chiếu tới encoder CHƯA bọc: dùng để dò chiều vector sau
+            # warmup. Dò qua bản đã bọc dịch sẽ tốn một lời gọi LLM cho chuỗi
+            # "probe" — vô ích, và làm khởi động phụ thuộc mạng.
+            visual_encoder = encoder
             # Text tower của CLIP chỉ biết tiếng Anh, mà truy vấn thi đấu là
             # tiếng Việt — không dịch thì nhánh này vẫn trả số nhưng số đó gần
             # như vô nghĩa. Bọc encoder chứ không sửa DenseRetriever: mọi thứ
             # phía sau (vector store, fusion) không cần biết có bước dịch.
-            if settings.enable_query_translation:
+            #
+            # Trừ `jina` — cùng lý do đã ghi ở nhánh AIC_DENSE_INDEXES bên dưới:
+            # text tower của nó đa ngữ sẵn, dịch là mất thông tin chứ không thêm.
+            if settings.enable_query_translation and encoder.kind != "jina":
                 if not (settings.fpt_enabled and fast_llm_model):
                     raise ValueError(
                         "AIC_ENABLE_QUERY_TRANSLATION=true nhưng chưa có LLM: cần "
@@ -312,6 +339,22 @@ async def build_container(settings: Settings) -> AppContainer:
                 "thư mục model đã tải sẵn (vd storage/models/clip-vit-large-patch14) — xem "
                 "scripts/download_hf_model.py."
             ) from exc
+        # Model và bộ vector giờ khai báo ĐỘC LẬP (AIC_VISUAL_EMBEDDING_MODEL và
+        # AIC_VISUAL_EMBEDDING_NAME), nên khai lệch nhau là chuyện xảy ra được —
+        # vd trỏ model CLIP 768 chiều vào bộ vector jina 1024 chiều. Cùng phép
+        # chặn mà AIC_DENSE_INDEXES đã có, vì cùng một hậu quả: cosine vẫn ra số.
+        #
+        # CHỈ khi tên được khai tường minh: đó đúng là bậc tự do mới mà phép
+        # chặn này canh. Đường cũ (không khai tên) giữ nguyên hành vi — và giữ
+        # nguyên việc `encode()` không bị gọi lúc dựng container, thứ mà test
+        # wiring dựa vào khi nó mock `warmup` để khỏi tải model thật về.
+        if visual_encoder is not None and settings.visual_embedding_name:
+            _assert_dimension_matches(
+                settings.visual_embedding_name,
+                await visual_encoder.encode("probe"),
+                local_frame_rows,
+                hint="AIC_VISUAL_EMBEDDING_MODEL/AIC_VISUAL_EMBEDDING_NAME",
+            )
 
     dense_branches = [dense]
 
@@ -358,7 +401,14 @@ async def build_container(settings: Settings) -> AppContainer:
                 ) from exc
             _assert_dimension_matches(name, await index_encoder.encode("probe"), rows)
             wrapped = index_encoder
-            if settings.enable_query_translation:
+            # Dịch CHỈ cho text tower tiếng Anh. `jina` (jina-clip) dùng
+            # jina-XLM-RoBERTa đa ngữ: đo được nó phân biệt tiếng Việt ngang
+            # tiếng Anh (cosine giữa các câu khác nghĩa 0.260 so với 0.262),
+            # trong khi CLIP là 0.912 so với 0.448. Dịch cho nó là mất thông tin
+            # (ghép vi↔en chỉ 0.820, tức bản dịch KHÔNG bằng bản gốc), cộng thêm
+            # 0.39s và một phụ thuộc mạng cho đúng cái nhánh sinh ra để khỏi cần
+            # mạng. Xem docs/20 § VISUAL-01.
+            if settings.enable_query_translation and kind != "jina":
                 wrapped = TranslatingTextEncoder(
                     index_encoder,
                     FptQueryTranslator(
