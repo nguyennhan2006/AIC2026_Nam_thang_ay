@@ -112,6 +112,71 @@ class FrameVectorStoreTests(unittest.TestCase):
             self.assertEqual(payload["start_frame"], 0)
             self.assertEqual(payload["end_frame"], 299)
 
+    def test_npy_row_fragment_picks_that_row(self) -> None:
+        """`vector_uri` kết thúc bằng `#<số>` chọn một hàng trong ma trận.
+
+        Bố cục của pack thi đấu: một `.npy` cho cả video thay vì một file cho
+        mỗi keyframe. Lấy nhầm hàng thì cosine VẪN ra số, thứ hạng VẪN có — nên
+        phải kiểm đúng giá trị, không chỉ kiểm số chiều.
+        """
+
+        numpy = __import__("numpy")
+        with tempfile.TemporaryDirectory() as raw:
+            tmp = Path(raw)
+            scenes_path = self._write_export(tmp, with_embedding=True)
+            matrix_uri = "processed/embeddings_pack/L01_V001.npy"
+            matrix_path = tmp / matrix_uri
+            matrix_path.parent.mkdir(parents=True, exist_ok=True)
+            numpy.save(
+                matrix_path,
+                numpy.asarray(
+                    [[9.0, 9.0, 9.0], [0.1, 0.2, 0.3], [8.0, 8.0, 8.0]],
+                    dtype=numpy.float16,
+                ),
+            )
+            for name in ("scenes.jsonl", "keyframes.jsonl"):
+                path = tmp / name
+                record = json.loads(path.read_text(encoding="utf-8"))
+                target = record["keyframes"][0] if name == "scenes.jsonl" else record
+                target["embedding_refs"] = [_embedding_ref(f"{matrix_uri}#1")]
+                path.write_text(json.dumps(record), encoding="utf-8")
+
+            repository = run(JsonlSceneRepository.load(scenes_path))
+            rows, has_real = run(build_frame_vector_rows(repository, tmp))
+            self.assertTrue(has_real)
+            self.assertEqual(len(rows), 1)
+            vector = rows[0][2]
+            self.assertEqual(len(vector), 3)
+            # float16 trên đĩa -> float32 trong bộ nhớ, nên so gần đúng.
+            self.assertAlmostEqual(float(vector[0]), 0.1, places=3)
+            self.assertAlmostEqual(float(vector[2]), 0.3, places=3)
+
+    def test_npy_row_fragment_out_of_range_raises(self) -> None:
+        """Export trỏ hàng không tồn tại là lỗi DỪNG, không phải bỏ qua.
+
+        Bỏ qua thì keyframe đó biến mất khỏi nhánh dense mà `/capabilities` vẫn
+        báo `vector` — kiểu hỏng im lặng mà cả tầng này dựng lên để chặn.
+        """
+
+        numpy = __import__("numpy")
+        with tempfile.TemporaryDirectory() as raw:
+            tmp = Path(raw)
+            scenes_path = self._write_export(tmp, with_embedding=True)
+            matrix_uri = "processed/embeddings_pack/L01_V001.npy"
+            matrix_path = tmp / matrix_uri
+            matrix_path.parent.mkdir(parents=True, exist_ok=True)
+            numpy.save(matrix_path, numpy.asarray([[0.1, 0.2, 0.3]], dtype=numpy.float16))
+            for name in ("scenes.jsonl", "keyframes.jsonl"):
+                path = tmp / name
+                record = json.loads(path.read_text(encoding="utf-8"))
+                target = record["keyframes"][0] if name == "scenes.jsonl" else record
+                target["embedding_refs"] = [_embedding_ref(f"{matrix_uri}#7")]
+                path.write_text(json.dumps(record), encoding="utf-8")
+
+            repository = run(JsonlSceneRepository.load(scenes_path))
+            with self.assertRaises(IndexError):
+                run(build_frame_vector_rows(repository, tmp))
+
     def test_embedding_name_filter_skips_non_matching_reference(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             tmp = Path(raw)

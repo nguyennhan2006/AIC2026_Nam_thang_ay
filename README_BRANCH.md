@@ -159,6 +159,34 @@ Nhánh này đã đo và **DROP** trên bộ gold hiện tại (`docs/20` § DEN
 
 ---
 
+### 4.4 Corpus thi đấu đầy đủ — 873 video
+
+Ba mục trên nói về corpus 3 video. Muốn chạy trên **toàn bộ 873 video** thì
+nguồn dữ liệu là `AIC2026_competition_clean_v3.zip`, và nó dùng một lược đồ
+KHÁC repo (id khác, file khác) nên phải chuyển đổi:
+
+```bash
+python -m scripts.import_competition_pack \
+    --pack /duong/dan/AIC2026_competition_clean_v3.zip \
+    --out storage/exports_competition \
+    --merge-embeddings-from storage/exports_multivideo
+```
+
+Ra 873 video / 87.742 scene / 176.707 keyframe, mất ~6 phút. `--merge-embeddings-from`
+KHÔNG phải tuỳ chọn: pack chỉ có 43/7.790 vector cho batch L21, mà toàn bộ bộ
+gold nằm trên L21_V001..V003 — thiếu cờ đó là corpus có một lỗ hổng dense ngay
+chỗ duy nhất đo được, và không có gì báo lỗi.
+
+**`docs/34_COMPETITION_PACK_IMPORT.md` là tài liệu đầy đủ**: pack thiếu gì
+(OCR 0%, không một file ảnh nào), script quyết định những gì và giá phải trả,
+số đo nạp/RAM/độ trễ, và lệnh chạy server trên corpus này.
+
+Một cảnh báo không được bỏ qua: ở 87.742 scene, `dense_visual` mất 5,2–11,8 s
+mỗi truy vấn, nên **`AIC_BRANCH_TIMEOUT_MS=8000` mặc định sẽ cắt nhánh đó trong
+im lặng**. Đặt `30000` cho corpus đầy đủ.
+
+---
+
 ## 5. Chạy
 
 ```bash
@@ -228,6 +256,7 @@ trông hợp lệ nhưng không phải số của server. Xem `docs/20` § "Lỗ
 | Tài liệu | Nội dung |
 |---|---|
 | `docs/08_FILE_GUIDE.md` | file nào làm gì — đọc trước tiên |
+| `docs/34_COMPETITION_PACK_IMPORT.md` | nạp pack thi đấu 873 video, và nó còn thiếu gì |
 | `docs/04_ONLINE_RETRIEVAL.md` | kiến trúc tầng tìm kiếm |
 | `docs/33_RETRIEVAL_TECHNIQUES.md` | mỗi nhánh dùng kỹ thuật gì, và điểm mù của chúng |
 | `docs/20_EXPERIMENT_LOG.md` | mọi thí nghiệm đã chạy, gồm cả những cái **DROP** |

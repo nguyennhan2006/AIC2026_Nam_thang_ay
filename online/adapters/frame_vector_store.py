@@ -14,27 +14,91 @@ không parse lại toàn bộ export.
 
 from __future__ import annotations
 
+from collections import OrderedDict
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 from online.adapters.json_metadata import JsonlSceneRepository
 
+# Ma trận .npy đang mở, khoá theo đường dẫn. Nhỏ có chủ ý: export sắp xếp theo
+# video nên vòng lặp dưới đây chỉ chạm 1-2 file cùng lúc; giữ nhiều hơn chỉ tốn
+# handle chứ không tránh thêm lần mở nào.
+_MATRIX_CACHE_SIZE = 4
+_matrix_cache: "OrderedDict[str, Any]" = OrderedDict()
 
-def _read_vector_file(path: Path) -> list[float]:
+
+def _read_npy_row(path: Path, row: int) -> Any:
+    """Một hàng của ma trận .npy nhiều vector, mở bằng mmap.
+
+    Pack thi đấu gom vector theo VIDEO (`dense/vectors/L21_V001.npy`) thay vì
+    một file cho mỗi keyframe. Ở quy mô 168.960 keyframe thì đó là khác biệt
+    giữa 873 lần mở file và 168.960 lần — trên NTFS, khác biệt đó tính bằng
+    phút ở mỗi lần khởi động.
+
+    `mmap_mode="r"` để cả ma trận không bị nạp vào RAM chỉ vì cần một hàng;
+    trang nào đọc tới thì OS mới nạp trang đó.
+    """
+
+    import numpy
+
+    key = str(path)
+    matrix = _matrix_cache.get(key)
+    if matrix is None:
+        matrix = numpy.load(path, mmap_mode="r")
+        _matrix_cache[key] = matrix
+        while len(_matrix_cache) > _MATRIX_CACHE_SIZE:
+            _matrix_cache.popitem(last=False)
+    else:
+        _matrix_cache.move_to_end(key)
+    if row >= len(matrix):
+        raise IndexError(
+            f"{path.name}: xin hang {row} nhung file chi co {len(matrix)} vector. "
+            "Export va thu muc vector lech nhau — sinh lai export."
+        )
+    # float32 vì `InMemoryVectorStore` xếp mọi thứ về float32; trả thẳng mảng
+    # thay vì list[float] cắt RAM trung gian 6 lần (24.1 KB -> 4.1 KB mỗi vector,
+    # tức 4.1 GB -> 0.7 GB ở 168.960 vector) và bỏ được vòng ép kiểu Python.
+    return numpy.asarray(matrix[row], dtype=numpy.float32)
+
+
+def _release_matrix_cache() -> None:
+    """Đóng mọi mmap đang mở.
+
+    Cache chỉ có ích TRONG lúc dựng rows: mỗi hàng đọc ra đã được sao thành
+    mảng float32 riêng, xong việc thì không ai cần ma trận nữa. Trên Windows,
+    giữ mmap là giữ KHOÁ file — server đang chạy sẽ chặn việc ghi đè chính
+    export mà nó đang phục vụ, và `TemporaryDirectory` trong test không xoá
+    được. Nên thả ngay khi dựng xong thay vì để bộ thu gom rác quyết định.
+    """
+
+    while _matrix_cache:
+        _, matrix = _matrix_cache.popitem()
+        handle = getattr(matrix, "_mmap", None)
+        if handle is not None:
+            handle.close()
+
+
+def _read_vector_file(path: Path) -> Sequence[float]:
+    """Vector tại `path`. Hậu tố `#<số>` chọn một hàng trong file nhiều vector."""
+
+    raw = str(path)
+    base, separator, fragment = raw.rpartition("#")
+    if separator and fragment.isdigit():
+        return _read_npy_row(Path(base), int(fragment))
     if path.suffix == ".npy":
         import numpy  # local: chỉ cần khi embedding lưu dạng .npy
 
-        return [float(value) for value in numpy.load(path)]
+        return numpy.asarray(numpy.load(path), dtype=numpy.float32)
     return [float(value) for value in json.loads(path.read_text(encoding="utf-8"))]
 
 
-async def build_frame_vector_rows(
+async def _build_frame_vector_rows(
     repository: JsonlSceneRepository,
     data_root: Path,
     *,
     embedding_name: str | None = None,
-) -> tuple[list[tuple[str, str, list[float], dict[str, Any]]], bool]:
+) -> tuple[list[tuple[str, str, Sequence[float], dict[str, Any]]], bool]:
     """Trả `(rows, has_real_embeddings)`.
 
     `has_real_embeddings=False` khi KHÔNG có frame nào từng qua enrichment
@@ -55,13 +119,13 @@ async def build_frame_vector_rows(
             raw = json.loads(line)
             raw_by_key[(str(raw["video_id"]), int(raw["frame_idx"]))] = raw
 
-    rows: list[tuple[str, str, list[float], dict[str, Any]]] = []
+    rows: list[tuple[str, str, Sequence[float], dict[str, Any]]] = []
     for scene in scenes:
         for frame in scene.keyframes:
             raw = raw_by_key.get((frame.video_id, frame.frame_idx))
             if raw is None:
                 continue
-            vector: list[float] | None = None
+            vector: Sequence[float] | None = None
             for reference in raw.get("embedding_refs", []):
                 if embedding_name and reference.get("embedding_name") != embedding_name:
                     continue
@@ -95,12 +159,12 @@ async def build_frame_vector_rows(
 
 
 
-async def build_frame_vector_rows_by_index(
+async def _build_frame_vector_rows_by_index(
     repository: JsonlSceneRepository,
     data_root: Path,
     *,
     embedding_names: list[str] | None = None,
-) -> dict[str, list[tuple[str, str, list[float], dict[str, Any]]]]:
+) -> dict[str, list[tuple[str, str, Sequence[float], dict[str, Any]]]]:
     """Như `build_frame_vector_rows` nhưng TÁCH theo `embedding_name`.
 
     Một keyframe có thể mang nhiều `embedding_refs` (CLIP + Jina + SigLIP…).
@@ -128,7 +192,7 @@ async def build_frame_vector_rows_by_index(
             raw = json.loads(line)
             raw_by_key[(str(raw["video_id"]), int(raw["frame_idx"]))] = raw
 
-    out: dict[str, list[tuple[str, str, list[float], dict[str, Any]]]] = {}
+    out: dict[str, list[tuple[str, str, Sequence[float], dict[str, Any]]]] = {}
     for scene in scenes:
         for frame in scene.keyframes:
             raw = raw_by_key.get((frame.video_id, frame.frame_idx))
@@ -154,7 +218,7 @@ async def build_frame_vector_rows_by_index(
                 name = str(reference.get("embedding_name") or "")
                 if not name or (wanted is not None and name not in wanted):
                     continue
-                vector: list[float] | None = None
+                vector: Sequence[float] | None = None
                 for location in reference.get("storage_locations", []):
                     if location.get("backend") == "file" and location.get("vector_uri"):
                         vector = _read_vector_file(data_root / str(location["vector_uri"]))
@@ -165,6 +229,42 @@ async def build_frame_vector_rows_by_index(
                     (frame.keyframe_id, scene.video_id, vector, dict(payload))
                 )
     return out
+
+
+async def build_frame_vector_rows(
+    repository: JsonlSceneRepository,
+    data_root: Path,
+    *,
+    embedding_name: str | None = None,
+) -> tuple[list[tuple[str, str, Sequence[float], dict[str, Any]]], bool]:
+    """`_build_frame_vector_rows` + đóng mmap, kể cả khi thân hàm vỡ giữa chừng.
+
+    Tách vỏ ra thay vì bọc `try/finally` quanh vòng lặp: thân hàm là phần dễ đọc
+    nhầm nhất của module này, và một tầng thụt đầu dòng nữa không đáng.
+    """
+
+    try:
+        return await _build_frame_vector_rows(
+            repository, data_root, embedding_name=embedding_name
+        )
+    finally:
+        _release_matrix_cache()
+
+
+async def build_frame_vector_rows_by_index(
+    repository: JsonlSceneRepository,
+    data_root: Path,
+    *,
+    embedding_names: list[str] | None = None,
+) -> dict[str, list[tuple[str, str, Sequence[float], dict[str, Any]]]]:
+    """Như trên, cho biến thể tách theo `embedding_name`."""
+
+    try:
+        return await _build_frame_vector_rows_by_index(
+            repository, data_root, embedding_names=embedding_names
+        )
+    finally:
+        _release_matrix_cache()
 
 
 __all__ = ["build_frame_vector_rows", "build_frame_vector_rows_by_index"]

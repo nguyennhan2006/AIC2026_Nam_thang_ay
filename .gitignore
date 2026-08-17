@@ -79,6 +79,14 @@ storage/indexes_multivideo/
 storage/exports_l21_enriched/
 storage/exports_l21_repaired/
 
+# ---- Pack thi đấu 873 video đã chuyển đổi (620MB JSONL + 346MB vector).
+# Sinh lại được: scripts/import_competition_pack.py + AIC2026_competition_clean_v3.zip,
+# mất ~6 phút. Xem docs/34_COMPETITION_PACK_IMPORT.md. Khác `exports_multivideo/`
+# — cái đó GIỮ track vì là caption/OCR do VLM sinh, đắt để làm lại mà chỉ 15MB.
+storage/exports_competition/
+storage/exports_pack_*/
+storage/processed/embeddings_pack/
+
 # Bản sao lưu thủ công trước mỗi lần backfill — dựng lại được từ git, không
 # commit 27MB jsonl trùng lặp.
 *.bak
