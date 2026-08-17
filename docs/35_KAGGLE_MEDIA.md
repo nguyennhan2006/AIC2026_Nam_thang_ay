@@ -1,18 +1,60 @@
-# 35 — Tải keyframe và video từ Kaggle
-
-Nguồn: [`trongnhantran25/aic-nam-thang-ay`](https://www.kaggle.com/datasets/trongnhantran25/aic-nam-thang-ay)
-— `Keyframes_L21..L30` (L26 chẻ làm 5 phần) và `Videos_L**_a/video/*.mp4`.
-Kho `.zip` đo được là **106,13 GB**.
+# 35 — Tải keyframe, video và objects
 
 Pack thi đấu (`docs/34`) mang caption, ASR và vector nhưng **không kèm một file
 ảnh nào**. Đây là bước lấy ảnh về.
 
-Đã chạy thật ngày **2026-08-17**, kể cả phần hỏng. Đọc §4 trước khi bắt đầu —
-đường hiển nhiên nhất là đường không đi được.
+Có hai nguồn. **Dùng mirror của ban tổ chức** (§0); Kaggle chỉ là dự phòng và có
+những cái bẫy ghi ở §4. Đã chạy thật cả hai ngày **2026-08-17**, kể cả phần hỏng.
 
 ---
 
-## 1. Khoá Kaggle
+## 0. Mirror ban tổ chức — đường nên đi
+
+Link nằm trong CSV ban tổ chức phát ("Dữ liệu cho vòng Sơ Tuyển AIC 2026 -
+Batch1.csv", hai cột `Filenames` / `Download link`), trỏ tới
+`https://aic-data.ledo.io.vn/`. Đã kiểm cả 32 link: HTTP 200, đều hỗ trợ
+`Range`, đo được **29,5 MB/s** và không bị chặn tốc độ.
+
+| Nhóm | Dung lượng | Ghi chú |
+|---|---:|---|
+| `Keyframes_L21..L30` (14 file) | **28,69 GB** | ảnh, tách riêng khỏi video |
+| `Videos_L**_a` (14 file) | 77,29 GB | chỉ cần cho xem lại / TRAKE |
+| `objects-aic25-b1.zip` | 0,60 GB | **178.195 file phát hiện vật thể Open Images** |
+| `map-keyframes`, `media-info`, `clip-features-32` | 0,16 GB | |
+
+```powershell
+$csv  = "C:\Users\ASUS\Downloads\Copy of Dữ liệu cho vòng Sơ Tuyển AIC 2026 - Batch1.csv"
+$pack = "D:\Sinh viên CNhan\download\AIC2026_competition_clean_v3 (1).zip"
+
+# Anh keyframe — 28,69 GB, tai + giai nen + doi ten trong mot lenh
+python -m scripts.fetch_aic_data --what keyframes --pack $pack --csv $csv
+
+# Thu mot batch nho truoc cho chac
+python -m scripts.fetch_aic_data --what keyframes --batch L23 --pack $pack --csv $csv
+
+# Phat hien vat the (nhanh object_search dang rong)
+python -m scripts.fetch_aic_data --what objects --pack $pack --csv $csv
+
+# Video, chon loc
+python -m scripts.fetch_aic_data --what videos --batch L21 --csv $csv
+```
+
+Script xoá `.zip` ngay sau khi giải nén xong từng file để không tốn gấp đôi chỗ
+(`--keep-zip` nếu muốn giữ). Đứt giữa chừng thì chạy lại — `Range` tính từ số
+byte đã ghi, và ảnh đã có trên đĩa thì bỏ qua.
+
+Đo trên batch L23: tải + giải nén + đổi tên **2.326/2.326 ảnh, 0 thiếu, 32 giây**.
+
+So với Kaggle: 28,69 GB thay vì 106,13 GB cho cùng ngần ấy ảnh, vì Kaggle gói
+chung cả video vào một kho không tách được.
+
+`media-info-aic25-b1.zip` KHÔNG chứa width/height như tưởng — nó là metadata
+YouTube (title, description, keywords, length, channel). Vẫn đáng giữ: tiêu đề
+và mô tả video là văn bản tìm kiếm được mà hệ chưa hề dùng.
+
+---
+
+## 1. Khoá Kaggle (chỉ cần cho đường dự phòng)
 
 `kaggle.com` → ảnh đại diện → **Settings** → mục **API** → **Create New Token**.
 Trình duyệt tải về `kaggle.json`. Mở nó ra, chép hai giá trị vào file env đang
@@ -146,8 +188,9 @@ liệt kê video nào thiếu bao nhiêu.
 | Dò bố cục trên Kaggle | **Đã chạy thật** — ra `Keyframes_L23/keyframes/<id>/{n:03d}.jpg` |
 | Tải từng file | **Đã chạy thật** — 112 ảnh về đĩa, `--verify` xác nhận **112/112 nằm đúng chỗ export trỏ tới**; rồi dính hạn ngạch (§4) |
 | Giải nén từ kho (`--archive`) | **Đã chạy thật** trên kho dựng lại từ 855 ảnh có sẵn — ra đúng 855 tên VÀ nội dung giống byte-for-byte |
-| `--download-archive` 106 GB | **Chưa chạy hết** — mới xác nhận endpoint trả 206 và `Content-Range` đúng 106,13 GB |
-| `--verify` | Đã chạy trên 967 ảnh |
+| `--download-archive` 106 GB | **Bỏ dở có chủ ý** — mirror §0 lấy cùng ngần ấy ảnh với 28,69 GB |
+| Mirror ban tổ chức | **Đã chạy thật** — 32/32 link 200, batch L23 ra 2.326/2.326 ảnh, 0 thiếu |
+| `--verify` | Đã chạy |
 
 Chỉ dòng áp chót là chưa chạy trọn vẹn. Phần logic của nó (nối tiếp theo kích
 thước file hiện có) không phụ thuộc quy mô.

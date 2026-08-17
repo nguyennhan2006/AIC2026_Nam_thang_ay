@@ -188,11 +188,16 @@ python -c "import zipfile,json;print(json.loads(zipfile.ZipFile('<zip>').read('i
 (OCR 0%, không một file ảnh nào), script quyết định những gì và giá phải trả,
 số đo nạp/RAM/độ trễ, và lệnh chạy server trên corpus này.
 
-Ảnh keyframe lấy riêng từ Kaggle — `docs/35_KAGGLE_MEDIA.md`:
+Ảnh keyframe lấy riêng từ mirror ban tổ chức — `docs/35_KAGGLE_MEDIA.md`:
 
 ```bash
-python -m scripts.fetch_kaggle_media --what keyframes --batch L23 --pack <zip>
+python -m scripts.fetch_aic_data --what keyframes --pack <pack.zip> --csv <link.csv>
 ```
+
+28,69 GB, tải + giải nén + đổi tên trong một lệnh. **Đừng chép thẳng thư mục
+ảnh**: nguồn đặt tên theo số thứ tự keyframe (`002.jpg`) còn export trỏ theo
+frame index (`frame_000090.jpg`) — chép thẳng là 176.707 ảnh nằm sai chỗ và
+không có gì báo lỗi.
 
 Một cảnh báo không được bỏ qua: ở 87.742 scene, `dense_visual` mất 5,2–11,8 s
 mỗi truy vấn, nên **`AIC_BRANCH_TIMEOUT_MS=8000` mặc định sẽ cắt nhánh đó trong
