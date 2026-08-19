@@ -192,7 +192,9 @@ async def build_dense(repository: JsonlSceneRepository, backend: str) -> DenseRe
                     f"không nạp được text encoder {settings.visual_embedding_model!r}: {exc}. "
                     "Export này có embedding thật nên nhánh dense_visual bắt buộc cần encoder. "
                     "Trỏ AIC_VISUAL_EMBEDDING_MODEL vào model đã tải sẵn "
-                    "(vd storage/models/clip-vit-large-patch14) rồi chạy lại."
+                    "(vd storage/models/clip-vit-large-patch14) rồi chạy lại. Lỗi nói về "
+                    "PHIÊN BẢN thư viện (vd huggingface-hub 1.x với transformers 4.x) là "
+                    "xung đột dependency: pip install 'huggingface_hub>=0.34,<1'."
                 ) from exc
         return DenseRetriever(encoder, InMemoryVectorStore(frame_rows), branch_id="dense_visual", backend_kind="vector")
 

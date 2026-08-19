@@ -1,6 +1,6 @@
 # Khoi dong server tren corpus thi dau (873 video / 87.742 scene / 176.707 keyframe).
 #
-# Gom lai mot cho toan bo cau hinh da kiem chung trong docs/34 §7, vi ngay thi
+# Gom lai mot cho toan bo cau hinh da kiem chung trong docs/34 muc 7, vi ngay thi
 # khong phai luc go lai 7 bien moi truong tu tai lieu. Chay:
 #
 #     .\scripts\run_competition.ps1
@@ -26,7 +26,7 @@ foreach ($f in $must) {
 
 # jina-clip-v2 mac dinh tro text tower toi repo HuggingFace tu xa. Voi
 # HF_HUB_OFFLINE=1 thi `model_info` NEM LOI thay vi roi ve cache, nen container
-# chet ngay luc dung. Da vá config.json tro sang ban local; kiem lai o day vi
+# chet ngay luc dung. Da va config.json tro sang ban local; kiem lai o day vi
 # tai ve model moi se ghi de va loi quay lai ma khong ai nho.
 $cfgPath = "storage/models/jina-clip-v2/config.json"
 $cfg = Get-Content -Raw -LiteralPath $cfgPath | ConvertFrom-Json
@@ -55,18 +55,18 @@ $env:AIC_METADATA_JSONL           = "storage/exports_competition/scenes.jsonl"
 # trong so nhanh va moi --disable-branch da luu tro sai cho.
 $env:AIC_VISUAL_EMBEDDING_NAME    = "jina_clip_v2"
 $env:AIC_VISUAL_EMBEDDING_MODEL   = "storage/models/jina-clip-v2"
-# jina co text tower da ngu — dich VI->EN cho no la mat thong tin, va bo dich
+# jina co text tower da ngu - dich VI->EN cho no la mat thong tin, va bo dich
 # thi duong truy van khong can mang, khong ton loi goi FPT nao.
 $env:AIC_ENABLE_QUERY_TRANSLATION = "false"
 # 8000 ms la con so chon cho 765 scene. O 87.742 scene, dense_visual mat
 # 5,2-11,8 s; vuot han thi nhanh bien mat KHONG BAO LOI (branch_status=timeout,
-# API van 200, UI van co ket qua — chi la tang ngu nghia da tat).
+# API van 200, UI van co ket qua - chi la tang ngu nghia da tat).
 $env:AIC_BRANCH_TIMEOUT_MS        = "30000"
 # Dat TUONG MINH "true", khong phai bo dong nay di. Pack co OCR 0% nen tat hai
 # nhanh nay nghe hop ly, nhung tat chung DOI TOPOLOGY nhanh:
 # `/v1/search/capabilities` tu choi moi `search_options` tro toi nhanh khong
 # ton tai bang 422, ma UI gui kem trong so da luu (`AIC_BRANCH_WEIGHTS` co
-# `bm25_ocr:1.0`) — nen MOI truy van tu UI deu 422. Da xay ra that.
+# `bm25_ocr:1.0`) - nen MOI truy van tu UI deu 422. Da xay ra that.
 #
 # Phai gan "true" chu khong phai xoa dong: `$env:` song suot phien PowerShell,
 # nen chay lai script trong CUNG terminal se giu nguyen gia tri "false" cu.

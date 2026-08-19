@@ -338,7 +338,10 @@ async def build_container(settings: Settings) -> AppContainer:
                 "Export có embedding thật nên nhánh dense_visual bắt buộc cần encoder này. "
                 "Trên máy không tải được từ HuggingFace, trỏ AIC_VISUAL_EMBEDDING_MODEL vào "
                 "thư mục model đã tải sẵn (vd storage/models/clip-vit-large-patch14) — xem "
-                "scripts/download_hf_model.py."
+                "scripts/download_hf_model.py. Nếu lỗi trên nói về PHIÊN BẢN thư viện "
+                "(vd 'huggingface-hub>=0.34.0,<1.0 is required ... but found 1.x') thì đó là "
+                "xung đột dependency chứ không phải thiếu model: pip install "
+                "'huggingface_hub>=0.34,<1' vào đúng venv đang chạy."
             ) from exc
         # Model và bộ vector giờ khai báo ĐỘC LẬP (AIC_VISUAL_EMBEDDING_MODEL và
         # AIC_VISUAL_EMBEDDING_NAME), nên khai lệch nhau là chuyện xảy ra được —

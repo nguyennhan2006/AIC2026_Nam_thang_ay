@@ -93,6 +93,46 @@ def _read_vector_file(path: Path) -> Sequence[float]:
     return [float(value) for value in json.loads(path.read_text(encoding="utf-8"))]
 
 
+def _vector_uri_index(
+    keyframes_path: Path, *, embedding_names: set[str] | None = None
+) -> dict[tuple[str, int], dict[str, str]]:
+    """`(video_id, frame_idx)` -> `{embedding_name: vector_uri}`, đọc theo dòng.
+
+    Bản trước giữ NGUYÊN bản ghi keyframe đã parse của MỌI frame trong một dict
+    rồi mới duyệt. Với pack thi đấu (`keyframes.jsonl` 515 MB, 176 707 frame,
+    696 738 instance object) đó là vài GB sống suốt lúc khởi động, trên máy chỉ
+    còn ~2 GB trống — tức chết vì hết bộ nhớ, hoặc thrashing, đúng lúc khởi
+    động server trước giờ thi.
+
+    Thứ duy nhất cần từ file thô là `vector_uri`. Giữ mỗi chuỗi đó thì chỉ tốn
+    ~40 MB, và caption/object/color của cùng bản ghi được thả ngay sau khi
+    `json.loads` trả về.
+
+    Giữ nguyên luật chọn của bản cũ: theo THỨ TỰ `embedding_refs`, mỗi tên lấy
+    `storage_location` dạng file ĐẦU TIÊN. Dict giữ thứ tự chèn nên "ref đầu
+    tiên thắng" vẫn đúng ở phía caller.
+    """
+
+    index: dict[tuple[str, int], dict[str, str]] = {}
+    with keyframes_path.open(encoding="utf-8") as handle:
+        for line in handle:
+            if not line.strip():
+                continue
+            raw = json.loads(line)
+            uris: dict[str, str] = {}
+            for reference in raw.get("embedding_refs", []):
+                name = str(reference.get("embedding_name") or "")
+                if embedding_names is not None and name not in embedding_names:
+                    continue
+                for location in reference.get("storage_locations", []):
+                    if location.get("backend") == "file" and location.get("vector_uri"):
+                        uris.setdefault(name, str(location["vector_uri"]))
+                        break
+            if uris:
+                index[(str(raw["video_id"]), int(raw["frame_idx"]))] = uris
+    return index
+
+
 async def _build_frame_vector_rows(
     repository: JsonlSceneRepository,
     data_root: Path,
@@ -111,32 +151,18 @@ async def _build_frame_vector_rows(
         return [], False
 
     keyframes_path = repository.path.with_name("keyframes.jsonl")
-    raw_by_key: dict[tuple[str, int], dict[str, Any]] = {}
-    with keyframes_path.open(encoding="utf-8") as handle:
-        for line in handle:
-            if not line.strip():
-                continue
-            raw = json.loads(line)
-            raw_by_key[(str(raw["video_id"]), int(raw["frame_idx"]))] = raw
+    uri_by_key = _vector_uri_index(
+        keyframes_path,
+        embedding_names={embedding_name} if embedding_name else None,
+    )
 
     rows: list[tuple[str, str, Sequence[float], dict[str, Any]]] = []
     for scene in scenes:
         for frame in scene.keyframes:
-            raw = raw_by_key.get((frame.video_id, frame.frame_idx))
-            if raw is None:
+            uris = uri_by_key.get((frame.video_id, frame.frame_idx))
+            if not uris:
                 continue
-            vector: Sequence[float] | None = None
-            for reference in raw.get("embedding_refs", []):
-                if embedding_name and reference.get("embedding_name") != embedding_name:
-                    continue
-                for location in reference.get("storage_locations", []):
-                    if location.get("backend") == "file" and location.get("vector_uri"):
-                        vector = _read_vector_file(data_root / str(location["vector_uri"]))
-                        break
-                if vector is not None:
-                    break
-            if vector is None:
-                continue
+            vector = _read_vector_file(data_root / next(iter(uris.values())))
             payload = {
                 "entity_type": "keyframe",
                 "keyframe_id": frame.keyframe_id,
@@ -184,19 +210,13 @@ async def _build_frame_vector_rows_by_index(
 
     wanted = set(embedding_names) if embedding_names else None
     keyframes_path = repository.path.with_name("keyframes.jsonl")
-    raw_by_key: dict[tuple[str, int], dict[str, Any]] = {}
-    with keyframes_path.open(encoding="utf-8") as handle:
-        for line in handle:
-            if not line.strip():
-                continue
-            raw = json.loads(line)
-            raw_by_key[(str(raw["video_id"]), int(raw["frame_idx"]))] = raw
+    uri_by_key = _vector_uri_index(keyframes_path, embedding_names=wanted)
 
     out: dict[str, list[tuple[str, str, Sequence[float], dict[str, Any]]]] = {}
     for scene in scenes:
         for frame in scene.keyframes:
-            raw = raw_by_key.get((frame.video_id, frame.frame_idx))
-            if raw is None:
+            uris = uri_by_key.get((frame.video_id, frame.frame_idx))
+            if not uris:
                 continue
             payload = {
                 "entity_type": "keyframe",
@@ -214,19 +234,16 @@ async def _build_frame_vector_rows_by_index(
                 "has_ocr": bool(frame.ocr_texts),
                 "has_asr": bool(scene.asr_texts),
             }
-            for reference in raw.get("embedding_refs", []):
-                name = str(reference.get("embedding_name") or "")
-                if not name or (wanted is not None and name not in wanted):
-                    continue
-                vector: Sequence[float] | None = None
-                for location in reference.get("storage_locations", []):
-                    if location.get("backend") == "file" and location.get("vector_uri"):
-                        vector = _read_vector_file(data_root / str(location["vector_uri"]))
-                        break
-                if vector is None:
+            for name, uri in uris.items():
+                if not name:
                     continue
                 out.setdefault(name, []).append(
-                    (frame.keyframe_id, scene.video_id, vector, dict(payload))
+                    (
+                        frame.keyframe_id,
+                        scene.video_id,
+                        _read_vector_file(data_root / uri),
+                        dict(payload),
+                    )
                 )
     return out
 

@@ -202,3 +202,166 @@ hoặc bật lại nhánh thiếu, hoặc bỏ nó khỏi `AIC_BRANCH_WEIGHTS` v
 
 > `$env:` sống suốt phiên PowerShell. Đã lỡ chạy với `false` thì mở terminal
 > MỚI, hoặc chạy lại script (nay nó gán "true" tường minh).
+
+---
+
+## 10. `ValueError: không nạp được text encoder 'storage/models/jina-clip-v2'` vì phiên bản `huggingface-hub`
+
+```
+huggingface-hub>=0.34.0,<1.0 is required for a normal functioning of this
+module, but found huggingface-hub==1.28.0.
+```
+
+Thông điệp lỗi của container gợi ý "trỏ vào model đã tải sẵn" — **ở ca này lời
+khuyên đó sai đường**. Model vẫn nằm đúng chỗ; cái chết là `transformers` 4.x
+kiểm phiên bản `huggingface-hub` ngay lúc import và ném `ImportError` khi gặp
+hub 1.x. Lỗi đó bị `warmup()` bắt lại rồi bọc thành lỗi cấu hình, nên nhìn
+giống thiếu model.
+
+Hay gặp trên **máy GPU thuê** (Vast.ai/RunPod): image gốc đã cài sẵn hub 1.x ở
+`/venv/main`, còn `.venv` của dự án dựng kèm system-site-packages nên thừa
+hưởng luôn.
+
+Xem cái nào đang được nạp, rồi ghim hub về nhánh 0.x **vào đúng venv đang chạy
+uvicorn**:
+
+```bash
+cd /workspace/AIC2026_Nam_thang_ay
+.venv/bin/python -c "import transformers, huggingface_hub as h; print(transformers.__version__, transformers.__file__); print(h.__version__, h.__file__)"
+.venv/bin/pip install "huggingface_hub>=0.34,<1"
+```
+
+Cài vào `.venv` là đủ để che bản 1.x của `/venv/main` — không cần đụng vào
+image gốc. Ghim này nay nằm sẵn trong extra `gpu` của `pyproject.toml`, nên máy
+mới chỉ cần `pip install -e '.[gpu]'`.
+
+**Đừng chữa theo hướng ngược lại** (giữ hub 1.x, nâng `transformers` lên 5.x):
+`jina-clip-v2` chạy bằng `trust_remote_code`, code mô hình đó viết cho API
+`transformers` 4.x — đổi lên 5 là đổi một lỗi dependency lấy một lỗi runtime
+khó đoán hơn, ngay giữa lúc thi.
+
+---
+
+## 11. `OSError: We couldn't connect to 'https://huggingface.co'` dù model đã có sẵn trên đĩa
+
+```
+File ".../transformers/dynamic_module_utils.py", line 406, in get_cached_module_file
+OSError: We couldn't connect to 'https://huggingface.co' to load the files,
+and couldn't find them in the cached files.
+```
+
+Đây **không phải** cái bẫy text tower ở §3 (cái đó đã vá bằng `config.json`), và
+cũng không phải thiếu model. Cái thiếu là **code mô hình**:
+
+```json
+"auto_map": {"AutoModel": "jinaai/jina-clip-implementation--modeling_clip.JinaCLIPModel"}
+```
+
+Dấu `--` nghĩa là file `.py` nằm ở **repo khác**. Dù `storage/models/jina-clip-v2`
+đủ 1,7 GB trọng số, `transformers` vẫn gọi `cached_file()` lên repo đó —
+`HF_HUB_OFFLINE=1` biến lời gọi ấy thành `OSError` ngay. `jina-embeddings-v3`
+cũng thế, qua `jinaai/xlm-roberta-flash-implementation`.
+
+**Chép `hf_modules/` (gói Drive) hay giải nén `04_hf_modules.zip` (Kaggle) KHÔNG
+đủ.** `~/.cache/huggingface/modules/` là bản sao dẫn xuất mà `transformers` sinh
+ra *sau* khi `cached_file()` chạy xong; còn `cached_file()` chỉ đọc
+`$HF_HOME/hub`. Thiếu `hub/models--jinaai--*-implementation` là chết y hệt.
+
+Chạy một lần trên máy còn mạng (~350 KB, hai repo code):
+
+```bash
+python -m scripts.prepare_jina_offline
+```
+
+Script vá `config.json` (như §3), kéo về đúng hai repo code, rồi **tự kiểm lại
+bằng một tiến trình con bật `HF_HUB_OFFLINE=1`** — xanh nghĩa là startup sẽ qua.
+Kiểm suông, không đụng mạng: `--verify-only`.
+
+Máy **hoàn toàn không ra được** huggingface.co thì chép hai thư mục này từ máy
+đã chạy được sang `$HF_HOME/hub` (mặc định `~/.cache/huggingface/hub`):
+
+```
+models--jinaai--jina-clip-implementation
+models--jinaai--xlm-roberta-flash-implementation
+```
+
+> `HF_HOME` trên Vast.ai thường bị trỏ sang `/workspace/.hf_home`. Chép vào
+> `~/.cache` trong khi uvicorn đọc `$HF_HOME` là hỏng âm thầm — `bootstrap_vast_from_kaggle.py
+> --verify-only` in ra đúng đường dẫn nó đang kiểm, đối chiếu ở đó.
+
+---
+
+## 12. `ImportError: This modeling file requires ... einops`
+
+Lỗi tiếp ngay sau §11, và là **dấu hiệu tốt**: cache đã có code mô hình, nên
+`transformers` mới đọc tới `import` của nó. `check_imports` chặn ở đây, **mỗi
+lần một gói** — `einops`, rồi `timm`, rồi `torchvision`... mỗi lần một lượt khởi
+động nữa. Cài trọn một phát:
+
+```bash
+pip install einops timm torchvision click
+```
+
+Toàn bộ gói mà code jina cần (quét bằng `get_imports` trên hai repo code):
+
+| Repo code | Gói bên thứ ba |
+|---|---|
+| `jinaai/jina-clip-implementation` | `einops`, `timm`, `torchvision`, `pillow`, `numpy`, `requests`, `torch`, `transformers` |
+| `jinaai/xlm-roberta-flash-implementation` | `einops`, `click`, `numpy`, `torch`, `transformers` |
+
+`flash_attn` và `xformers` **không** có trong bảng: code jina bọc chúng trong
+`try/except` nên thiếu vẫn chạy (chậm hơn). Đừng cài `flash-attn` chỉ vì thấy
+`use_flash_attn: true` trong `config.json` — nó biên dịch hàng chục phút.
+
+`python -m scripts.prepare_jina_offline` nay quét sẵn danh sách này và in đúng
+một dòng `pip install` cho những gói còn thiếu, trước khi thử nạp. Ghim cũng đã
+nằm trong extra `gpu` của `pyproject.toml`, nên máy mới chỉ cần
+`pip install -e '.[gpu]'`.
+
+> `torchvision` phải khớp bản `torch` đang có. Image GPU thuê hầu như luôn cài
+> sẵn cả hai — kiểm `python -c "import torch, torchvision"` trước, đừng để pip
+> kéo về một cặp torch khác rồi hỏng CUDA.
+
+---
+
+## 13. UI chạy trên máy mình, backend chạy trên Vast.ai
+
+UI mặc định gọi `http://localhost:8000`, còn backend nằm trong container Vast —
+hai máy khác nhau, chưa có gì nối chúng lại. `run_ui.ps1` nay dò
+`/v1/health` (đường duy nhất không đòi token) và in ra cách nối khi không thấy
+backend.
+
+**Cách 1 — SSH tunnel (khuyên dùng).** Không cần map cổng lúc tạo máy, và API
+base trong QueryStudio giữ nguyên `http://localhost:8000` nên không phải sửa gì:
+
+```powershell
+# Terminal riêng, để chạy suốt phiên. Lệnh ssh lấy ở nút Connect của Vast.
+ssh -p <SSH_PORT> root@<HOST> -L 8000:localhost:8000 -N
+```
+
+Backend trên box bind `127.0.0.1` hay `0.0.0.0` đều được — tunnel đi vào
+`localhost` phía box.
+
+**Cách 2 — cổng công khai.** Chỉ được nếu lúc tạo máy đã mở cổng (ô "Open Ports"
+hoặc `-p 8000:8000`). Backend PHẢI bind `0.0.0.0` (`scripts/run_backend.sh` đã
+làm sẵn), rồi điền `API base = http://<IP>:<cổng đã map>`.
+
+Kiểm nhanh, theo thứ tự — dừng ở chỗ đầu tiên im lặng:
+
+```bash
+# trên box
+ss -ltnp | grep 8000
+curl -s localhost:8000/v1/health
+```
+
+```powershell
+# trên máy mình, sau khi mở tunnel
+curl.exe -s http://localhost:8000/v1/health
+```
+
+CORS **không** phải thứ chặn bạn ở đây: `AIC_CORS_ORIGINS` mặc định đã có
+`http://localhost:5173`, và origin tính theo nơi phục vụ TRANG (UI), không phải
+nơi API chạy. Đổi cổng dev của Vite thì mới phải thêm origin.
+
+> Ảnh keyframe đi qua `/v1/media` của backend, tức cũng qua tunnel. Box không có
+> 28 GB ảnh thì UI vẫn tìm kiếm được, chỉ là thumbnail 404 — xem §2.

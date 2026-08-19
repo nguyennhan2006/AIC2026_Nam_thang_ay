@@ -5,10 +5,10 @@
 #
 #     .\scripts\run_ui.ps1
 #
-# Vi sao can script rieng: mo http://localhost:8000 se ra MOT UI KHAC — API tu
+# Vi sao can script rieng: mo http://localhost:8000 se ra MOT UI KHAC - API tu
 # mount `online/ui` (HTML thuan) tai `/ui` va cho `/` chuyen huong vao do. Do la
 # ban demo cu, khong co bang trong so nhanh, khong co tab chinh frame, khong co
-# duong nop bai. Xem docs/36 §8.
+# duong nop bai. Xem docs/36 muc 8.
 
 $ErrorActionPreference = "Stop"
 $repo = Split-Path -Parent $PSScriptRoot
@@ -18,7 +18,7 @@ if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
     throw "Khong tim thay node. Cai Node.js roi chay lai."
 }
 if (-not (Test-Path "node_modules")) {
-    Write-Host "node_modules chua co — dang chay npm install..."
+    Write-Host "node_modules chua co - dang chay npm install..."
     npm install
 }
 
@@ -28,12 +28,30 @@ if (-not (Test-Path "node_modules")) {
 $newestSrc  = (Get-ChildItem src -Recurse -File | Sort-Object LastWriteTime | Select-Object -Last 1).LastWriteTime
 $newestDist = (Get-ChildItem dist -Recurse -File -ErrorAction SilentlyContinue | Sort-Object LastWriteTime | Select-Object -Last 1).LastWriteTime
 if ($newestDist -and $newestDist -lt $newestSrc) {
-    Write-Host ("[luu y] dist/ ({0:yyyy-MM-dd}) cu hon src/ ({1:yyyy-MM-dd}) — dang chay tu nguon, dung mo dist." -f $newestDist, $newestSrc)
+    Write-Host ("[luu y] dist/ ({0:yyyy-MM-dd}) cu hon src/ ({1:yyyy-MM-dd}) - dang chay tu nguon, dung mo dist." -f $newestDist, $newestSrc)
 }
+
+# Backend co the dang chay tren MAY KHAC (Vast.ai). Do o day de nguoi dung biet
+# NGAY, thay vi mo UI, go truy van, roi doc mot loi fetch khong noi len dieu gi.
+# /v1/health la duong duy nhat khong doi token (xem app.py api_key_guard).
+$backendUp = $false
+try {
+    $null = Invoke-RestMethod -Uri "http://localhost:8000/v1/health" -TimeoutSec 2
+    $backendUp = $true
+} catch { }
 
 Write-Host ""
 Write-Host "UI:      http://localhost:5173"
-Write-Host "Backend: http://localhost:8000  (chay .\scripts\run_competition.ps1 o terminal khac)"
+if ($backendUp) {
+    Write-Host "Backend: http://localhost:8000  (dang song)"
+} else {
+    Write-Host "Backend: KHONG thay gi o http://localhost:8000"
+    Write-Host "  - Backend chay ngay tren may nay : mo terminal khac roi chay run_competition.ps1"
+    Write-Host "  - Backend chay tren Vast.ai      : mo tunnel o terminal khac, giu nguyen API base:"
+    Write-Host "        ssh -p <SSH_PORT> root@<HOST> -L 8000:localhost:8000 -N"
+    Write-Host "    hoac dien API base = http://<IP_VAST>:<CONG_DA_MAP> trong QueryStudio"
+    Write-Host "    (can uvicorn --host 0.0.0.0 va cong da duoc map luc tao may)."
+}
 Write-Host ""
 Write-Host "Lan dau mo UI phai dien 2 o trong QueryStudio:"
 Write-Host "  API base : http://localhost:8000"
@@ -42,7 +60,13 @@ Write-Host ""
 $envFile = Join-Path $repo ".env.fpt.local"
 if (Test-Path $envFile) {
     $m = Select-String -Path $envFile -Pattern '^AIC_ONLINE_API_KEY=(.+)$'
-    if ($m) { Write-Host ("  -> Token: " + $m.Matches.Groups[1].Value) }
+    if ($m) {
+        Write-Host ("  -> Token: " + $m.Matches.Groups[1].Value)
+    } else {
+        # Khoa rong nghia la api_key_guard tat han (online/api/app.py), khong
+        # phai loi. Noi ro de khoi ai di tim mot token khong ton tai.
+        Write-Host "  -> AIC_ONLINE_API_KEY dang rong: de trong o Token la chay duoc."
+    }
 }
 Write-Host ""
 

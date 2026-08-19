@@ -185,8 +185,18 @@ Ra 873 video / 87.742 scene / 176.707 keyframe, ~6 phút.
 
 ```powershell
 python -m scripts.download_hf_model jinaai/jina-clip-v2 --out storage/models/jina-clip-v2
+python -m scripts.download_hf_model jinaai/jina-embeddings-v3 --out storage/models/jina-embeddings-v3
 python -m scripts.download_hf_model openai/clip-vit-large-patch14 --out storage/models/clip-vit-large-patch14
 ```
+
+**`jina-embeddings-v3` la BAT BUOC, khong phai tuy chon.** `jina-clip-v2` khong
+chua text tower cua chinh no: `config.json` khai
+`text_config.hf_model_name_or_path = "jinaai/jina-embeddings-v3"`, tuc mot repo
+TU XA. Voi `HF_HUB_OFFLINE=1` thi `model_info` NEM LOI thay vi roi ve cache; bo
+co do thi may du an bi chan SSL. Ca hai duong deu chet.
+`scripts/run_competition.ps1` tu sua truong do thanh duong dan tuong doi
+`storage/models/jina-embeddings-v3` (giu ban goc o `config.json.orig`) — nen thu
+muc nay PHAI ton tai, neu khong loi chi doi dang.
 
 **Rồi chép thư mục `hf_modules/` trong gói này vào:**
 
@@ -199,6 +209,18 @@ code mô hình nằm ở repo khác và `transformers` tải nó qua `huggingfac
 đúng cái stack chết với `SSLCertVerificationError` trên máy Windows của dự án
 (xem docstring `scripts/download_hf_model.py`). Không có thư mục này thì container
 chết ngay lúc dựng, ở một file 1,2 MB.
+
+**Và chép xong vẫn phải chạy một lệnh nữa (máy còn mạng, ~350 KB, một lần):**
+
+```powershell
+python -m scripts.prepare_jina_offline
+```
+
+`hf_modules/` là bản sao DẪN XUẤT, `transformers` chỉ sinh ra nó SAU khi lấy
+được file `.py` từ repo code. Lượt lấy đó đọc `$HF_HOME/hub`, không đọc
+`modules/` — nên máy chỉ có `hf_modules/` vẫn chết y hệt:
+`OSError: We couldn't connect to 'https://huggingface.co'`. Lệnh trên kéo về
+đúng hai repo code còn thiếu rồi tự kiểm lại bằng `HF_HUB_OFFLINE=1`.
 
 ## 5. Ảnh keyframe (28,7 GB) và objects (610 MB)
 
@@ -216,34 +238,51 @@ python -m scripts.fetch_aic_data --what keyframes --pack $pack --csv $csv
 python -m scripts.fetch_kaggle_media --verify --export storage/exports_competition
 ```
 
-## 6. Chạy
+## 6. Chạy — HAI terminal
 
 ```powershell
-$env:AIC_ENV_FILE                 = ".env.fpt.local"
-$env:AIC_METADATA_JSONL           = "storage/exports_competition/scenes.jsonl"
-$env:AIC_VISUAL_EMBEDDING_NAME    = "jina_clip_v2"
-$env:AIC_VISUAL_EMBEDDING_MODEL   = "storage/models/jina-clip-v2"
-$env:AIC_ENABLE_QUERY_TRANSLATION = "false"
-$env:AIC_BRANCH_TIMEOUT_MS        = "30000"
-$env:HF_HUB_OFFLINE               = "1"
-$env:TRANSFORMERS_OFFLINE         = "1"
+# Terminal 1 — backend (cong 8000)
+.\\scripts\\run_competition.ps1
 
-python -m uvicorn online.api.app:app --host 127.0.0.1 --port 8000
+# Terminal 2 — UI thi dau (cong 5173)
+.\\scripts\\run_ui.ps1
 ```
 
-Khởi động ~4 phút, cần ~5 GB RAM. Mọi endpoint nằm dưới `/v1`, và `/v1/*` trừ
-`/v1/health` đòi header `Authorization: Bearer <AIC_ONLINE_API_KEY>`.
+Hai script gom san toan bo cau hinh da kiem chung, tu kiem file thieu, va tu va
+`config.json` cua jina (xem §4). Khoi dong ~4 phut, can ~5 GB RAM. Doi dong
+`Application startup complete.`
 
-`AIC_BRANCH_TIMEOUT_MS=30000` **không phải tuỳ chọn**: ở 87.742 scene nhánh
-`dense_visual` mất 5,2–11,8 s, để mặc định 8000 là nó bị cắt **trong im lặng**.
+### Mo cong 8000 se ra NHAM UI
 
-UI: `cd online/ui-react && npm run dev`, đặt API base `http://localhost:8000`.
+API tu mount `online/ui` (HTML thuan, ban demo cu) tai `/ui` va cho `/` chuyen
+huong vao do. Ban demo do **van tim kiem duoc** nen rat de tuong la dung, nhung
+khong co bang trong so nhanh, khong co tab chinh frame, khong co duong nop bai.
+
+Ban thi dau la React o **http://localhost:5173**. Lan dau mo, dien hai o trong
+QueryStudio (luu localStorage, chi mot lan):
+
+- **API base**: `http://localhost:8000`
+- **Token**: `AIC_ONLINE_API_KEY` trong `.env.fpt.local` — `run_ui.ps1` in san.
+
+Dung phuc vu `online/ui-react/dist/`: ban build san cu hon `src/`, thieu ca tab
+"Chinh frame". `run_ui.ps1` chay tu nguon bang `npm run dev`.
+
+### Dung tu tat nhanh
+
+`/v1/search/capabilities` **tu choi bang 422** moi `search_options` tro toi nhanh
+khong ton tai — khong phai lo di. UI co preset dung san
+"Tim chu hien tren man hinh" gui `bm25_ocr`, nen chay backend voi
+`AIC_ENABLE_OCR_BRANCH=false` lam MOI truy van tu preset do tra 422. Da xay ra
+that. Doi topology nhanh la doi hop dong voi UI.
+
+`AIC_BRANCH_TIMEOUT_MS=30000` giu nguyen: 8000 la con so chon cho 765 scene.
 
 ## 7. Đọc trước khi đổi bất cứ thứ gì
 
 | Tài liệu | Nội dung |
 |---|---|
 | `README_BRANCH.md` | tổng quan, dựng lại dữ liệu |
+| `docs/36_CHAY_HE_THONG.md` | **doc dau tien** — chay tu dau den cuoi, 4 cai bay da dinh that |
 | `docs/34_COMPETITION_PACK_IMPORT.md` | pack thiếu gì, importer quyết định gì |
 | `docs/35_KAGGLE_MEDIA.md` | tải ảnh, và vì sao không được chép thẳng |
 | `docs/20_EXPERIMENT_LOG.md` | mọi thí nghiệm đã chạy, gồm cả cái **DROP** |
