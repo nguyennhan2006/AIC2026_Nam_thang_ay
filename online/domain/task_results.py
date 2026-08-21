@@ -101,7 +101,10 @@ class TrakeStep(StrictModel):
     scene_id: str | None = None
     confidence: float = Field(ge=0.0, le=1.0)
     # Frame được tinh chỉnh tới mức nào — quan trọng vì cửa sổ GT chỉ ±4 frame.
-    refinement: Literal["keyframe_only", "dense_window"] = "keyframe_only"
+    # `interpolated` = step KHÔNG có bằng chứng riêng; frame được lấp bằng
+    # keyframe THẬT gần vị trí nội suy giữa hai step lân cận. Phải phân biệt
+    # được với frame có bằng chứng, nếu không người dùng tin nhầm một ô trống.
+    refinement: Literal["keyframe_only", "dense_window", "interpolated"] = "keyframe_only"
     # Đường dẫn ảnh keyframe thật đã chọn — None khi anchor nằm ngoài scene
     # (không có frame thật để trỏ tới, xem frame_refinement.py). UI dùng để
     # hiển thị thumbnail cho mỗi step card, không suy đoán theo path convention.

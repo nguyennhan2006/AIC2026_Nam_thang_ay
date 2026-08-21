@@ -1,0 +1,1542 @@
+[
+ {
+  "query_id": "V001_TRAKE_E01",
+  "event_order": 1,
+  "event_text": "cột nước được quay từ xa",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 185,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 5696,
+   "end_frame": 5704,
+   "window_width_sec": 7.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V001_TRAKE_E01",
+  "event_order": 2,
+  "event_text": "một người đàn ông tiến sát cột nước",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 28,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 6026,
+   "end_frame": 6034,
+   "window_width_sec": 7.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V001_TRAKE_E01",
+  "event_order": 3,
+  "event_text": "người này cầm chai hoặc vật chứa cạnh dòng nước",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 299,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 6386,
+   "end_frame": 6394,
+   "window_width_sec": 2.467,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V001_TRAKE_E01",
+  "event_order": 4,
+  "event_text": "nhiều người cùng chỉ về phía cột nước",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 72,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 7016,
+   "end_frame": 7024,
+   "window_width_sec": 2.367,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V001_TRAKE_E02",
+  "event_order": 1,
+  "event_text": "máy bay tại sân bay ban đêm",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 1,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 7826,
+   "end_frame": 7834,
+   "window_width_sec": 2.5,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V001_TRAKE_E02",
+  "event_order": 2,
+  "event_text": "đội y tế mang thùng chuyên dụng đến xe cứu thương",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 69,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 8066,
+   "end_frame": 8074,
+   "window_width_sec": 2.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V001_TRAKE_E02",
+  "event_order": 3,
+  "event_text": "xe cứu thương di chuyển trên đường ướt",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": null,
+  "gold_region_present": false,
+  "gold_window": {
+   "start_frame": 8306,
+   "end_frame": 8314,
+   "window_width_sec": 2.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V001_TRAKE_E02",
+  "event_order": 4,
+  "event_text": "bác sĩ tiến hành phẫu thuật",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 85,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 8786,
+   "end_frame": 8794,
+   "window_width_sec": 2.733,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V001_TRAKE_M01",
+  "event_order": 1,
+  "event_text": "toàn cảnh bờ sông sụt lún cạnh nhà dân",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 33,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 1946,
+   "end_frame": 1954,
+   "window_width_sec": 2.483,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V001_TRAKE_M01",
+  "event_order": 2,
+  "event_text": "biển cảnh báo sạt lở",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 1,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 2246,
+   "end_frame": 2254,
+   "window_width_sec": 2.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V001_TRAKE_M01",
+  "event_order": 3,
+  "event_text": "cán bộ phát biểu trong cuộc họp",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 69,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 2996,
+   "end_frame": 3004,
+   "window_width_sec": 4.733,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V001_TRAKE_M01",
+  "event_order": 4,
+  "event_text": "đoàn khảo sát xem bản vẽ lớn",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 17,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 4046,
+   "end_frame": 4054,
+   "window_width_sec": 2.45,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V001_TRAKE_M01",
+  "event_order": 5,
+  "event_text": "công trình bê tông ven sông được kiểm tra",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 138,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 4796,
+   "end_frame": 4804,
+   "window_width_sec": 7.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V001_TRAKE_M02",
+  "event_order": 1,
+  "event_text": "sườn đồi bốc cháy dữ dội trong đêm",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 273,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 26906,
+   "end_frame": 26914,
+   "window_width_sec": 2.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V001_TRAKE_M02",
+  "event_order": 2,
+  "event_text": "xe cứu hỏa bật đèn xanh",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 61,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 27446,
+   "end_frame": 27454,
+   "window_width_sec": 2.7,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V001_TRAKE_M02",
+  "event_order": 3,
+  "event_text": "trực thăng mang túi nước bay qua vùng khói",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 4,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 28076,
+   "end_frame": 28084,
+   "window_width_sec": 2.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V001_TRAKE_M02",
+  "event_order": 4,
+  "event_text": "cảnh rừng cháy xơ xác và xe cứu hỏa vào ban ngày",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 37,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 28436,
+   "end_frame": 28444,
+   "window_width_sec": 2.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V001_TRAKE_M03",
+  "event_order": 1,
+  "event_text": "chó đánh hơi trên bãi cát",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 28,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 33476,
+   "end_frame": 33484,
+   "window_width_sec": 2.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V001_TRAKE_M03",
+  "event_order": 2,
+  "event_text": "người hướng dẫn đi cùng hai con chó",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": null,
+  "gold_region_present": false,
+  "gold_window": {
+   "start_frame": 34076,
+   "end_frame": 34084,
+   "window_width_sec": 2.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V001_TRAKE_M03",
+  "event_order": 3,
+  "event_text": "nhân viên tại trung tâm cứu hộ",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 226,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 34436,
+   "end_frame": 34444,
+   "window_width_sec": 4.067,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V001_TRAKE_M03",
+  "event_order": 4,
+  "event_text": "rùa biển bơi dưới nước",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 5,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 34916,
+   "end_frame": 34924,
+   "window_width_sec": 7.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V001_TRAKE_M03",
+  "event_order": 5,
+  "event_text": "rùa được thả từ thuyền xuống biển",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 4,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 35036,
+   "end_frame": 35044,
+   "window_width_sec": 2.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V001_TRAKE_H01",
+  "event_order": 1,
+  "event_text": "phương tiện màu xanh di chuyển trên kênh",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": null,
+  "gold_region_present": false,
+  "gold_window": {
+   "start_frame": 28856,
+   "end_frame": 28864,
+   "window_width_sec": 2.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V001_TRAKE_H01",
+  "event_order": 2,
+  "event_text": "thuyền chở đông du khách đi giữa dãy nhà",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": null,
+  "gold_region_present": false,
+  "gold_window": {
+   "start_frame": 29216,
+   "end_frame": 29224,
+   "window_width_sec": 2.783,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V001_TRAKE_H01",
+  "event_order": 3,
+  "event_text": "người đội mũ bảo hiểm di chuyển bằng xe đạp",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": null,
+  "gold_region_present": false,
+  "gold_window": {
+   "start_frame": 29456,
+   "end_frame": 29464,
+   "window_width_sec": 2.433,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V001_TRAKE_H01",
+  "event_order": 4,
+  "event_text": "khách tham quan không gian bên trong bảo tàng",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": null,
+  "gold_region_present": false,
+  "gold_window": {
+   "start_frame": 30536,
+   "end_frame": 30544,
+   "window_width_sec": 2.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V001_TRAKE_H02",
+  "event_order": 1,
+  "event_text": "cá mú lớn bơi giữa đàn cá",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 166,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 31076,
+   "end_frame": 31084,
+   "window_width_sec": 7.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V001_TRAKE_H02",
+  "event_order": 2,
+  "event_text": "hai thợ lặn bơi gần đáy",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 3,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 31556,
+   "end_frame": 31564,
+   "window_width_sec": 2.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V001_TRAKE_H02",
+  "event_order": 3,
+  "event_text": "cận cảnh cá mú sát nền đá",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 147,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 31916,
+   "end_frame": 31924,
+   "window_width_sec": 2.85,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V001_TRAKE_H02",
+  "event_order": 4,
+  "event_text": "thợ lặn khảo sát sinh vật trên đáy biển",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 4,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 32516,
+   "end_frame": 32524,
+   "window_width_sec": 2.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V001_TRAKE_H02",
+  "event_order": 5,
+  "event_text": "thợ lặn bơi qua một đàn cá nhỏ",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 1,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 32756,
+   "end_frame": 32764,
+   "window_width_sec": 2.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V001_TRAKE_H03",
+  "event_order": 1,
+  "event_text": "toàn cảnh lực lượng chức năng tại hiện trường",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 399,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 19796,
+   "end_frame": 19804,
+   "window_width_sec": 3.833,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V001_TRAKE_H03",
+  "event_order": 2,
+  "event_text": "người kiểm tra chiếc xe máy màu đỏ",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 456,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 20096,
+   "end_frame": 20104,
+   "window_width_sec": 7.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V001_TRAKE_H03",
+  "event_order": 3,
+  "event_text": "cận cảnh phần đuôi chiếc xe màu xanh bị hư hỏng",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 39,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 20396,
+   "end_frame": 20404,
+   "window_width_sec": 4.3,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V001_TRAKE_H03",
+  "event_order": 4,
+  "event_text": "cận cảnh biển số của các xe tại hiện trường",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": null,
+  "gold_region_present": false,
+  "gold_window": {
+   "start_frame": 20696,
+   "end_frame": 20704,
+   "window_width_sec": 3.55,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V002_TRAKE_E01",
+  "event_order": 1,
+  "event_text": "người kiểm tra quả trong vườn",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 273,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 7196,
+   "end_frame": 7204,
+   "window_width_sec": 2.25,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V002_TRAKE_E01",
+  "event_order": 2,
+  "event_text": "công nhân phân loại bưởi",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 118,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 7496,
+   "end_frame": 7504,
+   "window_width_sec": 7.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V002_TRAKE_E01",
+  "event_order": 3,
+  "event_text": "bưởi chạy trên băng chuyền",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 1,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 7796,
+   "end_frame": 7804,
+   "window_width_sec": 7.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V002_TRAKE_E01",
+  "event_order": 4,
+  "event_text": "công nhân mang các thùng hàng",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 155,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 8096,
+   "end_frame": 8104,
+   "window_width_sec": 2.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V002_TRAKE_E02",
+  "event_order": 1,
+  "event_text": "robot có pin mặt trời trên ruộng",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 6,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 25796,
+   "end_frame": 25804,
+   "window_width_sec": 2.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V002_TRAKE_E02",
+  "event_order": 2,
+  "event_text": "đại diện công ty được phỏng vấn cạnh robot",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 206,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 26096,
+   "end_frame": 26104,
+   "window_width_sec": 2.8,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V002_TRAKE_E02",
+  "event_order": 3,
+  "event_text": "màn hình nhận diện cây bằng khung đỏ",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 495,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 26696,
+   "end_frame": 26704,
+   "window_width_sec": 3.717,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V002_TRAKE_E02",
+  "event_order": 4,
+  "event_text": "cận cảnh logo Earth Rover",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 1,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 26996,
+   "end_frame": 27004,
+   "window_width_sec": 2.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V002_TRAKE_E02",
+  "event_order": 5,
+  "event_text": "robot trở lại di chuyển giữa luống cây",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 33,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 27146,
+   "end_frame": 27154,
+   "window_width_sec": 2.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V002_TRAKE_M01",
+  "event_order": 1,
+  "event_text": "quầy dịch vụ có bảng MoMo",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 1,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 1496,
+   "end_frame": 1504,
+   "window_width_sec": 7.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V002_TRAKE_M01",
+  "event_order": 2,
+  "event_text": "máy móc trong nhà xưởng",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 29,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 1796,
+   "end_frame": 1804,
+   "window_width_sec": 7.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V002_TRAKE_M01",
+  "event_order": 3,
+  "event_text": "lịch nghỉ từ cuối tháng 8 sang tháng 9",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 253,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 1946,
+   "end_frame": 1954,
+   "window_width_sec": 2.483,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V002_TRAKE_M01",
+  "event_order": 4,
+  "event_text": "xe nâng chở thùng",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 44,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 2246,
+   "end_frame": 2254,
+   "window_width_sec": 2.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V002_TRAKE_M01",
+  "event_order": 5,
+  "event_text": "hẻm treo nhiều cờ Việt Nam",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 228,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 2546,
+   "end_frame": 2554,
+   "window_width_sec": 2.717,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V002_TRAKE_M02",
+  "event_order": 1,
+  "event_text": "toàn cảnh bể bơi nhìn từ trên cao",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 23,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 21596,
+   "end_frame": 21604,
+   "window_width_sec": 2.1,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V002_TRAKE_M02",
+  "event_order": 2,
+  "event_text": "trẻ em nằm ngửa nổi trên nước",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 217,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 21896,
+   "end_frame": 21904,
+   "window_width_sec": 2.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V002_TRAKE_M02",
+  "event_order": 3,
+  "event_text": "người phụ trách chương trình trả lời phỏng vấn",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 420,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 22796,
+   "end_frame": 22804,
+   "window_width_sec": 7.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V002_TRAKE_M02",
+  "event_order": 4,
+  "event_text": "cảnh khu vực mặt nước tự nhiên ở cuối bản tin",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 332,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 23096,
+   "end_frame": 23104,
+   "window_width_sec": 7.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V002_TRAKE_M03",
+  "event_order": 1,
+  "event_text": "tay đua bật xe trên dốc trong nhà",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 10,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 29546,
+   "end_frame": 29554,
+   "window_width_sec": 7.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V002_TRAKE_M03",
+  "event_order": 2,
+  "event_text": "tay đua di chuyển trong sân ban đêm",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": null,
+  "gold_region_present": false,
+  "gold_window": {
+   "start_frame": 29846,
+   "end_frame": 29854,
+   "window_width_sec": 4.733,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V002_TRAKE_M03",
+  "event_order": 3,
+  "event_text": "cú nhảy trên dốc xanh",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": null,
+  "gold_region_present": false,
+  "gold_window": {
+   "start_frame": 30296,
+   "end_frame": 30304,
+   "window_width_sec": 2.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V002_TRAKE_M03",
+  "event_order": 4,
+  "event_text": "nữ vận động viên được phỏng vấn",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 18,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 30596,
+   "end_frame": 30604,
+   "window_width_sec": 2.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V002_TRAKE_M03",
+  "event_order": 5,
+  "event_text": "một cú nhảy cao khác ở cuối bản tin",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 281,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 31046,
+   "end_frame": 31054,
+   "window_width_sec": 7.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V002_TRAKE_H01",
+  "event_order": 1,
+  "event_text": "xe tải và xe buýt tại giao lộ",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 31,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 11696,
+   "end_frame": 11704,
+   "window_width_sec": 4.667,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V002_TRAKE_H01",
+  "event_order": 2,
+  "event_text": "xe buýt xanh đi qua khi đèn vẫn đỏ",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 14,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 11996,
+   "end_frame": 12004,
+   "window_width_sec": 7.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V002_TRAKE_H01",
+  "event_order": 3,
+  "event_text": "đèn tín hiệu đỏ được làm nổi bật",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 154,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 12296,
+   "end_frame": 12304,
+   "window_width_sec": 2.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V002_TRAKE_H01",
+  "event_order": 4,
+  "event_text": "xe cảnh sát bật đèn ban đêm",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 7,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 13046,
+   "end_frame": 13054,
+   "window_width_sec": 2.1,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V002_TRAKE_H01",
+  "event_order": 5,
+  "event_text": "các bên làm việc tại bàn ở cơ quan chức năng",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 94,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 13346,
+   "end_frame": 13354,
+   "window_width_sec": 7.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V002_TRAKE_H02",
+  "event_order": 1,
+  "event_text": "Andrew Bailey bước vào khu họp báo",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 17,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 17546,
+   "end_frame": 17554,
+   "window_width_sec": 2.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V002_TRAKE_H02",
+  "event_order": 2,
+  "event_text": "ngồi trước phông Bank of England",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 5,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 17696,
+   "end_frame": 17704,
+   "window_width_sec": 7.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V002_TRAKE_H02",
+  "event_order": 3,
+  "event_text": "phát biểu trước micro",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 59,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 17996,
+   "end_frame": 18004,
+   "window_width_sec": 7.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V002_TRAKE_H02",
+  "event_order": 4,
+  "event_text": "các tờ tiền được in thành từng tấm",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 1,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 18746,
+   "end_frame": 18754,
+   "window_width_sec": 2.083,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V002_TRAKE_H02",
+  "event_order": 5,
+  "event_text": "tòa nhà Bank of England xuất hiện",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 3,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 18896,
+   "end_frame": 18904,
+   "window_width_sec": 2.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V002_TRAKE_H03",
+  "event_order": 1,
+  "event_text": "biển National Park Service tại Abuja",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 184,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 27836,
+   "end_frame": 27844,
+   "window_width_sec": 2.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V002_TRAKE_H03",
+  "event_order": 2,
+  "event_text": "tượng voi còn phủ bạt",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 102,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 27896,
+   "end_frame": 27904,
+   "window_width_sec": 2.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V002_TRAKE_H03",
+  "event_order": 3,
+  "event_text": "bộ trưởng phát biểu",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": null,
+  "gold_region_present": false,
+  "gold_window": {
+   "start_frame": 28016,
+   "end_frame": 28024,
+   "window_width_sec": 2.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V002_TRAKE_H03",
+  "event_order": 4,
+  "event_text": "khán giả và lực lượng mặc đồng phục dự lễ",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 77,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 28496,
+   "end_frame": 28504,
+   "window_width_sec": 2.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V002_TRAKE_H03",
+  "event_order": 5,
+  "event_text": "bia giới thiệu tượng",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 424,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 28736,
+   "end_frame": 28744,
+   "window_width_sec": 5.65,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V002_TRAKE_H03",
+  "event_order": 6,
+  "event_text": "tượng voi được công bố hoàn toàn",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 3,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 28976,
+   "end_frame": 28984,
+   "window_width_sec": 2.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V003_TRAKE_E01",
+  "event_order": 1,
+  "event_text": "dòng nước trắng phun mạnh từ cửa đập",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 3,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 1496,
+   "end_frame": 1504,
+   "window_width_sec": 7.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V003_TRAKE_E01",
+  "event_order": 2,
+  "event_text": "bảng xanh liệt kê số cửa mở",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 87,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 1746,
+   "end_frame": 1754,
+   "window_width_sec": 7.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V003_TRAKE_E01",
+  "event_order": 3,
+  "event_text": "góc rộng đập Hòa Bình",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 1,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 1896,
+   "end_frame": 1904,
+   "window_width_sec": 2.483,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V003_TRAKE_E01",
+  "event_order": 4,
+  "event_text": "mặt nước cuộn bọt phía hạ lưu",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 23,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 2121,
+   "end_frame": 2129,
+   "window_width_sec": 2.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V003_TRAKE_E02",
+  "event_order": 1,
+  "event_text": "lừa trưởng thành đứng cùng lừa non gần hàng rào",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 312,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 23821,
+   "end_frame": 23829,
+   "window_width_sec": 2.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V003_TRAKE_E02",
+  "event_order": 2,
+  "event_text": "con lớn và con non cúi đầu trên bãi cỏ",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 46,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 23996,
+   "end_frame": 24004,
+   "window_width_sec": 2.65,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V003_TRAKE_E02",
+  "event_order": 3,
+  "event_text": "lừa non cúi xuống nền đất",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": null,
+  "gold_region_present": false,
+  "gold_window": {
+   "start_frame": 24296,
+   "end_frame": 24304,
+   "window_width_sec": 2.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V003_TRAKE_E02",
+  "event_order": 4,
+  "event_text": "ba con cùng đứng trong một khung hình",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 217,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 24496,
+   "end_frame": 24504,
+   "window_width_sec": 2.233,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V003_TRAKE_M01",
+  "event_order": 1,
+  "event_text": "trẻ em đứng trước phông bé Cà",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 7,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 4746,
+   "end_frame": 4754,
+   "window_width_sec": 7.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V003_TRAKE_M01",
+  "event_order": 2,
+  "event_text": "hà mã con đứng sát con lớn ở cổng chuồng",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": null,
+  "gold_region_present": false,
+  "gold_window": {
+   "start_frame": 4908,
+   "end_frame": 4916,
+   "window_width_sec": 2.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V003_TRAKE_M01",
+  "event_order": 3,
+  "event_text": "các hà mã bơi trong hồ",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 73,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 5496,
+   "end_frame": 5504,
+   "window_width_sec": 7.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V003_TRAKE_M01",
+  "event_order": 4,
+  "event_text": "hà mã ăn thức ăn trên nền chuồng",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 13,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 5746,
+   "end_frame": 5754,
+   "window_width_sec": 7.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V003_TRAKE_M02",
+  "event_order": 1,
+  "event_text": "người mặc áo xanh thò tay vào hố cát",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 1,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 6596,
+   "end_frame": 6604,
+   "window_width_sec": 2.333,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V003_TRAKE_M02",
+  "event_order": 2,
+  "event_text": "rùa con nằm trên cát",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 109,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 6996,
+   "end_frame": 7004,
+   "window_width_sec": 2.367,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V003_TRAKE_M02",
+  "event_order": 3,
+  "event_text": "nhiều trứng trắng được xếp thành hàng",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 16,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 7246,
+   "end_frame": 7254,
+   "window_width_sec": 7.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V003_TRAKE_M02",
+  "event_order": 4,
+  "event_text": "người kiểm tra cúi sâu vào ổ",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 132,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 7496,
+   "end_frame": 7504,
+   "window_width_sec": 7.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V003_TRAKE_M03",
+  "event_order": 1,
+  "event_text": "góc rộng nhiều xe trên mặt nước",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 8,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 25508,
+   "end_frame": 25516,
+   "window_width_sec": 2.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V003_TRAKE_M03",
+  "event_order": 2,
+  "event_text": "xe mui trần đỏ chở khách",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 473,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 25796,
+   "end_frame": 25804,
+   "window_width_sec": 2.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V003_TRAKE_M03",
+  "event_order": 3,
+  "event_text": "xe trắng xuống nước trước đám đông",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 1,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 25946,
+   "end_frame": 25954,
+   "window_width_sec": 2.4,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V003_TRAKE_M03",
+  "event_order": 4,
+  "event_text": "đoàn xe đi dưới cầu đá",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 21,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 26208,
+   "end_frame": 26216,
+   "window_width_sec": 3.4,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V003_TRAKE_M03",
+  "event_order": 5,
+  "event_text": "xe tối màu chạy giữa các thuyền",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 17,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 26484,
+   "end_frame": 26492,
+   "window_width_sec": 5.217,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V003_TRAKE_H01",
+  "event_order": 1,
+  "event_text": "ô tô cháy đen trong hầm",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 4,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 11496,
+   "end_frame": 11504,
+   "window_width_sec": 2.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V003_TRAKE_H01",
+  "event_order": 2,
+  "event_text": "lực lượng kiểm tra cạnh xe máy và cọc phân luồng",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 63,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 11734,
+   "end_frame": 11742,
+   "window_width_sec": 4.667,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V003_TRAKE_H01",
+  "event_order": 3,
+  "event_text": "người cứu hộ đi sâu hơn trong hầm",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 12,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 11958,
+   "end_frame": 11966,
+   "window_width_sec": 2.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V003_TRAKE_H01",
+  "event_order": 4,
+  "event_text": "xe bốc lửa lớn ngoài trời",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 5,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 12496,
+   "end_frame": 12504,
+   "window_width_sec": 2.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V003_TRAKE_H01",
+  "event_order": 5,
+  "event_text": "khói dày bao quanh xe",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 22,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 12746,
+   "end_frame": 12754,
+   "window_width_sec": 6.467,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V003_TRAKE_H02",
+  "event_order": 1,
+  "event_text": "đường trước sạp còn tương đối trống",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 292,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 14446,
+   "end_frame": 14454,
+   "window_width_sec": 6.867,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V003_TRAKE_H02",
+  "event_order": 2,
+  "event_text": "xe máy đi qua gần gốc cây",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 74,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 14596,
+   "end_frame": 14604,
+   "window_width_sec": 6.867,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V003_TRAKE_H02",
+  "event_order": 3,
+  "event_text": "ô tô trắng xuất hiện ở mép trên camera",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": null,
+  "gold_region_present": false,
+  "gold_window": {
+   "start_frame": 14746,
+   "end_frame": 14754,
+   "window_width_sec": 2.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V003_TRAKE_H02",
+  "event_order": 4,
+  "event_text": "cảnh dọc cho thấy xe máy đổ",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 229,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 15071,
+   "end_frame": 15079,
+   "window_width_sec": 2.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V003_TRAKE_H02",
+  "event_order": 5,
+  "event_text": "cận cảnh đầu ô tô hư hỏng",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 7,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 15208,
+   "end_frame": 15216,
+   "window_width_sec": 2.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V003_TRAKE_H03",
+  "event_order": 1,
+  "event_text": "góc nhìn đôi chân ở mép công trình",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": null,
+  "gold_region_present": false,
+  "gold_window": {
+   "start_frame": 26951,
+   "end_frame": 26959,
+   "window_width_sec": 2.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V003_TRAKE_H03",
+  "event_order": 2,
+  "event_text": "người chơi nhìn về tháp khi đang đu",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 23,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 27241,
+   "end_frame": 27249,
+   "window_width_sec": 2.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V003_TRAKE_H03",
+  "event_order": 3,
+  "event_text": "bóng người và dây đu nhìn từ trên xuống",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 110,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 27508,
+   "end_frame": 27516,
+   "window_width_sec": 2.7,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V003_TRAKE_H03",
+  "event_order": 4,
+  "event_text": "người chơi văng ra ngoài bệ",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 22,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 27728,
+   "end_frame": 27736,
+   "window_width_sec": 7.0,
+   "interval_source": "derived_scene_window"
+  }
+ },
+ {
+  "query_id": "V003_TRAKE_H03",
+  "event_order": 5,
+  "event_text": "người đàn ông được phỏng vấn trên sân thượng",
+  "stage_b_candidate_count": 500,
+  "gold_region_rank": 186,
+  "gold_region_present": true,
+  "gold_window": {
+   "start_frame": 27984,
+   "end_frame": 27992,
+   "window_width_sec": 2.0,
+   "interval_source": "derived_scene_window"
+  }
+ }
+]

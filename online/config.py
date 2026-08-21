@@ -211,10 +211,34 @@ class Settings:
     trake_engine: str = "sequences"
     # Phase A docs/31: beam (link_event_hits, hien tai) | dp (DANTE)
     trake_solver: str = "beam"
-    # None = giu mac dinh cua solver (beam 0.002, dp 0.0). Hieu chuan: khoang
-    # cach giua hai buoc gold p50=10s, diem moi scene ~0.04 — nen 0.002 phat
-    # 0.02 tai p50, tuc bang NUA tin hieu.
+    # Phat khoang cach thoi gian MEM: min(lambda * max(0, gap - W), cap).
+    # None = giu mac dinh da hieu chuan o online/services/temporal_gap.py
+    # (W=60s, lambda=2e-5, cap=0.01 — tuc 1/4 diem mot scene). Rang buoc CUNG
+    # chi con: cung video + thu tu xuat hien tang dan.
     trake_gap_penalty: float | None = None
+    # None = dung candidate_limit chung. Xem SearchService.trake_candidate_limit:
+    # TRAKE can K lon hon han vi moi step lay top-K tren TOAN corpus, va chuoi
+    # chi dung duoc khi moi step co candidate trong CUNG mot video.
+    trake_candidate_limit: int | None = None
+    # Han ngach video trong beam / o dau ra. None = hanh vi cu (cat thuan theo
+    # diem). Do tren 873 video: 20 dong output chi chua 1.58 video khac nhau,
+    # va co query gold co mat o CA 5 step ma van khong lot noi vao output vi
+    # mot video "nam cham" chiem sach beam.
+    # beam_size=100 la con so chinh cho corpus 3 video. Tren 873 video no vua
+    # qua nho de chua nhieu video, vua buoc phai chon giua SAU va RONG: dat
+    # per_video_beam thap thi cat luon phan kham pha cua chinh video gold
+    # (do duoc: hit@20 0.750 -> 0.542). Noi beam ra thi khong con phai danh doi.
+    # Chuoi THIEU step van duoc tra ve. Do tren 873 video: chi 14/24 truy van
+    # co du candidate o MOI step, nen doi chuoi day du la vut 10/24 truy van ve
+    # khong — ke ca khi video dung dang nam san trong pool o 4/5 step.
+    trake_allow_missing_steps: bool = False
+    trake_min_covered_steps: int = 2
+    trake_missing_step_penalty: float | None = None
+    trake_beam_size: int | None = None
+    trake_per_video_beam: int | None = None
+    trake_max_chains_per_video: int | None = None
+    trake_free_gap_sec: float | None = None
+    trake_gap_cap: float | None = None
     # Dense visual local (PR-13) — text tower phải cùng model với vector ảnh
     # đã sinh (`scripts/embed_keyframes_local.py`), nếu không hai không gian
     # embedding lệch nhau và cosine similarity vô nghĩa. Chỉ thật sự nạp model
@@ -382,6 +406,36 @@ class Settings:
             trake_gap_penalty=(
                 float(os.environ["AIC_TRAKE_GAP_PENALTY"])
                 if os.getenv("AIC_TRAKE_GAP_PENALTY") else None
+            ),
+            trake_candidate_limit=(
+                int(os.environ["AIC_TRAKE_CANDIDATE_LIMIT"])
+                if os.getenv("AIC_TRAKE_CANDIDATE_LIMIT") else None
+            ),
+            trake_allow_missing_steps=_env_bool("AIC_TRAKE_ALLOW_MISSING_STEPS", False),
+            trake_min_covered_steps=_env_int("AIC_TRAKE_MIN_COVERED_STEPS", 2),
+            trake_missing_step_penalty=(
+                float(os.environ["AIC_TRAKE_MISSING_STEP_PENALTY"])
+                if os.getenv("AIC_TRAKE_MISSING_STEP_PENALTY") else None
+            ),
+            trake_beam_size=(
+                int(os.environ["AIC_TRAKE_BEAM_SIZE"])
+                if os.getenv("AIC_TRAKE_BEAM_SIZE") else None
+            ),
+            trake_per_video_beam=(
+                int(os.environ["AIC_TRAKE_PER_VIDEO_BEAM"])
+                if os.getenv("AIC_TRAKE_PER_VIDEO_BEAM") else None
+            ),
+            trake_max_chains_per_video=(
+                int(os.environ["AIC_TRAKE_MAX_CHAINS_PER_VIDEO"])
+                if os.getenv("AIC_TRAKE_MAX_CHAINS_PER_VIDEO") else None
+            ),
+            trake_free_gap_sec=(
+                float(os.environ["AIC_TRAKE_FREE_GAP_SEC"])
+                if os.getenv("AIC_TRAKE_FREE_GAP_SEC") else None
+            ),
+            trake_gap_cap=(
+                float(os.environ["AIC_TRAKE_GAP_CAP"])
+                if os.getenv("AIC_TRAKE_GAP_CAP") else None
             ),
             visual_embedding_model=os.getenv("AIC_VISUAL_EMBEDDING_MODEL", "openai/clip-vit-large-patch14"),
             visual_embedding_name=os.getenv("AIC_VISUAL_EMBEDDING_NAME", "").strip(),

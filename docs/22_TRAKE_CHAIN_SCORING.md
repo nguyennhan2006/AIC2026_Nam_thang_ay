@@ -45,11 +45,13 @@ Ba hệ quả, trong đó hai cái đi ngược cài đặt hiện tại:
 |---|---|---|
 | Thứ tự phải đúng | **Cổng cứng**: `f_1 < f_2 < ... < f_n` | ĐÃ là cổng cứng (`sequence_search.py:87`) — `ordering_weight` là chuyện khác, nó xếp hạng *video* |
 | Ngữ nghĩa phải chặt | Điểm chuỗi do **độ khớp ngữ nghĩa tuyệt đối** quyết định | điểm retrieval (mang tính so sánh) |
-| Lệch vị trí được tha | **Không phạt khoảng cách** | `gap_penalty_per_sec` phạt chuỗi trải rộng |
+| Lệch vị trí được tha | **Không phạt khoảng cách** | phạt dead-zone + trần — và ĐO ĐƯỢC là cần, mục 4c |
 
 `gap_penalty_per_sec` không có cơ sở nào trong luật: không điều khoản nào
 thưởng cho chuỗi gọn về thời gian. Nghi vấn "nó đang lấn át độ liên quan" đã
-được **kiểm chứng và bác bỏ** — xem mục 4b.
+được **kiểm chứng và bác bỏ** trên đường `processor` — xem mục 4b — nhưng phép
+đo đó KHÔNG nói gì về đường đang chạy thật (`link_event_hits`), nơi công thức
+phạt khác hẳn. Mục 4c ghi lại chỗ đó.
 
 ---
 
@@ -162,6 +164,59 @@ Lý do nhìn lại thì rõ: thứ tự vốn ĐÃ là cổng cứng
 (`sequence_search.py:87` bỏ qua hit có frame nhỏ hơn frame trước), và
 `max_gap_sec=300s` không bó khi khoảng cách bước thực chỉ ~12s. Hai tham số
 này chưa bao giờ là thứ đang quyết định.
+
+## 4c. Nới thời gian trên đường ĐANG CHẠY THẬT — ĐÃ ĐO, giả thuyết SAI
+
+Mục 4b đo `SequenceConfig.gap_penalty_per_sec`, tham số của `TrakeProcessor`.
+Nhưng deployment mặc định là `AIC_TRAKE_ENGINE=sequences`, tức chuỗi thật do
+`online/services/temporal.py::link_event_hits` dựng, và ở đó phạt là **tuyến
+tính từ gap = 0** với `lambda = 0.002`:
+
+| gap giữa hai bước gold | p10 5s | p50 10s | p90 21s | max 36s |
+|---|---|---|---|---|
+| phạt (0.002/s) | 0.010 | **0.020** | 0.042 | 0.072 |
+| điểm một scene sau RRF | ~0.04 | ~0.04 | ~0.04 | ~0.04 |
+
+Đọc bảng đó rất dễ kết luận "chuỗi có nhịp đúng bằng trung vị gold đang bị lấy
+mất nửa điểm một scene, vậy phạt phải yếu đi". **Kết luận đó sai**, và
+GAP-RELAX-01 ([docs/20](20_EXPERIMENT_LOG.md)) đo ra điều ngược lại.
+
+### Hình dạng mới
+
+`online/services/temporal_gap.py`, dùng chung cho beam, dp và `sequence_search`:
+
+```
+penalty(gap) = min( lambda * max(0, gap - W),  cap )
+```
+
+| tham số | giá trị | căn cứ |
+|---|---|---|
+| `W` (`free_gap_sec`) | 60s | gold max 36s → chuỗi đúng không mất điểm. Đo: trung tính (.354 → .355) |
+| `lambda` | 0.002 | **giữ nguyên**. Hạ xuống 2e-5 đo ra tệ hơn cả tắt hẳn |
+| `cap` | 1.0 | ngưỡng gãy giữa 0.3 và 0.5; 1.0 nằm giữa hai điểm đo giống hệt nhau |
+
+Ràng buộc **cứng** rút còn đúng hai: cùng video, và `(scene_idx, best_frame_idx)`
+tăng nghiêm ngặt — hai bước được phép nằm trong cùng một scene miễn frame tiến
+lên. Đo: trung tính, giữ vì đúng luật chứ không vì ăn điểm.
+
+### Vì sao trần thấp lại hỏng
+
+`cap=0.01` (¼ điểm một scene, đúng theo lập luận "phạt chỉ nên đủ phá hoà") làm
+`video_recall@1` rơi 1.000 → 0.958 và `mean_r` 0.355 → 0.330, **tệ hơn cả tắt
+hẳn phạt** (0.338).
+
+Phạt khoảng cách không phải cái phá hoà giữa hai chuỗi gần bằng nhau trong cùng
+một video. Nó là thứ **dìm chuỗi trải rộng ở video SAI** xuống để video đúng nổi
+lên — và để làm việc đó nó cần thẩm quyền cỡ 0.5, hơn 12 lần điểm của một scene.
+Bảng đầy đủ ở GAP-RELAX-01.
+
+Chỗ nhầm trong lập luận của mục 2 bên trên: luật không thưởng chuỗi gọn về thời
+gian, đúng — nhưng tính cục bộ thời gian vẫn là một **prior đúng về việc diễn
+biến của một video trông như thế nào**, và trên corpus này prior đó đang gánh
+việc chọn đúng video. Một tham số retrieval không cần có điều khoản tương ứng
+trong luật chấm để có ích.
+
+---
 
 ### Cửa sổ chấm KHÔNG phải ràng buộc đang bó — chỉ nới thì gần như vô ích
 

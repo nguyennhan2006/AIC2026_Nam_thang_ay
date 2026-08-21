@@ -25,6 +25,12 @@ export interface FrameTunerProps {
   task: TaskType;
   /** Dòng dựng sẵn từ kết quả tìm kiếm hiện tại — nguồn nạp không ma sát. */
   seedRows: TunerRow[];
+  /** Đổi giá trị này = nạp NGAY `seedRows`, không đợi bấm nút.
+   *
+   *  Dùng cho "Lưu & chỉnh frame" ở bảng nộp: người dùng đã ra lệnh chỉnh rồi,
+   *  bắt bấm thêm một nút "nạp" nữa là thừa — và tệ hơn, tab mở ra rỗng trông
+   *  y hệt như tính năng bị hỏng. `undefined` = giữ hành vi cũ (nạp thủ công). */
+  autoLoadKey?: number;
 }
 
 export interface TunerRow {
@@ -38,6 +44,11 @@ export interface TunerRow {
   /** TRAKE: một dòng là một chuỗi, mỗi bước chỉnh riêng. */
   step?: number;
   chain?: number;
+  /** Bước KHÔNG có bằng chứng riêng: frame chỉ là điểm giữa hai mốc lân cận
+   *  (hoặc frame nội suy do backend lấp). Phải nhìn thấy được — đây chính là
+   *  những bước đáng mở video ra chỉnh, và cũng là những bước dễ tưởng nhầm
+   *  là hệ đã tìm ra. */
+  placeholder?: boolean;
 }
 
 const NUDGES = [-300, -30, -5, -1, 1, 5, 30, 300];
@@ -90,7 +101,7 @@ function toCsv(task: TaskType, rows: TunerRow[]): string {
     .join("\n");
 }
 
-export function FrameTuner({ apiConfig, task, seedRows }: FrameTunerProps) {
+export function FrameTuner({ apiConfig, task, seedRows, autoLoadKey }: FrameTunerProps) {
   const [rows, setRows] = useState<TunerRow[]>([]);
   const [loadedFrom, setLoadedFrom] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -217,6 +228,18 @@ export function FrameTuner({ apiConfig, task, seedRows }: FrameTunerProps) {
     setLoadedFrom(`kết quả hiện tại (${seedRows.length} dòng)`);
   }
 
+  // Nạp thẳng khi được đẩy sang từ bảng nộp. Chỉ chạy khi `autoLoadKey` ĐỔI,
+  // nên thao tác chỉnh tay sau đó không bị ghi đè ở mỗi lần render.
+  const loadedKey = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    if (autoLoadKey === undefined || autoLoadKey === loadedKey.current) return;
+    loadedKey.current = autoLoadKey;
+    if (seedRows.length === 0) return;
+    setRows(seedRows.map((row) => ({ ...row })));
+    setSelectedId(seedRows[0]?.id ?? null);
+    setLoadedFrom(`bảng nộp bài (${seedRows.length} dòng)`);
+  }, [autoLoadKey, seedRows]);
+
   function loadFile(file: File) {
     file.text().then((text) => {
       const parsed = parseCsv(text);
@@ -316,6 +339,11 @@ export function FrameTuner({ apiConfig, task, seedRows }: FrameTunerProps) {
                   >
                     <td className="muted-cell">
                       {row.chain ? `C${row.chain}·B${row.step}` : index + 1}
+                      {row.placeholder && (
+                        <span className="tuner-placeholder-dot" title="Bước chưa có bằng chứng — frame chỉ là điểm giữa hai mốc lân cận, cần chỉnh tay">
+                          {" "}●
+                        </span>
+                      )}
                     </td>
                     <td className="cell-strong">
                       {row.videoId}

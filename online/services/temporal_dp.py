@@ -5,43 +5,48 @@ tốt nhất ở MỖI bước rồi mở rộng, nên một chuỗi có bước
 bước sau rất mạnh có thể bị loại từ sớm. DP không loại gì — nó tính chuỗi tối ưu
 cho TỪNG ứng viên kết thúc, nên tối ưu toàn cục theo đúng hàm mục tiêu.
 
-Hàm mục tiêu::
+Hàm mục tiêu — GIỐNG HỆT `link_event_hits`, dùng chung `temporal_gap`::
 
-    DP[i][t] = S[i][t] + max   ( DP[i-1][tau] - lambda * gap(tau, t) )
-                        tau: scene_idx(tau) < scene_idx(t)
+    DP[i][t] = S[i][t] + max   ( DP[i-1][tau] - penalty(gap(tau, t)) )
+                        tau dung TRUOC t
 
-`gap = start_sec(t) - end_sec(tau)`, luôn >= 0 vì scene trong một video liền kề
-nhau và ràng buộc bắt `scene_idx` tăng nghiêm ngặt.
+    penalty(gap) = min( lambda * max(0, gap - W), cap )
 
-**Chạy được O(N·M) nhờ tách biến.** Phạt tuyến tính nên::
+Ràng buộc cứng: cùng video, và `(scene_idx, best_frame_idx)` tăng nghiêm ngặt —
+hai bước ĐƯỢC PHÉP nằm trong cùng một scene miễn là frame tiến lên.
 
-    DP[i][t] = S[i][t] - lambda*start_t + max( DP[i-1][tau] + lambda*end_tau )
+**Vì sao O(N·M²) chứ không còn O(N·M).** Bản trước phạt tuyến tính thuần nên tách
+được biến (`-lambda*start_t` + `max(DP + lambda*end_tau)`), và một running maximum
+quét theo `scene_idx` là đủ. Phạt dead-zone + trần KHÔNG tách được: cùng một
+`tau`, phần đóng góp của nó đổi công thức tuỳ `t` rơi vào vùng miễn phạt, vùng
+tuyến tính hay vùng chạm trần. Giữ running maximum ở đây là giải một bài toán
+khác rồi gọi kết quả là "tối ưu".
 
-Vế `max` không phụ thuộc `t`, nên duyệt ứng viên theo `scene_idx` tăng dần và
-giữ một running maximum là đủ. Không tách được biến thì độ phức tạp là O(N·M²),
-và với M=100 ứng viên mỗi bước thì vẫn chạy được nhưng chậm hơn nhiều.
+Cái giá thật sự nhỏ: M là số ứng viên TRONG MỘT VIDEO ở một bước (hàng chục), và
+N <= 6, nên quét thẳng vẫn không đáng kể so với chi phí retrieval. Đổi một hằng
+số nhỏ lấy lời giải đúng là đúng hướng ở quy mô này.
 
-Hiệu chuẩn `lambda` — ĐO TRƯỚC, không chép từ paper (đơn vị thời gian khác nhau
-thì `lambda` của paper vô nghĩa). Trên gold TRAKE của corpus này::
-
-    khoang cach giua hai buoc gold lien tiep:  p10=5s  p50=10s  p90=21s  max=36s
-    diem moi scene sau fusion RRF:             ~0.04
-
-`link_event_hits` đang dùng `gap_penalty=0.002`, tức phạt tại p50 là **0.02** —
-bằng NỬA điểm của một scene. Nói cách khác ràng buộc hình thức đang lấn át độ
-liên quan. `lambda=0` là biến thể bắt buộc phải đo để biết phạt có ích gì không.
+Hiệu chuẩn ba tham số phạt: xem `online/services/temporal_gap.py`.
 """
 
 from __future__ import annotations
 
 from online.domain.models import SearchHit, SequenceHit
+from online.services.temporal_gap import (
+    DEFAULT_FREE_GAP_SEC,
+    DEFAULT_GAP_PENALTY_PER_SEC,
+    DEFAULT_MAX_GAP_PENALTY,
+    gap_penalty_value,
+)
 
 
 def link_event_hits_dp(
     event_hits: list[list[SearchHit]],
     *,
     limit: int = 20,
-    gap_penalty: float = 0.0,
+    gap_penalty: float = DEFAULT_GAP_PENALTY_PER_SEC,
+    free_gap_sec: float = DEFAULT_FREE_GAP_SEC,
+    max_gap_penalty: float = DEFAULT_MAX_GAP_PENALTY,
 ) -> list[SequenceHit]:
     """Chuỗi tối ưu toàn cục cho từng ứng viên kết thúc, gộp mọi video.
 
@@ -61,11 +66,13 @@ def link_event_hits_dp(
                 [
                     sorted(
                         (hit for hit in hits if hit.video_id == video_id),
-                        key=lambda item: (item.scene_idx, item.scene_id),
+                        key=lambda item: (item.scene_idx, item.best_frame_idx, item.scene_id),
                     )
                     for hits in event_hits
                 ],
                 gap_penalty=gap_penalty,
+                free_gap_sec=free_gap_sec,
+                max_gap_penalty=max_gap_penalty,
             )
         )
     # Sắp theo điểm, phá hoà bằng scene_id để kết quả TẤT ĐỊNH — cùng quy ước
@@ -74,8 +81,21 @@ def link_event_hits_dp(
     return results[:limit]
 
 
+def _precedes(previous: SearchHit, hit: SearchHit) -> bool:
+    """Cùng thứ tự xuất hiện mà `temporal._in_order` áp cho beam."""
+
+    return (previous.scene_idx, previous.best_frame_idx) < (
+        hit.scene_idx,
+        hit.best_frame_idx,
+    )
+
+
 def _solve_one_video(
-    per_event: list[list[SearchHit]], *, gap_penalty: float
+    per_event: list[list[SearchHit]],
+    *,
+    gap_penalty: float,
+    free_gap_sec: float,
+    max_gap_penalty: float,
 ) -> list[SequenceHit]:
     """DP trong PHẠM VI một video. Thiếu ứng viên ở bất kỳ bước nào -> bỏ video."""
 
@@ -89,27 +109,33 @@ def _solve_one_video(
 
     for index in range(1, len(per_event)):
         previous, current = per_event[index - 1], per_event[index]
-        # Running maximum trên `DP[i-1][tau] + lambda*end_tau`, quét theo
-        # `scene_idx` tăng dần. `pointer` là vị trí đầu tiên của `previous` CHƯA
-        # được nạp vào running max.
-        pointer = 0
-        running_best = float("-inf")
-        running_arg: int | None = None
         scores: list[float] = []
         parents: list[int | None] = []
         for hit in current:
-            while pointer < len(previous) and previous[pointer].scene_idx < hit.scene_idx:
-                value = best[pointer] + gap_penalty * previous[pointer].end_sec
-                if value > running_best:
-                    running_best, running_arg = value, pointer
-                pointer += 1
-            if running_arg is None:
-                # Không có ứng viên bước trước nào đứng TRƯỚC scene này.
+            # Quét thẳng mọi ứng viên bước trước. Không dùng running maximum:
+            # phạt dead-zone + trần không tách được biến, xem docstring module.
+            best_total = float("-inf")
+            best_arg: int | None = None
+            for position, candidate in enumerate(previous):
+                if best[position] == float("-inf"):
+                    continue
+                if not _precedes(candidate, hit):
+                    continue
+                total = best[position] - gap_penalty_value(
+                    hit.start_sec - candidate.end_sec,
+                    penalty_per_sec=gap_penalty,
+                    free_gap_sec=free_gap_sec,
+                    max_penalty=max_gap_penalty,
+                )
+                if total > best_total:
+                    best_total, best_arg = total, position
+            if best_arg is None:
+                # Không có ứng viên bước trước nào đứng TRƯỚC hit này.
                 scores.append(float("-inf"))
                 parents.append(None)
             else:
-                scores.append(hit.score - gap_penalty * hit.start_sec + running_best)
-                parents.append(running_arg)
+                scores.append(hit.score + best_total)
+                parents.append(best_arg)
         best = scores
         back.append(parents)
 

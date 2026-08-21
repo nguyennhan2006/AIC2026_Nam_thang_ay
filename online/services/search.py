@@ -71,6 +71,15 @@ class SearchService:
         trake_engine: str = "sequences",
         trake_solver: str = "beam",
         trake_gap_penalty: float | None = None,
+        trake_candidate_limit: int | None = None,
+        trake_allow_missing_steps: bool = False,
+        trake_min_covered_steps: int = 2,
+        trake_missing_step_penalty: float | None = None,
+        trake_beam_size: int | None = None,
+        trake_per_video_beam: int | None = None,
+        trake_max_chains_per_video: int | None = None,
+        trake_free_gap_sec: float | None = None,
+        trake_gap_cap: float | None = None,
         media_root=None,
         branch_timeout_ms: int | None = None,
         evidence_select_top_n: int = 10,
@@ -115,7 +124,37 @@ class SearchService:
         # `dp` = quy hoạch động kiểu DANTE, tối ưu toàn cục thay vì cắt tỉa
         # theo từng bước. `trake_gap_penalty=None` giữ mặc định của từng solver.
         self.trake_solver = trake_solver
+        # Ba tham số của phạt khoảng cách mềm (dead-zone + tuyến tính + trần).
+        # None ở tham số nào thì tham số đó giữ mặc định đã hiệu chuẩn trong
+        # `online/services/temporal_gap.py` — cùng bộ số cho cả beam lẫn dp.
         self.trake_gap_penalty = trake_gap_penalty
+        # TRAKE cần candidate_limit RIÊNG và LỚN hơn hẳn ba task kia. Lý do là
+        # cấu trúc, không phải tinh chỉnh: `link_event_hits` chỉ dựng được chuỗi
+        # khi MỌI step có candidate trong CÙNG một video, mà mỗi step lại lấy
+        # top-K trên toàn corpus. Với 873 video, K=100 nghĩa là 100 slot rải
+        # trên 873 video — số video có mặt ở cả 3 step tụt về ~1, và TRAKE trả
+        # về đúng một video, thường là video "nam châm" chứ không phải đáp án.
+        #
+        # Đo trên mô phỏng 873 video, số video trả về theo K:
+        #     K=100 -> 0    K=200 -> 2    K=500 -> 13    K=1000 -> 13
+        # Gãy giữa 200 và 500, bão hoà trên 500. Quota candidate/video KHÔNG
+        # cứu được (đo 3/5/10, số y hệt) — thiếu là thiếu độ phủ tuyệt đối.
+        #
+        # Tách khỏi `candidate_limit` chung vì ba task kia được chỉnh ở K=100 và
+        # TRAKE chạy retrieval MỘT LẦN MỖI STEP, nên nâng chung là nhân chi phí
+        # với số step.
+        self.trake_candidate_limit = trake_candidate_limit
+        # Đổi bản-sao-gần-trùng lấy ĐỘ PHỦ. Chỉ có nghĩa với beam: `dp` giải
+        # riêng từng video nên nó không có hiện tượng một video chiếm beam.
+        # Chuỗi thiếu step vẫn được trả về. Xem docstring `link_event_hits`.
+        self.trake_allow_missing_steps = trake_allow_missing_steps
+        self.trake_min_covered_steps = trake_min_covered_steps
+        self.trake_missing_step_penalty = trake_missing_step_penalty
+        self.trake_beam_size = trake_beam_size
+        self.trake_per_video_beam = trake_per_video_beam
+        self.trake_max_chains_per_video = trake_max_chains_per_video
+        self.trake_free_gap_sec = trake_free_gap_sec
+        self.trake_gap_cap = trake_gap_cap
         self.media_root = media_root
         self._last_avs_diagnostics: dict = {}
         self.planner = planner or RuleBasedQueryPlanner()
@@ -430,7 +469,7 @@ class SearchService:
                     }
                 )
                 candidates, step_statuses = await self._retrieve(
-                    event_plan, self.candidate_limit
+                    event_plan, self.trake_candidate_limit or self.candidate_limit
                 )
                 statuses = _merge_statuses(statuses, step_statuses)
                 event_hit_lists.append(await self._hydrate(candidates, event.text))
@@ -448,18 +487,43 @@ class SearchService:
                 documents,
                 limit=request.top_k,
             )
-            if self.trake_solver == "dp":
-                sequences = link_event_hits_dp(
-                    event_hit_lists,
-                    limit=request.top_k,
-                    gap_penalty=0.0 if self.trake_gap_penalty is None else self.trake_gap_penalty,
-                )
-            elif self.trake_gap_penalty is None:
-                sequences = link_event_hits(event_hit_lists, limit=request.top_k)
-            else:
-                sequences = link_event_hits(
-                    event_hit_lists, limit=request.top_k, gap_penalty=self.trake_gap_penalty
-                )
+            linker = link_event_hits_dp if self.trake_solver == "dp" else link_event_hits
+            # Chỉ truyền tham số ĐƯỢC ĐẶT TƯỜNG MINH; thiếu thì để mặc định của
+            # `temporal_gap` nói lên tiếng nói cuối. Trước đây nhánh `dp` ép
+            # `gap_penalty=0.0` khi không cấu hình gì, nên beam và dp chạy hai
+            # hàm mục tiêu khác nhau mà không ai thấy.
+            #
+            # `search_options.temporal` thắng cấu hình deployment. Trước đây ba
+            # tham số này CHỈ tới được `TrakeProcessor`, nên chạy ablation bằng
+            # `--trake-gap-penalty` trên engine mặc định (`sequences`) là chỉnh
+            # một tham số KHÔNG nằm trên đường chạy — cờ im lặng không làm gì và
+            # bảng số trông như "đổi gì cũng không ảnh hưởng".
+            temporal_set = plan.search_options.temporal.model_fields_set
+            overrides = {}
+            for argument, option_name, deployment_value in (
+                ("gap_penalty", "gap_penalty_per_sec", self.trake_gap_penalty),
+                ("free_gap_sec", "free_gap_sec", self.trake_free_gap_sec),
+                ("max_gap_penalty", "gap_penalty_cap", self.trake_gap_cap),
+            ):
+                requested = getattr(plan.search_options.temporal, option_name, None)
+                if option_name in temporal_set and requested is not None:
+                    overrides[argument] = requested
+                elif deployment_value is not None:
+                    overrides[argument] = deployment_value
+            if linker is link_event_hits:
+                if self.trake_allow_missing_steps:
+                    overrides["allow_missing_steps"] = True
+                    overrides["min_covered_steps"] = self.trake_min_covered_steps
+                    if self.trake_missing_step_penalty is not None:
+                        overrides["missing_step_penalty"] = self.trake_missing_step_penalty
+                for argument, value in (
+                    ("beam_size", self.trake_beam_size),
+                    ("per_video_beam", self.trake_per_video_beam),
+                    ("max_chains_per_video", self.trake_max_chains_per_video),
+                ):
+                    if value is not None:
+                        overrides[argument] = value
+            sequences = linker(event_hit_lists, limit=request.top_k, **overrides)
             # Đường CŨ (`link_event_hits`) đo ra TỐT HƠN đường đã thay thế nó:
             # video_recall@1 0.833 so với 0.542, và gấp đôi trên hai video
             # holdout. Bảng số đầy đủ ở `trake/from_sequences.py`.
@@ -471,7 +535,9 @@ class SearchService:
             trake = (
                 processor_trake
                 if self.trake_engine == "processor"
-                else to_trake_results(sequences, expected_steps=len(plan.events))
+                else to_trake_results(
+                    sequences, expected_steps=len(plan.events), documents=documents
+                )
             )
             await _attach_playback(self.repository, trake, self.playback_pad_sec, self.media_root)
             warnings = _status_warnings(statuses)

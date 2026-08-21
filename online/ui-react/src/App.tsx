@@ -49,6 +49,12 @@ function App() {
   const [apiBase, setApiBase] = useState(loadApiBase);
   const [apiToken, setApiToken] = useState(loadApiToken);
   const [page, setPage] = useState<AppPage>("search");
+  // Dòng do người dùng đẩy sang từ bảng nộp ("Lưu & chỉnh frame"). `null` =
+  // chưa đẩy gì, tab chỉnh frame nạp từ kết quả tìm kiếm như trước.
+  const [tunerHandoff, setTunerHandoff] = useState<TunerRow[] | null>(null);
+  // Tăng mỗi lần bấm "Lưu & chỉnh frame". FrameTuner nạp khi số này đổi, nên
+  // bấm lại lần nữa vẫn nạp lại được dù danh sách giống hệt.
+  const [tunerHandoffKey, setTunerHandoffKey] = useState(0);
   const [healthState, setHealthState] = useState<HealthResponse | null>(null);
   const [healthStatus, setHealthStatus] = useState<"checking" | "ok" | "error">("checking");
   const [resultTab, setResultTab] = useState<ResultTab>("results");
@@ -229,6 +235,10 @@ function App() {
 
   // Dòng nạp sẵn cho tab chỉnh frame. TRAKE tách MỖI BƯỚC thành một dòng —
   // người chấm soát từng khoảnh khắc, không soát cả chuỗi một lượt.
+  // Truy vấn mới thì bản đã đẩy sang không còn đúng nữa. Không xoá thì người
+  // dùng chỉnh danh sách của truy vấn TRƯỚC mà không có gì báo.
+  useEffect(() => { setTunerHandoff(null); }, [result]);
+
   const tunerSeed = useMemo<TunerRow[]>(() => {
     if (!result) return [];
     if (task === "TEXTUAL_KIS") {
@@ -244,12 +254,55 @@ function App() {
       }));
     }
     if (task === "TRAKE") {
-      return result.trake.flatMap((item, chain) =>
-        item.frame_ids.map((frame, step) => ({
-          id: `trake-${chain}-${step}`, videoId: item.video_id,
-          originalFrame: frame, frame, chain: chain + 1, step: step + 1,
-        }))
-      );
+      // Đánh số bước theo `steps[].step` của backend, KHÔNG theo vị trí trong
+      // `frame_ids`: chuỗi được phép thiếu bước ở giữa, nên phần tử thứ 3 của
+      // mảng không còn chắc chắn là bước 3. Đánh theo vị trí là gán nhầm frame
+      // cho bước — sai lặng lẽ, và người dùng chỉnh đúng frame vào nhầm ô.
+      return result.trake.flatMap((item, chain) => {
+        const known = new Map(item.steps.map((entry) => [entry.step, entry]));
+        const total = Math.max(
+          0,
+          ...item.steps.map((entry) => entry.step),
+          ...(item.missing_steps ?? []),
+        );
+        const rows: TunerRow[] = [];
+        for (let step = 1; step <= total; step += 1) {
+          const entry = known.get(step);
+          if (entry) {
+            rows.push({
+              id: `trake-${chain}-${step}`, videoId: item.video_id,
+              originalFrame: entry.frame_idx, frame: entry.frame_idx,
+              chain: chain + 1, step,
+              placeholder: entry.refinement === "interpolated",
+            });
+            continue;
+          }
+          // Bước không tìm được gì: dựng sẵn một dòng ở ĐIỂM GIỮA hai mốc lân
+          // cận để người dùng có chỗ bám mà kéo, thay vì phải tự nhớ là chuỗi
+          // thiếu bước nào rồi gõ số từ đầu.
+          let before: number | null = null;
+          let after: number | null = null;
+          for (let probe = step - 1; probe >= 1; probe -= 1) {
+            const found = known.get(probe);
+            if (found) { before = found.frame_idx; break; }
+          }
+          for (let probe = step + 1; probe <= total; probe += 1) {
+            const found = known.get(probe);
+            if (found) { after = found.frame_idx; break; }
+          }
+          const guess =
+            before != null && after != null ? Math.round((before + after) / 2)
+            : before != null ? before + 1
+            : after != null ? Math.max(0, after - 1)
+            : 0;
+          rows.push({
+            id: `trake-${chain}-${step}`, videoId: item.video_id,
+            originalFrame: guess, frame: guess, chain: chain + 1, step,
+            placeholder: true,
+          });
+        }
+        return rows;
+      });
     }
     return [];
   }, [result, task]);
@@ -362,7 +415,12 @@ function App() {
                 {resultTab === "task" && task === "AVS" && <AvsWorkspace items={result?.avs ?? []} />}
 
                 {resultTab === "tuner" && (
-                  <FrameTuner apiConfig={apiConfig} task={task} seedRows={tunerSeed} />
+                  <FrameTuner
+                    apiConfig={apiConfig}
+                    task={task}
+                    seedRows={tunerHandoff ?? tunerSeed}
+                    autoLoadKey={tunerHandoff ? tunerHandoffKey : undefined}
+                  />
                 )}
 
                 {resultTab === "submission" && (
@@ -378,6 +436,11 @@ function App() {
                       onSelectSequence={(index) => {
                         setSelectedSequenceIndex(index);
                         setActiveStepIndex(null);
+                      }}
+                      onEditRows={(rows) => {
+                        setTunerHandoff(rows);
+                        setTunerHandoffKey((value) => value + 1);
+                        setResultTab("tuner");
                       }}
                     />
                   </PanelBody>
@@ -449,6 +512,12 @@ function App() {
                   trake={result?.trake ?? []}
                   avs={result?.avs ?? []}
                   results={result?.results ?? []}
+                  onEditRows={(rows) => {
+                    setTunerHandoff(rows);
+                    setTunerHandoffKey((value) => value + 1);
+                    setPage("search");
+                    setResultTab("tuner");
+                  }}
                 />
               </PanelBody>
             </Surface>

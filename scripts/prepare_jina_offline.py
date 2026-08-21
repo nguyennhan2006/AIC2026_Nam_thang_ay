@@ -214,6 +214,20 @@ def main() -> int:
 
     patch_jina_config(root)
 
+    # KHÔNG có thư mục model nào thì mọi bước sau đều rỗng, và `verify()` cũng
+    # rỗng theo (nó `continue` khi thiếu config.json) — script sẽ in "Xong" trên
+    # một máy chưa có gì. Đã xảy ra thật: bản tải Kaggle bỏ sót model, script
+    # vẫn báo xanh, và lỗi chỉ lộ ra sau 4 phút khởi động uvicorn.
+    present = [name for name in MODEL_DIRS
+               if (root / "storage" / "models" / name / "config.json").exists()]
+    if not present:
+        log("KHÔNG thấy thư mục model nào dưới storage/models/:")
+        for name in MODEL_DIRS:
+            log(f"    thiếu {root / 'storage' / 'models' / name / 'config.json'}")
+        log("Tải model trước đã — không có nó thì backend không khởi động được:")
+        log("    python scripts/bootstrap_vast_from_kaggle.py --skip-keyframes")
+        return 1
+
     repos = code_repos(root)
     if not repos:
         log("Không thấy auto_map trỏ repo ngoài — không có gì để tải.")

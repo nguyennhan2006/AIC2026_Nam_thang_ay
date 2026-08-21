@@ -1,0 +1,18 @@
+`torch_dtype` is deprecated! Use `dtype` instead!
+`torch_dtype` is deprecated! Use `dtype` instead!
+C:\Users\ASUS\.cache\huggingface\modules\transformers_modules\jinaai\jina_hyphen_clip_hyphen_implementation\39e6a55ae971b59bea6e44675d237c99762e7ee2\modeling_clip.py:137: UserWarning: Flash attention requires CUDA, disabling
+  warnings.warn('Flash attention requires CUDA, disabling')
+C:\Users\ASUS\.cache\huggingface\modules\transformers_modules\jinaai\jina_hyphen_clip_hyphen_implementation\39e6a55ae971b59bea6e44675d237c99762e7ee2\modeling_clip.py:172: UserWarning: xFormers requires CUDA, disabling
+  warnings.warn('xFormers requires CUDA, disabling')
+The tokenizer you are loading from 'storage/models/jina-embeddings-v3' with an incorrect regex pattern: https://huggingface.co/mistralai/Mistral-Small-3.1-24B-Instruct-2503/discussions/84#69121093e8b480e709447d5e. This will lead to incorrect tokenization. You should set the `fix_mistral_regex=True` flag when loading this tokenizer to fix this issue.
+The tokenizer you are loading from 'storage/models/jina-clip-v2' with an incorrect regex pattern: https://huggingface.co/mistralai/Mistral-Small-3.1-24B-Instruct-2503/discussions/84#69121093e8b480e709447d5e. This will lead to incorrect tokenization. You should set the `fix_mistral_regex=True` flag when loading this tokenizer to fix this issue.
+=== Stage B thật — 110 bước ===
+pool trung bình mỗi bước : 500 candidate
+gold_region_recall@20  : 35/110
+gold_region_recall@50  : 51/110
+gold_region_recall@100 : 63/110
+  khi tìm được: rank trung vị=38 top-1=10 top-5=21 top-20=35
+query có ĐỦ mọi event retrieve được: 14/24
+  (đây là điều kiện CẦN của complete_chain_rate — bằng 0 thì chuỗi đầy đủ là bất khả thi bất kể beam tốt tới đâu)
+
+chi tiết từng bước -> outputs\evaluation\scale873\stageb_k500.json

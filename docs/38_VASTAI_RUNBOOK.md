@@ -166,6 +166,28 @@ Xong thì `--verify-only` phải xanh **mọi dòng**, gồm cả hai dòng `hf 
 > Kaggle. Cần khoá FPT hay `AIC_ONLINE_API_KEY` thì tự điền lại trên máy —
 > đừng upload bản có khoá lên Kaggle, kể cả dataset riêng tư.
 
+### Ảnh keyframe: hai hệ tên, đừng lẫn
+
+| Nguồn | Tên file |
+|---|---|
+| Mirror ban tổ chức | `keyframes/<video_id>/<n>.jpg` — **số thứ tự keyframe** (`002.jpg`) |
+| Export của hệ | `processed/keyframes/<video_id>/frame_<frame_idx:06d>.jpg` — **chỉ số frame** |
+
+Bảng đổi tên là `canonical/keyframe_scene_mapping.csv` trong pack thi đấu;
+`scripts/fetch_aic_data.py --what keyframes --pack <pack.zip>` và
+`scripts/fetch_kaggle_media.py` đều đọc **chung** bảng đó — nếu không sẽ lệch.
+`06_keyframes.zip` trên Kaggle thì đã đổi tên sẵn, giải nén là dùng được.
+
+Triệu chứng khi lẫn hai hệ: search trả 200, video `206 Partial Content`, nhưng
+mọi `GET /v1/media/processed/keyframes/.../frame_XXXXXX.jpg` trả **404** — ảnh
+có trên đĩa, chỉ là mang tên khác.
+
+> **Đừng cắt lại ảnh từ mp4 để thay thế.** Đo trên 129 keyframe của 3 video
+> (`L21_V001..003`, so với ảnh gốc của pack): 106 khớp, **23 lệch đúng +1
+> frame** — và vì keyframe hay nằm ngay chỗ cắt cảnh, lệch một frame nghĩa là
+> ảnh ra thuộc *shot trước*. Ngưỡng theo độ chênh ảnh không tách được hai nhóm
+> (chồng nhau), nên không có luật cắt nào tái tạo đúng pack. Lấy ảnh của pack.
+
 ---
 
 ## 6. Cache code mô hình — bước hay bị bỏ quên

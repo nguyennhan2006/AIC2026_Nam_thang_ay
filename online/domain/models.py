@@ -250,15 +250,52 @@ class SearchHit(StrictModel):
 
 
 class SequenceHit(StrictModel):
-    """Chuỗi scene theo đúng thứ tự cho TRAKE.
+    """Chuỗi scene theo đúng thứ tự cho TRAKE, CÓ THỂ thiếu step.
 
-    `frame_ids` là thứ được nộp — mỗi step một frame. Nó được suy ra từ
-    `scenes[*].best_frame_idx` nên không thể lệch với evidence hiển thị.
+    `frame_ids` là thứ được nộp — nó được suy ra từ `scenes[*].best_frame_idx`
+    nên không thể lệch với evidence hiển thị.
+
+    **Chuỗi thiếu step là công dân hạng nhất, không phải trường hợp lỗi.** Đo
+    trên corpus 873 video: chỉ 14/24 truy vấn có đủ candidate cho MỌI step, nên
+    đòi chuỗi đầy đủ là vứt 10/24 truy vấn về không — kể cả những truy vấn mà
+    video đúng đang nằm sẵn trong pool ở 4/5 step. Một chuỗi bắt được 2/5 step
+    vẫn chỉ đúng video là đủ để người dùng xem và chốt.
+
+    `covered_steps` là số thứ tự step (1-based) của từng phần tử trong `scenes`,
+    cùng độ dài với `scenes`. Không có nó thì lỗ thủng ở GIỮA chuỗi không phân
+    biệt được với lỗ thủng ở ĐUÔI, và mọi thứ hạ nguồn sẽ gán nhầm frame cho
+    step — sai lặng lẽ, đúng loại lỗi tệ nhất.
     """
 
     video_id: str
     score: float
-    scenes: list[SearchHit] = Field(min_length=2)
+    scenes: list[SearchHit] = Field(min_length=1)
+    covered_steps: list[int] = Field(default_factory=list)
+    total_steps: int = Field(default=0, ge=0)
+
+    @model_validator(mode="after")
+    def _default_and_check_step_mapping(self) -> "SequenceHit":
+        # Chuỗi đầy đủ dựng trước khi có field này vẫn hợp lệ: suy ra 1..N.
+        if not self.covered_steps:
+            object.__setattr__(self, "covered_steps", list(range(1, len(self.scenes) + 1)))
+        if len(self.covered_steps) != len(self.scenes):
+            raise ValueError(
+                f"covered_steps ({len(self.covered_steps)}) phải cùng độ dài với "
+                f"scenes ({len(self.scenes)})"
+            )
+        if any(
+            later <= earlier
+            for earlier, later in zip(self.covered_steps, self.covered_steps[1:])
+        ):
+            raise ValueError(f"covered_steps phải tăng dần, nhận {self.covered_steps}")
+        if not self.total_steps:
+            object.__setattr__(self, "total_steps", max(self.covered_steps, default=0))
+        return self
+
+    @property
+    def missing_steps(self) -> list[int]:
+        covered = set(self.covered_steps)
+        return [step for step in range(1, self.total_steps + 1) if step not in covered]
 
     # computed_field (không phải property thường): `frame_ids` là thứ được nộp
     # nên nó phải nằm trong JSON response, kể cả khi FastAPI serialize qua

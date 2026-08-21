@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDown, ArrowUp, FileDown, ImageOff, Play, RotateCcw, X } from "lucide-react";
+import {
+  AlertTriangle, ArrowDown, ArrowUp, CheckCircle2, FileDown, HelpCircle, ImageOff,
+  MessageSquareText, Play, RotateCcw, SlidersHorizontal, X,
+} from "lucide-react";
 import type { ApiClientConfig } from "../api";
 import { ApiError, buildSubmission, mediaUrl } from "../api";
 import { downloadCsv, submissionFilename } from "../exportCsv";
@@ -15,6 +18,7 @@ import type {
   TrakeStep,
 } from "../types";
 import { zoneForRank } from "../types";
+import type { TunerRow } from "./FrameTuner";
 import { Badge, Button, EmptyState, IconButton, InlineError } from "../ui";
 
 export interface SubmissionBoardProps {
@@ -30,6 +34,43 @@ export interface SubmissionBoardProps {
    *  Thiếu callback này thì bảng và panel xem chỉ vào hai chuỗi khác nhau —
    *  bấm dòng 2 mà bên phải vẫn hiện chuỗi 0. */
   onSelectSequence?: (index: number) => void;
+  /** "Lưu & chỉnh frame": đẩy đúng các dòng ĐANG chọn (kể cả thứ tự đã sắp
+   *  tay) sang tab chỉnh frame. Thiếu callback này thì tab chỉnh frame vẫn
+   *  nạp từ kết quả tìm kiếm thô, nên mọi thao tác sắp xếp và loại bỏ ở đây
+   *  bị bỏ qua — người dùng chỉnh một danh sách khác với danh sách sắp nộp. */
+  onEditRows?: (rows: TunerRow[]) => void;
+}
+
+/** Biểu tượng của một dòng: nói ngay dòng này ĐÁNG TIN tới đâu.
+ *
+ * Có nó vì người dùng dễ nhầm ba thứ trông giống nhau trong cùng một bảng:
+ * chuỗi đầy đủ, chuỗi có frame do hệ nội suy, và chuỗi thiếu hẳn bước. Ba loại
+ * này cần ba hành động khác nhau trước khi nộp.
+ */
+function RowIcon({ task, row }: { task: TaskType; row: Row }) {
+  if (task === "QA") return <MessageSquareText size={13} aria-label="Câu trả lời" />;
+  if (task !== "TRAKE") return <Play size={13} aria-label="Một frame" />;
+  const holes = row.missingSteps?.length ?? 0;
+  const guessed = row.steps?.filter((step) => step.refinement === "interpolated").length ?? 0;
+  if (holes > 0) {
+    return (
+      <span className="row-icon is-danger" title={`Thiếu ${holes} bước — dòng này chưa nộp được`}>
+        <HelpCircle size={13} />
+      </span>
+    );
+  }
+  if (guessed > 0) {
+    return (
+      <span className="row-icon is-warning" title={`${guessed} bước là frame nội suy, không phải bằng chứng — nên xem lại`}>
+        <AlertTriangle size={13} />
+      </span>
+    );
+  }
+  return (
+    <span className="row-icon is-ok" title="Đủ bước, mọi frame đều có bằng chứng">
+      <CheckCircle2 size={13} />
+    </span>
+  );
 }
 
 /** Một dòng sẽ nộp, đã tách khỏi kiểu của từng task để bảng dùng chung. */
@@ -44,10 +85,66 @@ interface Row {
    *  trước khi nộp — bản cũ chỉ giữ `frame_ids[0]` nên người dùng không xem
    *  được chuỗi, chỉ thấy đúng cảnh đầu. */
   steps?: TrakeStep[];
+  /** Bước hệ không tìm được gì. Rỗng = chuỗi đủ. */
+  missingSteps?: number[];
   playback?: PlaybackWindow | null;
   /** Vị trí trong mảng gốc của task — dùng để đồng bộ với panel xem. */
   sourceIndex: number;
 }
+
+/** Dòng đang chọn ở bảng nộp -> dòng cho tab chỉnh frame.
+ *
+ * Giữ NGUYÊN thứ tự và tập dòng của bảng nộp: đó là điểm khác biệt so với việc
+ * tab chỉnh frame tự nạp từ kết quả tìm kiếm. Bước thiếu được dựng sẵn ở điểm
+ * giữa hai mốc lân cận để có chỗ bám mà kéo.
+ */
+function toTunerRows(task: TaskType, rows: Row[]): TunerRow[] {
+  if (task !== "TRAKE") {
+    return rows.map((row, index) => ({
+      id: `sub-${index}`, videoId: row.videoId,
+      originalFrame: row.frameIdx, frame: row.frameIdx, answer: row.answer,
+    }));
+  }
+  const out: TunerRow[] = [];
+  rows.forEach((row, chain) => {
+    const known = new Map((row.steps ?? []).map((step) => [step.step, step]));
+    const total = Math.max(0, ...known.keys(), ...(row.missingSteps ?? []));
+    for (let step = 1; step <= total; step += 1) {
+      const entry = known.get(step);
+      if (entry) {
+        out.push({
+          id: `sub-${chain}-${step}`, videoId: row.videoId,
+          originalFrame: entry.frame_idx, frame: entry.frame_idx,
+          chain: chain + 1, step,
+          placeholder: entry.refinement === "interpolated",
+        });
+        continue;
+      }
+      let before: number | null = null;
+      let after: number | null = null;
+      for (let probe = step - 1; probe >= 1; probe -= 1) {
+        const found = known.get(probe);
+        if (found) { before = found.frame_idx; break; }
+      }
+      for (let probe = step + 1; probe <= total; probe += 1) {
+        const found = known.get(probe);
+        if (found) { after = found.frame_idx; break; }
+      }
+      const guess =
+        before != null && after != null ? Math.round((before + after) / 2)
+        : before != null ? before + 1
+        : after != null ? Math.max(0, after - 1)
+        : 0;
+      out.push({
+        id: `sub-${chain}-${step}`, videoId: row.videoId,
+        originalFrame: guess, frame: guess, chain: chain + 1, step,
+        placeholder: true,
+      });
+    }
+  });
+  return out;
+}
+
 
 function toRows(task: TaskType, kis: KisResultItem[], qa: QaResultItem[], trake: TrakeResultItem[]): Row[] {
   if (task === "TEXTUAL_KIS") {
@@ -67,7 +164,8 @@ function toRows(task: TaskType, kis: KisResultItem[], qa: QaResultItem[], trake:
     key: `${item.video_id}-${item.rank}`, sourceIndex: index,
     videoId: item.video_id, frameIdx: item.frame_ids[0] ?? 0,
     sceneId: item.steps[0]?.scene_id ?? null, frameIds: item.frame_ids,
-    steps: item.steps, playback: item.playback ?? null,
+    steps: item.steps, missingSteps: item.missing_steps ?? [],
+    playback: item.playback ?? null,
   }));
 }
 
@@ -120,7 +218,7 @@ function StepStrip({
   );
 }
 
-export function SubmissionBoard({ apiConfig, task, kis, qa, trake, avs, results = [], onSelectSequence }: SubmissionBoardProps) {
+export function SubmissionBoard({ apiConfig, task, kis, qa, trake, avs, results = [], onSelectSequence, onEditRows }: SubmissionBoardProps) {
   const [result, setResult] = useState<SubmissionBuildResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -278,6 +376,15 @@ export function SubmissionBoard({ apiConfig, task, kis, qa, trake, avs, results 
             <span key={zone} className="zone-chip">{zone.replace("ranks_", "").replace("rank_", "")}: {zoneCounts.get(zone) ?? 0}</span>
           ))}
         </div>
+        {onEditRows && (
+          <Button
+            variant="secondary" size="sm" icon={<SlidersHorizontal size={13} />}
+            disabled={rows.length === 0}
+            onClick={() => onEditRows(toTunerRows(task, rows))}
+          >
+            Lưu &amp; chỉnh frame
+          </Button>
+        )}
         <Button variant="primary" size="sm" loading={loading} onClick={runBuild}>
           Build CSV
         </Button>
@@ -301,11 +408,13 @@ export function SubmissionBoard({ apiConfig, task, kis, qa, trake, avs, results 
                 }}
                 title="Bấm để xem đoạn video tại frame này"
               >
-                <Play size={12} />
+                <RowIcon task={task} row={row} />
                 <span className="truncate">
                   {row.videoId} · frame <span className="tabular">{row.frameIdx}</span>
                   {row.answer && ` · ${row.answer}`}
                   {row.frameIds && row.frameIds.length > 1 && ` · ${row.frameIds.length} bước`}
+                  {row.missingSteps && row.missingSteps.length > 0 &&
+                    ` · thiếu bước ${row.missingSteps.join(", ")}`}
                 </span>
               </button>
               <IconButton icon={<ArrowUp size={14} />} label="Lên một bậc" size="sm" variant="control"

@@ -110,7 +110,13 @@ class TemporalOptions(StrictModel):
     # thay vì cố định lúc container build. KHÔNG đổi thuật toán: chỉ cho override
     # số, không thêm bước tính mới. None = giữ giá trị mặc định của deployment.
     order_weight: float | None = Field(default=None, ge=0.0, le=5.0)
+    # Phạt khoảng cách MỀM: min(lambda * max(0, gap - free_gap_sec), cap).
+    # `free_gap_sec` là vùng miễn phạt (gold TRAKE cách nhau tối đa 36s, nên
+    # mặc định 60s cho chuỗi đúng đi qua sạch), `gap_penalty_cap` là trần để
+    # phạt không bao giờ lấn át độ liên quan. Xem online/services/temporal_gap.py.
     gap_penalty_per_sec: float | None = Field(default=None, ge=0.0, le=1.0)
+    free_gap_sec: float | None = Field(default=None, ge=0.0, le=3600.0)
+    gap_penalty_cap: float | None = Field(default=None, ge=0.0, le=5.0)
     missing_step_penalty: float | None = Field(default=None, ge=0.0, le=5.0)
     # "beam" | "dp" — cách ghép chuỗi. Xem search_sequences_dp.
     sequence_strategy: Literal["beam", "dp"] | None = None

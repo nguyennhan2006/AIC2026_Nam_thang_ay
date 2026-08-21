@@ -43,6 +43,13 @@ from scripts.eval_kis import build_service
 
 K_VALUES = (1, 5, 20, 50, 100)
 
+# Luật cho nộp tối đa 100 dòng cho một truy vấn TRAKE, nên chất lượng của hệ
+# KHÔNG phải là "chuỗi hạng 1 có đúng không" mà là "trong 100 dòng nộp lên có
+# dòng nào đúng không". Bộ chấm cũ chỉ đọc `rows[0]`, tức đo một hệ chỉ được
+# nộp đúng một dòng — nghiêm hơn luật thật và không nhìn thấy tiến bộ nào xảy
+# ra ở hạng 2..100.
+TRAKE_CHAIN_CUTS = (1, 5, 20, 100)
+
 # Dedup nhận số nguyên, không nhận None để nói 'không giới hạn' (None = dùng
 # mặc định của task). Dùng một số đủ lớn để không policy nào chạm tới.
 _UNLIMITED = 1_000_000
@@ -374,6 +381,8 @@ def _search_options(args: argparse.Namespace) -> SearchOptions | None:
         key: value
         for key, value in (
             ("gap_penalty_per_sec", args.trake_gap_penalty),
+            ("free_gap_sec", args.trake_free_gap_sec),
+            ("gap_penalty_cap", args.trake_gap_cap),
             ("order_weight", args.trake_order_weight),
             ("missing_step_penalty", args.trake_missing_penalty),
             ("sequence_strategy", args.trake_strategy),
@@ -450,6 +459,11 @@ async def evaluate(
     trake_video_correct = 0
     trake_r_scores: list[float] = []
     trake_video_ranks: list[int | None] = []
+    trake_r_at: dict[int, list[float]] = {cut: [] for cut in TRAKE_CHAIN_CUTS}
+    trake_complete_at: dict[int, list[float]] = {cut: [] for cut in TRAKE_CHAIN_CUTS}
+    trake_hit_at: dict[int, list[float]] = {cut: [] for cut in TRAKE_CHAIN_CUTS}
+    trake_distinct_videos: list[int] = []
+    trake_distinct_chains: list[int] = []
     trake_total = 0
     avs_ndcg: list[float] = []
     avs_precision: list[float] = []
@@ -648,6 +662,73 @@ async def evaluate(
             record["video_order"] = video_order[:5]
             trake_video_ranks.append(gold_rank)
 
+            policy = WindowPolicy(
+                min_sec=args.trake_window_min_sec,
+                max_sec=args.trake_window_max_sec,
+                ratio=args.trake_window_ratio,
+            )
+            fps = load_fps(args.metadata)
+            windows = [resolve_step_window(gt, scenes, fps, policy) for gt in item.steps]
+
+            def _row_r_score(row) -> float:
+                """Sai video = 0; đúng video = tỷ lệ step rơi đúng cửa sổ GT.
+
+                Khớp theo SỐ THỨ TỰ step chứ không theo vị trí trong danh sách:
+                chuỗi được phép thiếu step ở giữa, nên `frame_ids[2]` không còn
+                chắc chắn là step 3. Zip theo vị trí ở đây từng đúng, và sẽ âm
+                thầm chấm nhầm ngay khi `allow_missing_steps` được bật.
+
+                Step thiếu tính là TRƯỢT — không được thưởng cho việc bỏ trống.
+                """
+
+                if row.video_id != item.video_id or not item.steps:
+                    return 0.0
+                numbered = (
+                    [(step.step, step.frame_idx) for step in row.steps]
+                    if getattr(row, "steps", None)
+                    else list(enumerate(row.frame_ids, start=1))
+                )
+                hits = 0
+                for step_no, frame_idx in numbered:
+                    if not 1 <= step_no <= len(item.steps):
+                        continue
+                    step_gt = item.steps[step_no - 1]
+                    tol, _src = windows[step_no - 1]
+                    if step_gt.contains(frame_idx, tol):
+                        hits += 1
+                return hits / len(item.steps)
+
+            # Điểm của TỪNG chuỗi, không chỉ chuỗi đầu. Luật cho nộp tối đa 100
+            # dòng nên "chuỗi đúng nằm ở hạng mấy" là câu hỏi có thật, và
+            # `rows[0]` không trả lời được nó. Xem `r_at` trong summary.
+            row_scores = [_row_r_score(row) for row in rows]
+            record["chain_r_scores"] = [round(value, 3) for value in row_scores[:20]]
+            record["gold_chain_rank"] = next(
+                (index + 1 for index, row in enumerate(rows) if row.video_id == item.video_id),
+                None,
+            )
+            for cut in TRAKE_CHAIN_CUTS:
+                record[f"r_score@{cut}"] = max(row_scores[:cut], default=0.0)
+                trake_r_at[cut].append(max(row_scores[:cut], default=0.0))
+                trake_complete_at[cut].append(
+                    1.0 if any(value == 1.0 for value in row_scores[:cut]) else 0.0
+                )
+                # Ngưỡng CHẤP NHẬN hiện tại: đúng video và ít nhất một event
+                # rơi đúng cửa sổ. `_row_r_score` trả 0 khi sai video, nên
+                # `> 0` đã bao hàm cả hai vế.
+                trake_hit_at[cut].append(
+                    1.0 if any(value > 0.0 for value in row_scores[:cut]) else 0.0
+                )
+            # Đa dạng: 100 dòng gần trùng nhau chỉ là MỘT giả thuyết. Sai video
+            # thì cả 100 đều 0 điểm.
+            top = rows[:20]
+            record["distinct_videos@20"] = len({row.video_id for row in top})
+            record["distinct_chains@20"] = len({
+                (row.video_id, tuple(row.frame_ids)) for row in top
+            })
+            trake_distinct_videos.append(record["distinct_videos@20"])
+            trake_distinct_chains.append(record["distinct_chains@20"])
+
             best = rows[0] if rows else None
             if best is None or best.video_id != item.video_id:
                 trake_r_scores.append(0.0)
@@ -655,19 +736,7 @@ async def evaluate(
                 record["video_correct"] = bool(best and best.video_id == item.video_id)
             else:
                 trake_video_correct += 1
-                frame_ids = best.frame_ids
-                policy = WindowPolicy(
-                    min_sec=args.trake_window_min_sec,
-                    max_sec=args.trake_window_max_sec,
-                    ratio=args.trake_window_ratio,
-                )
-                fps = load_fps(args.metadata)
-                windows = [resolve_step_window(gt, scenes, fps, policy) for gt in item.steps]
-                hits = sum(
-                    1
-                    for step, step_gt, (tol, _src) in zip(frame_ids, item.steps, windows, strict=False)
-                    if step_gt.contains(step, tol)
-                )
+                trake_r_scores.append(row_scores[0])
                 record["windows"] = [
                     {
                         "window_width_sec": round(tol * 2 / fps, 3),
@@ -677,12 +746,9 @@ async def evaluate(
                     }
                     for tol, src in windows
                 ]
-                # Sai video = 0; đúng video = tỷ lệ step rơi đúng cửa sổ GT.
-                r_score = hits / len(item.steps) if item.steps else 0.0
-                trake_r_scores.append(r_score)
-                record["r_score"] = r_score
+                record["r_score"] = row_scores[0]
                 record["video_correct"] = True
-                record["predicted_frames"] = frame_ids
+                record["predicted_frames"] = best.frame_ids
                 record["expected_steps"] = len(item.steps)
 
         elif item.task == TaskType.AVS:
@@ -874,6 +940,34 @@ async def evaluate(
             "mean_r_on_correct_video": mean_r_correct,
             "frame_selection_accuracy": (mean_r_correct / oracle) if oracle else 0.0,
             "complete_chain_rate": sum(1 for value in trake_r_scores if value == 1.0) / trake_total,
+            # Nộp được 100 dòng: đây mới là thứ khớp với luật.
+            **{
+                f"r_score@{cut}": sum(trake_r_at[cut]) / trake_total
+                for cut in TRAKE_CHAIN_CUTS
+            },
+            **{
+                f"complete_chain@{cut}": sum(trake_complete_at[cut]) / trake_total
+                for cut in TRAKE_CHAIN_CUTS
+            },
+            # Ngưỡng chấp nhận: đúng video + >= 1 event đúng, trong top-K dòng.
+            **{
+                f"hit@{cut}": sum(trake_hit_at[cut]) / trake_total
+                for cut in TRAKE_CHAIN_CUTS
+            },
+            "gold_chain_rank_median": (
+                sorted(r for r in (rec.get("gold_chain_rank") for rec in per_query) if r)[
+                    len([r for r in (rec.get("gold_chain_rank") for rec in per_query) if r]) // 2
+                ]
+                if any(rec.get("gold_chain_rank") for rec in per_query) else None
+            ),
+            "distinct_videos@20": (
+                sum(trake_distinct_videos) / len(trake_distinct_videos)
+                if trake_distinct_videos else 0.0
+            ),
+            "distinct_chains@20": (
+                sum(trake_distinct_chains) / len(trake_distinct_chains)
+                if trake_distinct_chains else 0.0
+            ),
         }
     if avs_ndcg:
         summary["AVS"] = {
@@ -958,7 +1052,13 @@ async def _main() -> None:
                               "scripts/eval_kis.py::build_service) — không có cờ này, answer_accuracy "
                               "chỉ đo rule-based ANSWER_TOOLS, không phản ánh FPT QA LLM")
     parser.add_argument("--trake-gap-penalty", type=float, default=None,
-                        help="Ghi đè gap_penalty_per_sec (mặc định deployment 0.002). 0 = tắt phạt khoảng cách")
+                        help="Ghi đè lambda của phạt khoảng cách. 0 = tắt hẳn phạt thời gian")
+    parser.add_argument("--trake-free-gap-sec", type=float, default=None,
+                        help="Vùng MIỄN phạt tính bằng giây (mặc định 60s, phủ trọn gold p100=36s). "
+                             "Gap nhỏ hơn ngưỡng này không bị trừ điểm gì")
+    parser.add_argument("--trake-gap-cap", type=float, default=None,
+                        help="Trần phạt khoảng cách. Giữ cho ràng buộc thời gian không lấn át "
+                             "độ liên quan dù hai bước cách nhau bao xa")
     parser.add_argument("--trake-order-weight", type=float, default=None,
                         help="Ghi đè order_weight (mặc định 0.6). 0 = tắt thưởng thứ tự khi xếp hạng video")
     parser.add_argument("--disable-branch", action="append", default=[],

@@ -29,6 +29,29 @@ from online.errors import MetadataNotFoundError
 # 0.0 = giữ nguyên hành vi cũ (không lọc).
 _COLOR_MIN_RATIO = float(os.getenv("AIC_COLOR_MIN_RATIO", "0.0"))
 
+# Nới cửa sổ ASR của scene sang hai bên, tính bằng GIÂY.
+#
+# `offline/assemble.py::_project_asr` gán một segment ASR cho scene khi hai
+# khoảng thời gian GIAO nhau, và giữ nguyên văn cả segment. Nhờ vậy một câu dài
+# trải qua nhiều scene đã tự nằm đủ trong từng scene đó. Nhưng câu nói TRỌN VẸN
+# bên trong scene liền trước thì không với tới scene này — mà scene p50 chỉ 4,1
+# giây (`online/services/playback.py`), tức ngắn hơn hầu hết câu tiếng Việt.
+#
+# Hệ quả với `bm25_asr`: một truy vấn nhiều từ ("nghiên cứu tại Đại học
+# Lausanne về cơ chế bay của bọ") rải chữ qua 3-4 scene, không scene nào chứa
+# đủ, nên BM25 chấm mọi scene đều yếu và câu trả lời đúng không nổi lên được.
+# Cùng lý do mà cửa sổ PHÁT LẠI được nới ±5 giây (`DEFAULT_PAD_SEC`): 3 giây
+# không đủ để hiểu chuyện gì đang xảy ra, ở đây cũng vậy.
+#
+# MẶC ĐỊNH TẮT (0.0). Nới cửa sổ không miễn phí:
+#   - `bm25_asr` mất độ chính xác: mọi scene trong cùng một đoạn nói sẽ có văn
+#     bản gần giống nhau, nên thứ hạng TRONG một video phẳng đi.
+#   - `online/services/qa.py::_asr_tool` trả lời "nhân vật nói gì" từ chính
+#     trường này — nới rộng thì nó có thể trả lời bằng câu của scene bên cạnh,
+#     tức evidence sai chứ không chỉ kém.
+# Bật lên rồi PHẢI đo lại bằng `scripts/eval_tasks` trước khi tin.
+_ASR_WINDOW_PAD_SEC = float(os.getenv("AIC_ASR_WINDOW_PAD_SEC", "0.0"))
+
 
 def _texts(records: list[dict[str, Any]]) -> list[str]:
     return [str(item["text"]) for item in records if item.get("text")]
@@ -164,6 +187,68 @@ def project_scene(raw: dict[str, Any], video_path: str | None = None) -> SceneDo
     )
 
 
+def expand_asr_windows(
+    scenes: dict[str, SceneDocument], pad_sec: float
+) -> tuple[int, float]:
+    """Gộp lời nói của các scene lân cận vào `asr_texts` của từng scene.
+
+    Chỉ gộp trong CÙNG một video, và chỉ các scene mà khoảng thời gian còn giao
+    với `[start_sec - pad, end_sec + pad]`. Trả về (số scene bị đổi, hệ số nở
+    trung bình) để chỗ gọi ghi log — nở gấp mấy lần là con số cần biết trước khi
+    tin vào kết quả tìm kiếm sau đó.
+
+    Khử trùng lặp theo nguyên văn: các scene liền nhau vốn đã dùng chung nguyên
+    văn segment (xem `_project_asr`), không khử thì một câu bị đếm nhiều lần và
+    BM25 thổi phồng điểm term đúng những chỗ chồng lấn nhiều nhất.
+
+    Giữ THỨ TỰ THỜI GIAN chứ không sắp lại: `evidence_builder` ghép chuỗi này
+    thành `asr_window` cho người đọc, đảo thứ tự là câu văn thành vô nghĩa.
+    """
+
+    if pad_sec <= 0:
+        return 0, 1.0
+
+    by_video: dict[str, list[SceneDocument]] = {}
+    for scene in scenes.values():
+        by_video.setdefault(scene.video_id, []).append(scene)
+
+    widened = 0
+    before_total = after_total = 0
+    for group in by_video.values():
+        group.sort(key=lambda item: (item.start_sec, item.scene_idx))
+        for index, scene in enumerate(group):
+            low = scene.start_sec - pad_sec
+            high = scene.end_sec + pad_sec
+            # Scene trong một video là liên tục và đã sắp theo thời gian, nên
+            # gặp scene đầu tiên nằm ngoài cửa sổ là dừng được: mọi scene xa hơn
+            # nữa chắc chắn cũng ngoài.
+            first = index
+            while first > 0 and group[first - 1].end_sec >= low:
+                first -= 1
+            last = index
+            while last + 1 < len(group) and group[last + 1].start_sec <= high:
+                last += 1
+
+            merged: list[str] = []
+            seen: set[str] = set()
+            for neighbour in group[first:last + 1]:
+                for text in neighbour.asr_texts:
+                    if text not in seen:
+                        seen.add(text)
+                        merged.append(text)
+
+            before_total += len(scene.asr_texts)
+            after_total += len(merged)
+            if merged != list(scene.asr_texts):
+                scenes[scene.scene_id] = scene.model_copy(
+                    update={"asr_texts": merged}
+                )
+                widened += 1
+
+    ratio = (after_total / before_total) if before_total else 1.0
+    return widened, ratio
+
+
 @dataclass(frozen=True, slots=True)
 class VideoInfo:
     """Metadata mức video mà UI cần để quy đổi frame <-> giây CHÍNH XÁC.
@@ -257,6 +342,16 @@ class JsonlSceneRepository:
                 raise MetadataNotFoundError(
                     f"no scenes loaded from {path}; the export is empty — "
                     "run the offline pipeline/exporter before starting online"
+                )
+            if _ASR_WINDOW_PAD_SEC > 0:
+                widened, ratio = expand_asr_windows(scenes, _ASR_WINDOW_PAD_SEC)
+                # In ra vì đây là thay đổi ÂM THẦM với mọi thứ đọc `asr_texts`
+                # (bm25_asr, QA, evidence). Không có dòng này thì một lần chạy
+                # có nới và một lần không nhìn giống hệt nhau trong log.
+                print(
+                    f"[asr] nới cửa sổ ±{_ASR_WINDOW_PAD_SEC}s: "
+                    f"{widened}/{len(scenes)} scene đổi, số câu nở {ratio:.2f}x",
+                    flush=True,
                 )
             return scenes, video_frame_counts, video_infos
 

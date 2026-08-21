@@ -241,3 +241,26 @@
 .submission-row .icon-btn:hover:not(:disabled) { color: var(--text-primary); background: var(--surface-control-hover); }
 .submission-row .icon-btn:disabled { opacity: 0.3; }
 .submission-row { grid-template-columns: 28px minmax(0, 1fr) 26px 26px 26px; gap: var(--space-2); }
+
+/* Biểu tượng trạng thái của một dòng nộp bài.
+ *
+ * Ba loại dòng trước đây trông y hệt nhau trong cùng một bảng: chuỗi đầy đủ,
+ * chuỗi có frame do hệ nội suy, và chuỗi thiếu hẳn bước. Ba loại đó cần ba
+ * hành động khác nhau trước khi nộp, nên chúng phải phân biệt được bằng mắt
+ * chứ không phải bằng cách đọc kỹ từng dòng chữ. */
+.row-icon {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+.row-icon.is-ok { color: var(--accent-green); }
+.row-icon.is-warning { color: var(--accent-amber); }
+.row-icon.is-danger { color: var(--danger, #e5484d); }
+
+/* Bước chưa có bằng chứng trong tab chỉnh frame — frame chỉ là điểm giữa hai
+ * mốc lân cận, cần người xem video rồi kéo lại. */
+.tuner-placeholder-dot {
+  color: var(--accent-amber);
+  font-size: 9px;
+  vertical-align: super;
+}

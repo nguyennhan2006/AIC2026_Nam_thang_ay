@@ -1,0 +1,44 @@
+`torch_dtype` is deprecated! Use `dtype` instead!
+`torch_dtype` is deprecated! Use `dtype` instead!
+C:\Users\ASUS\.cache\huggingface\modules\transformers_modules\jinaai\jina_hyphen_clip_hyphen_implementation\39e6a55ae971b59bea6e44675d237c99762e7ee2\modeling_clip.py:137: UserWarning: Flash attention requires CUDA, disabling
+  warnings.warn('Flash attention requires CUDA, disabling')
+C:\Users\ASUS\.cache\huggingface\modules\transformers_modules\jinaai\jina_hyphen_clip_hyphen_implementation\39e6a55ae971b59bea6e44675d237c99762e7ee2\modeling_clip.py:172: UserWarning: xFormers requires CUDA, disabling
+  warnings.warn('xFormers requires CUDA, disabling')
+The tokenizer you are loading from 'storage/models/jina-embeddings-v3' with an incorrect regex pattern: https://huggingface.co/mistralai/Mistral-Small-3.1-24B-Instruct-2503/discussions/84#69121093e8b480e709447d5e. This will lead to incorrect tokenization. You should set the `fix_mistral_regex=True` flag when loading this tokenizer to fix this issue.
+The tokenizer you are loading from 'storage/models/jina-clip-v2' with an incorrect regex pattern: https://huggingface.co/mistralai/Mistral-Small-3.1-24B-Instruct-2503/discussions/84#69121093e8b480e709447d5e. This will lead to incorrect tokenization. You should set the `fix_mistral_regex=True` flag when loading this tokenizer to fix this issue.
+[1/24] V001_TRAKE_E01 (TRAKE) — đã 0s, còn ~0s
+[5/24] V001_TRAKE_M03 (TRAKE) — đã 37s, còn ~176s
+[10/24] V002_TRAKE_E02 (TRAKE) — đã 72s, còn ~113s
+[15/24] V002_TRAKE_H02 (TRAKE) — đã 111s, còn ~72s
+[20/24] V003_TRAKE_M02 (TRAKE) — đã 145s, còn ~31s
+[24/24] V003_TRAKE_H03 (TRAKE) — đã 176s, còn ~0s
+gold=24 query  scenes=87742  backend=local  top_k=100
+
+=== TRAKE (24 query) ===
+  correct_video_rate     0.667
+  video_recall@1         0.667
+  video_recall@3         0.708
+  gold_video_rank_median 1
+  gold_video_missing     0.292
+  mean_r_score           0.178
+  frame_oracle_coverage  0.845
+  mean_r_on_correct_video 0.268
+  frame_selection_accuracy 0.317
+  complete_chain_rate    0.000
+  r_score@1              0.178
+  r_score@5              0.233
+  r_score@20             0.233
+  r_score@100            0.233
+  complete_chain@1       0.000
+  complete_chain@5       0.000
+  complete_chain@20      0.000
+  complete_chain@100     0.000
+  hit@1                  0.542
+  hit@5                  0.542
+  hit@20                 0.542
+  hit@100                0.542
+  gold_chain_rank_median 1
+  distinct_videos@20     5.042
+  distinct_chains@20     9.750
+
+chi tiết -> outputs\evaluation\scale873\k500_quota.json

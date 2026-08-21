@@ -15,14 +15,28 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from online.domain.models import SearchHit
+from online.services.temporal_gap import gap_penalty_value
 
 
 @dataclass(frozen=True, slots=True)
 class SequenceConfig:
     beam_size: int = 50
     min_gap_frames: int = 1
+    # Chặn CỨNG, giữ nguyên 300s: TRAKE-STAGEB-02 đo được bỏ nó đi thì chuỗi
+    # trải tới 980 giây và mean_r_score rơi 0.263 -> 0.094. Nới thời gian ở đây
+    # là việc của `free_gap_sec` + phạt có trần bên dưới, không phải của việc
+    # tháo cái chặn này.
     max_gap_sec: float = 300.0
+    # Phạt MỀM: dead-zone + tuyến tính + trần, xem online/services/temporal_gap.py.
+    # `gap_penalty_per_sec` giữ nguyên 0.002 như trước — GAP-RELAX-01 đo trên
+    # đường live cho thấy hạ hệ số này xuống làm điểm TỆ HƠN cả tắt hẳn phạt.
+    # `max_gap_penalty=5.0` là TRẦN VÔ HIỆU có chủ ý: với `max_gap_sec=300` và
+    # `free_gap_sec=60`, phạt lớn nhất có thể chỉ là 0.002*240 = 0.48, nên trần
+    # không bao giờ chạm. Đường này KHÔNG có số đo cho trần, và một ràng buộc
+    # chưa đo thì không nên tự bật.
+    free_gap_sec: float = 60.0
     gap_penalty_per_sec: float = 0.002
+    max_gap_penalty: float = 5.0
     # Cho phép bỏ qua một step không tìm được bằng chứng thay vì vứt cả chuỗi:
     # thiếu 1/4 step vẫn được 0.75 điểm, còn không có chuỗi nào thì được 0.
     allow_missing_steps: bool = True
@@ -89,17 +103,23 @@ def search_sequences(
             for hit in hits:
                 if hit.best_frame_idx < last_frame + config.min_gap_frames:
                     continue
-                gap_sec = 0.0
+                penalty = 0.0
                 previous = next(
                     (item for item in reversed(sequence) if item is not None), None
                 )
                 if previous is not None:
-                    gap_sec = max(0.0, _timestamp(hit) - _timestamp(previous))
+                    gap_sec = _timestamp(hit) - _timestamp(previous)
                     if gap_sec > config.max_gap_sec:
                         continue
+                    penalty = gap_penalty_value(
+                        gap_sec,
+                        penalty_per_sec=config.gap_penalty_per_sec,
+                        free_gap_sec=config.free_gap_sec,
+                        max_penalty=config.max_gap_penalty,
+                    )
                 expanded.append((
                     (*sequence, hit),
-                    score + hit.score / best_score - config.gap_penalty_per_sec * gap_sec,
+                    score + hit.score / best_score - penalty,
                     hit.best_frame_idx,
                 ))
             if config.allow_missing_steps:
@@ -145,11 +165,12 @@ def search_sequences_dp(
     nên ràng buộc tăng dần vẫn đúng. Với prefix-max thì mỗi bước là O(|F|),
     tổng **O(n · |F|)**.
 
-    Lưu ý về `gap_penalty_per_sec`: DP bỏ qua nó. Phạt theo khoảng cách làm
-    điểm phụ thuộc frame TRƯỚC ĐÓ chứ không chỉ frame hiện tại, tức hàm mục
-    tiêu không còn cộng tính theo bước và DP mất tính chính xác. TRAKE-CONSTRAINT-01
-    đã đo được tham số này không ảnh hưởng gì (0.263 ở cả bật lẫn tắt), nên bỏ
-    nó là cái giá rẻ để đổi lấy một lời giải chính xác.
+    Về `gap_penalty_per_sec`: DP ÁP nó, khác bản trước (bản trước bỏ qua, nên
+    beam và DP âm thầm giải hai hàm mục tiêu khác nhau và mọi phép so beam-vs-DP
+    đều vô nghĩa). Phạt phụ thuộc mốc thời gian của bước ĐƯỢC CHỌN gần nhất —
+    nhưng đó CHÍNH LÀ trạng thái `f` của DP, nên hàm mục tiêu vẫn cộng tính theo
+    trạng thái và DP vẫn chính xác. Vòng quét ứng viên trước đó đằng nào cũng
+    phải chạy để áp `max_gap_sec`, nên phạt không thêm chi phí gì.
     """
 
     config = config or SequenceConfig()
@@ -208,16 +229,24 @@ def search_sequences_dp(
             # Quét thẳng thay vì dùng deque đơn điệu: |F| là số frame ứng viên
             # của một video (hàng chục tới vài trăm) và n ≤ 6, nên O(n·|F|²)
             # vẫn không đáng kể so với chi phí retrieval.
+            # Mốc 0 = "chưa chọn bước nào", không có khoảng cách nào để phạt.
             best_previous, best_from = dp[0], 0
             for index in range(1, slot):
                 if dp[index] <= neg:
                     continue
                 if frames[index - 1] > hit.best_frame_idx - config.min_gap_frames:
                     continue
-                if moment - timestamp_at[index] > config.max_gap_sec:
+                gap_sec = moment - timestamp_at[index]
+                if gap_sec > config.max_gap_sec:
                     continue
-                if dp[index] > best_previous:
-                    best_previous, best_from = dp[index], index
+                value = dp[index] - gap_penalty_value(
+                    gap_sec,
+                    penalty_per_sec=config.gap_penalty_per_sec,
+                    free_gap_sec=config.free_gap_sec,
+                    max_penalty=config.max_gap_penalty,
+                )
+                if value > best_previous:
+                    best_previous, best_from = value, index
             if best_previous <= neg:
                 continue
             candidate = best_previous + hit.score / best_score

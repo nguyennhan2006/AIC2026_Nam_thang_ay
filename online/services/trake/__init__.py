@@ -173,10 +173,14 @@ def trake_processor_for_request(
 
     if "order_weight" in fields_set and options.order_weight is not None:
         video_config = _dataclass_replace(video_config, ordering_weight=options.order_weight)
-    if "gap_penalty_per_sec" in fields_set and options.gap_penalty_per_sec is not None:
-        sequence_config = _dataclass_replace(
-            sequence_config, gap_penalty_per_sec=options.gap_penalty_per_sec
-        )
+    for field_name, target in (
+        ("gap_penalty_per_sec", "gap_penalty_per_sec"),
+        ("free_gap_sec", "free_gap_sec"),
+        ("gap_penalty_cap", "max_gap_penalty"),
+    ):
+        value = getattr(options, field_name, None)
+        if field_name in fields_set and value is not None:
+            sequence_config = _dataclass_replace(sequence_config, **{target: value})
     for field_name, target in (
         ("video_context_weight", "context_weight"),
         ("video_duplicate_penalty", "duplicate_penalty"),

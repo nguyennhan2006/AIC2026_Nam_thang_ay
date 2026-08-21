@@ -213,7 +213,10 @@ export interface TrakeStep {
   frame_idx: number;
   scene_id: string | null;
   confidence: number;
-  refinement: "keyframe_only" | "dense_window";
+  // `interpolated` = step KHÔNG có bằng chứng riêng; frame do backend lấp
+  // bằng keyframe thật gần điểm nội suy. Phải hiện khác đi, nếu không người
+  // dùng tin nhầm một ô trống là kết quả tìm được.
+  refinement: "keyframe_only" | "dense_window" | "interpolated";
   image_path: string | null;
   timestamp_sec: number | null;
 }

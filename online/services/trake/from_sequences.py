@@ -30,7 +30,8 @@ contract là giữ nguyên mọi thứ phía sau.
 
 from __future__ import annotations
 
-from online.domain.models import SequenceHit
+from online.domain.candidate import FrameEvidence
+from online.domain.models import SceneDocument, SequenceHit
 from online.domain.task_results import TrakeResultItem, TrakeStep
 
 
@@ -46,10 +47,92 @@ def _confidence(score: float, best: float) -> float:
     return min(max(score / best, 0.0), 1.0)
 
 
+def _fill_holes(
+    item: SequenceHit,
+    steps: list[TrakeStep],
+    total: int,
+    documents: dict[str, SceneDocument] | None,
+) -> list[TrakeStep]:
+    """Lấp step thiếu bằng keyframe THẬT, đặt đúng VỊ TRÍ step của nó.
+
+    Thứ tự ưu tiên — **độ khớp trước, hình học sau**:
+
+    1. Chỉ xét keyframe của những scene ĐÃ CÓ BẰNG CHỨNG cho truy vấn này, tức
+       nằm trong `documents` vì chúng lọt vào pool candidate của một step nào
+       đó. Đây là phần "độ khớp": không rải đều toàn video mà chỉ lấy vùng mà
+       hệ đã thấy liên quan.
+    2. Trong vùng đó, chọn keyframe gần điểm nội suy theo TỈ LỆ VỊ TRÍ STEP
+       nhất — step 2 của khoảng (1, 5) phải nằm gần đầu khoảng, không phải
+       chính giữa.
+    3. Không có gì trong khoảng -> để trống. KHÔNG bịa số frame: luật chỉ chấm
+       frame có thật trong `keyframes.jsonl`, nên frame bịa vừa chắc chắn mất
+       điểm vừa làm người dùng tin nhầm là đã tìm được.
+
+    Vì sao không lấy candidate của CHÍNH step thiếu: nếu step đó còn candidate
+    hợp lệ trong khoảng thì beam đã dùng rồi — lấy một hit được +0.04 điểm
+    scene, trong khi bỏ qua chỉ mất 0.01 tiền phạt. Lỗ thủng theo định nghĩa là
+    chỗ không còn lựa chọn nào có bằng chứng riêng.
+    """
+
+    if not documents:
+        return steps
+    covered = {step.step: step for step in steps}
+    holes = [number for number in range(1, total + 1) if number not in covered]
+    if not holes:
+        return steps
+
+    pool: list[FrameEvidence] = []
+    for document in documents.values():
+        if document.video_id == item.video_id:
+            pool.extend(document.keyframes)
+    if not pool:
+        return steps
+    pool.sort(key=lambda frame: frame.frame_idx)
+    taken = {step.frame_idx for step in steps}
+
+    for number in holes:
+        before = max((n for n in covered if n < number), default=None)
+        after = min((n for n in covered if n > number), default=None)
+        low = covered[before].frame_idx if before is not None else -1
+        high = covered[after].frame_idx if after is not None else float("inf")
+        window = [
+            frame for frame in pool
+            if low < frame.frame_idx < high and frame.frame_idx not in taken
+        ]
+        if not window:
+            continue
+        if before is not None and after is not None:
+            ratio = (number - before) / (after - before)
+            target = low + (high - low) * ratio
+        elif after is not None:
+            target = window[0].frame_idx
+        else:
+            target = window[-1].frame_idx
+        chosen = min(window, key=lambda frame: abs(frame.frame_idx - target))
+        taken.add(chosen.frame_idx)
+        covered[number] = TrakeStep(
+            step=number,
+            frame_idx=chosen.frame_idx,
+            scene_id=chosen.scene_id,
+            confidence=0.1,
+            refinement="interpolated",
+            image_path=chosen.image_path,
+            timestamp_sec=chosen.timestamp_sec,
+        )
+    return [covered[number] for number in sorted(covered)]
+
+
 def to_trake_results(
-    sequences: list[SequenceHit], *, expected_steps: int | None = None
+    sequences: list[SequenceHit],
+    *,
+    expected_steps: int | None = None,
+    documents: dict[str, SceneDocument] | None = None,
 ) -> list[TrakeResultItem]:
-    """`SequenceHit` -> `TrakeResultItem`, giữ nguyên thứ hạng sẵn có."""
+    """`SequenceHit` -> `TrakeResultItem`, giữ nguyên thứ hạng sẵn có.
+
+    Truyền `documents` để bật lấp lỗ: chuỗi thiếu step vẫn xuất đủ số frame nên
+    nộp được, phần lấp đánh dấu `refinement="interpolated"`.
+    """
 
     if not sequences:
         return []
@@ -59,7 +142,7 @@ def to_trake_results(
     for rank, item in enumerate(sequences, start=1):
         steps = [
             TrakeStep(
-                step=index,
+                step=step_no,
                 frame_idx=scene.best_frame_idx,
                 scene_id=scene.scene_id,
                 confidence=_confidence(scene.score, best),
@@ -67,19 +150,24 @@ def to_trake_results(
                 image_path=scene.best_keyframe_path,
                 timestamp_sec=scene.best_timestamp_sec,
             )
-            for index, scene in enumerate(item.scenes, start=1)
+            for step_no, scene in zip(item.covered_steps, item.scenes, strict=True)
         ]
-        total = expected_steps or len(steps)
-        # `link_event_hits` chỉ dựng chuỗi từ những step CÓ candidate, nên số
-        # step thiếu suy ra từ chênh lệch với số step của truy vấn. Không ghi
-        # lại thì output không phân biệt được "chuỗi đủ 3 bước" với "chuỗi 3
-        # bước nhưng truy vấn hỏi 5".
-        missing = list(range(len(steps) + 1, total + 1)) if total > len(steps) else []
+        total = expected_steps or item.total_steps or len(steps)
+        # Lấy thẳng từ `covered_steps` thay vì suy ra từ chênh lệch số lượng:
+        # cách suy ra chỉ đúng khi lỗ thủng nằm ở ĐUÔI. Từ khi
+        # `allow_missing_steps` cho phép bỏ step ở GIỮA, suy ra là gán nhầm
+        # frame cho step — sai lặng lẽ và không có gì báo.
+        covered = set(item.covered_steps)
+        missing = [step for step in range(1, total + 1) if step not in covered]
+        if missing:
+            steps = _fill_holes(item, steps, total, documents)
+            filled = {step.step for step in steps}
+            missing = [number for number in missing if number not in filled]
         results.append(
             TrakeResultItem(
                 rank=rank,
                 video_id=item.video_id,
-                frame_ids=[scene.best_frame_idx for scene in item.scenes],
+                frame_ids=[step.frame_idx for step in steps],
                 sequence_score=item.score,
                 steps=steps,
                 step_coverage=len(steps) / total if total else 0.0,
@@ -87,6 +175,15 @@ def to_trake_results(
                 # (nó nối theo thứ tự event và ràng buộc frame tăng), nên thứ
                 # tự đã đúng theo cấu trúc — không bịa thêm một số đo khác.
                 ordering_score=1.0 if len(steps) > 1 else 0.0,
+                # Chuỗi thủng phải nhìn thấy được ở tầng hiển thị: người dùng
+                # cần biết dòng này chỉ bắt được 2/5 step trước khi bỏ công xem.
+                #
+                # Tính CẢ phần đã lấp: `missing` được tính sau khi lấp, nên chỉ
+                # dựa vào nó thì một chuỗi từng thủng rồi được lấp bằng frame
+                # nội suy sẽ trông y hệt chuỗi lành. Đó đúng là thứ người dùng
+                # cần biết để chọn dòng nào đáng mở video ra xem.
+                degraded=bool(missing)
+                or any(step.refinement == "interpolated" for step in steps),
                 missing_steps=missing,
             )
         )

@@ -2246,3 +2246,242 @@ số trông hoàn toàn hợp lệ.**
 
 Không thay đổi mặc định nào. `AIC_CAPTION_DENSE_ENCODER=e5`,
 `AIC_VISUAL_EMBEDDING_MODEL=openai/clip-vit-large-patch14` giữ nguyên.
+
+---
+
+## GAP-RELAX-01 — Nới ràng buộc thời gian của chuỗi TRAKE
+
+**Ngày 2026-08-20. Trạng thái: GIỮ phần nới, BỎ phần trần thấp. Giả thuyết
+chính bị BÁC BỎ bởi chính số đo của nó.**
+
+### Giả thuyết
+
+Phạt khoảng cách của `link_event_hits` (`lambda=0.002`, tuyến tính **từ gap=0**,
+không trần) đang lấn át độ liên quan: chuỗi đúng có nhịp p50=10s nên bị trừ
+0.02 — bằng **nửa** điểm của một scene sau RRF (~0.04) — chỉ vì hành xử bình
+thường. Đề xuất: dead-zone `W=60s` + trần `cap=0.01`, nới ràng buộc thứ tự từ
+`scene_idx` tăng sang `(scene_idx, best_frame_idx)` tăng.
+
+### Thiết lập
+
+24 query TRAKE, `examples/gold_all3.jsonl`, `storage/exports_multivideo`
+(765 scene, 3 video), `--pipeline container --disable-branch bm25_ocr
+--max-per-video 40`, `PYTHONHASHSEED=0`. Engine mặc định `sequences`, tức
+`link_event_hits`. Output: `outputs/evaluation/gapfix/`.
+
+### Số đo
+
+| thứ tự | W | lambda | cap | video_recall@1 | mean_r | frame_sel |
+|---|---:|---:|---:|---:|---:|---:|
+| `scene_idx` (cũ) | 0 | 0.002 | ∞ | 1.000 | 0.354 | 0.419 |
+| `(scene_idx, frame)` | 0 | 0.002 | ∞ | 1.000 | 0.354 | 0.419 |
+| `(scene_idx, frame)` | 60 | 0.002 | ∞ | **1.000** | **0.355** | 0.420 |
+| `(scene_idx, frame)` | 60 | 0.002 | 1.0 | **1.000** | **0.355** | 0.420 |
+| `(scene_idx, frame)` | 60 | 0.002 | 0.5 | 1.000 | 0.355 | 0.420 |
+| `(scene_idx, frame)` | 60 | 0.002 | 0.3 | 0.958 | 0.347 | **0.428** |
+| `(scene_idx, frame)` | 60 | 0.002 | 0.2 | 0.958 | 0.330 | 0.407 |
+| `(scene_idx, frame)` | 60 | 2e-5 | 0.01 | 0.958 | 0.330 | 0.407 |
+| `(scene_idx, frame)` | 60 | 0 | — | 0.958 | 0.338 | 0.417 |
+
+### Ba kết luận
+
+**1. Nới thứ tự: KHÔNG ĐỔI GÌ (0.354 → 0.354).** Cho phép hai bước nằm trong
+cùng một scene không sinh thêm chuỗi nào tốt hơn trên corpus này. Giữ vì nó
+đúng theo luật và không tốn gì, nhưng nó không phải nguồn của bất kỳ điểm nào.
+
+**2. Dead-zone: gần như miễn phí (0.354 → 0.355).** Vùng miễn phạt 60s chưa
+từng phải làm việc, đúng như phân bố gold dự báo (p100=36s). Giữ vì cùng lý do.
+
+**3. Trần thấp: HỎNG, và giả thuyết chính SAI.** `cap=0.01` làm
+`video_recall@1` rơi 1.000 → 0.958 và `mean_r` 0.355 → 0.330 — **tệ hơn cả tắt
+hẳn phạt** (0.338). Phạt khoảng cách ở đây không phải cái phá hoà giữa hai chuỗi
+gần bằng nhau; nó là thứ dìm chuỗi trải rộng ở **video sai** xuống để video đúng
+nổi lên, và để làm được việc đó nó cần thẩm quyền cỡ 0.5 — **hơn 12 lần** điểm
+của một scene. Ngưỡng gãy nằm giữa cap=0.3 và cap=0.5.
+
+Nói cách khác, lập luận "ràng buộc hình thức không có cơ sở trong luật nên phải
+làm nó yếu đi" đã nhầm một tham số **retrieval** với một điều khoản **chấm
+điểm**. Luật không thưởng chuỗi gọn về thời gian, nhưng tính cục bộ thời gian
+vẫn là một prior đúng về việc *diễn biến của một video trông như thế nào*, và
+prior đó đang gánh việc chọn đúng video.
+
+### Chốt
+
+`W=60, lambda=0.002, cap=1.0` (`online/services/temporal_gap.py`). `cap=1.0`
+nằm giữa hai điểm đo giống hệt nhau (0.5 và không trần) nên có biên an toàn, mà
+vẫn chặn được trường hợp bệnh lý ở video rất dài. Net so với bản cũ:
+`mean_r` 0.354 → 0.355, `video_recall@1` giữ 1.000. **Không phải một cải thiện
+— là một thay đổi trung tính về số, đổi lấy một hàm mục tiêu nhất quán.**
+
+### Ba lỗi hạ tầng phát hiện cùng đợt, đã sửa
+
+Cùng họ với các lỗi ở mục 09/08 và 13/08 — *tham số trông như đang được đo
+nhưng không nằm trên đường chạy*:
+
+1. `search.py` ép `gap_penalty=0.0` cho nhánh `dp` khi không cấu hình gì, nên
+   beam và dp giải **hai hàm mục tiêu khác nhau**. Mọi so sánh beam-vs-dp trước
+   đây so nhầm hai bài toán.
+2. `search_sequences_dp` bỏ qua hoàn toàn `gap_penalty_per_sec`, cùng hệ quả.
+   Hoá ra không cần bỏ: mốc thời gian của bước được chọn gần nhất **chính là**
+   trạng thái của DP, nên áp phạt vào vẫn cho nghiệm chính xác.
+3. `--trake-gap-penalty` của `eval_tasks.py` đi qua `TemporalOptions` và **chỉ
+   tới được `TrakeProcessor`**, không tới `link_event_hits`. Chạy cờ này trên
+   engine mặc định là chỉnh một tham số không nằm trên đường chạy — cờ im lặng
+   không làm gì và bảng số trông như "đổi gì cũng không ảnh hưởng". Bảng
+   `gap_penalty_per_sec=0` ở [docs/22](22_TRAKE_CHAIN_SCORING.md) mục 4b đo trên
+   engine `processor` nên không dính lỗi này, nhưng bất kỳ ai đọc nó rồi chạy
+   lại trên mặc định đều sẽ dính.
+
+### Chưa làm
+
+Corpus chỉ 3 video và 24 query, nên toàn bộ chênh lệch giữa 1.000 và 0.958 là
+**đúng một query**. Trước khi coi `cap=1.0` là số cuối, cần đo lại trên pack
+873 video — nơi "video sai" nhiều gấp 290 lần và prior thời gian có thể hành xử
+hoàn toàn khác.
+
+---
+
+## TRAKE-SCALE-01 — TRAKE chỉ trả về một video trên corpus 873
+
+**Ngày 2026-08-20. Trạng thái: nguyên nhân xác định, đã thêm tham số sửa,
+CHƯA đo trên corpus thật.**
+
+### Triệu chứng
+
+Trên pack thi đấu (873 video), TRAKE trả về đúng **một** video và nó sai. Cùng
+code chạy trên `exports_multivideo` (3 video) trả về cả ba, trong đó có đáp án.
+
+### Nguyên nhân
+
+Hai tính chất vô hại khi đứng riêng, cộng lại thành hỏng hóc phụ thuộc quy mô:
+
+1. `link_event_hits` chỉ dựng được chuỗi khi **mọi step có candidate trong cùng
+   một video** (`search.py` gọi retrieval một lần cho mỗi step).
+2. Mỗi step lấy top-`candidate_limit` trên **toàn corpus**, không có hạn ngạch
+   theo video.
+
+K slot rải trên V video, nên số video có mặt ở **cả n step** tụt rất nhanh theo
+V. Mô phỏng 3 step, `candidate_limit=100`:
+
+| số video | giao n step | video TRAKE trả về |
+|---:|---:|---:|
+| 3 | 3.0 | 3 |
+| 50 | 36 | 7 |
+| 200 | 12 | 2 |
+| 873 | **0.7** | **0–1** |
+
+Ở 873 video, 100 slot chia cho 873 video là chưa tới 1 slot/video. Chuỗi chỉ
+dựng được khi một video tình cờ chiếm nhiều slot ở cả ba step — tức video "nam
+châm" (dài, cùng chủ đề, caption dày), gần như chắc chắn không phải đáp án.
+
+Đây là lý do lỗi sống sót qua mọi lần đo: benchmark 3 video có giao 3/3, **không
+có gì để hỏng**. Cùng họ với các lỗi hạ tầng đã ghi ở mục 09/08 và GAP-RELAX-01,
+nhưng ở một trục khác — không phải "tham số không nằm trên đường chạy" mà là
+**"benchmark không thể hiện được chế độ hỏng"**.
+
+### Quét tham số (mô phỏng 873 video, trung bình 3 seed)
+
+| candidate_limit | giao 3 step | chuỗi | video trả về |
+|---:|---:|---:|---:|
+| 100 | 0.7 | 0.0 | 0.0 |
+| 200 | 7.7 | 2.0 | 2.0 |
+| 500 | 74.7 | 18.3 | 13.0 |
+| 1000 | 287 | 20.0 | 13.3 |
+
+Gãy giữa 200 và 500, bão hoà trên 500.
+
+**Hạn ngạch candidate theo video KHÔNG cứu được.** Thử 3/5/10 candidate mỗi
+video ở cả bốn mức K, số liệu **y hệt** tới chữ số thập phân. Cái thiếu là độ
+phủ tuyệt đối, không phải phân bố — một giả thuyết hợp lý nhưng sai, ghi lại để
+không ai thử lại.
+
+### Đã làm
+
+`AIC_TRAKE_CANDIDATE_LIMIT` (mặc định None = dùng `candidate_limit` chung), chỉ
+áp cho vòng retrieval theo step của TRAKE. Tách riêng vì ba task kia được chỉnh
+ở K=100, và TRAKE chạy retrieval **một lần mỗi step** nên nâng K chung là nhân
+chi phí với số step (6 step × 500 = 3000 candidate/query).
+
+### Chưa làm
+
+Toàn bộ bảng trên là **mô phỏng**, không phải đo trên corpus thật — phân bố điểm
+thật lệch hơn nhiều so với mô hình. Việc cần làm ngay: chạy `AIC_TRAKE_CANDIDATE_LIMIT=500`
+trên box và đếm số video phân biệt trong `response.trake`, rồi quét 200/500/1000
+để tìm điểm gãy thật kèm chi phí latency.
+
+Cũng cần cân nhắc lại `AIC_TRAKE_ENGINE=processor`: Stage A của nó xếp hạng video
+bằng **bằng chứng gộp của mọi step** thay vì đòi giao top-K từng step, tức miễn
+nhiễm với đúng chế độ hỏng này. Nó bị loại vì đo tệ hơn trên benchmark 3 video —
+mà benchmark đó, như trên, không thể hiện được vấn đề.
+
+---
+
+## TRAKE-PARTIAL-01 — Chuỗi thiếu step, đo trên 873 video
+
+**Ngày 2026-08-21. Trạng thái: GIỮ. Đây là thay đổi lớn nhất của đợt.**
+
+### Bối cảnh
+
+`link_event_hits` đòi MỌI step có candidate trong CÙNG một video. Trên corpus
+873 video, Stage B đo được chỉ **14/24** truy vấn có đủ candidate ở mọi step —
+tức 10/24 truy vấn không thể có chuỗi nào, bất kể solver tốt tới đâu. Trong số
+truy vấn hỏng có `V003_TRAKE_H02`: video đúng nằm sẵn trong pool ở **4/5 step**
+(một step ở hạng 7) nhưng bị vứt sạch chỉ vì thiếu step còn lại.
+
+Luật chấm theo TỈ LỆ step đúng. Bắt được 2/5 step hơn hẳn không nộp gì.
+
+### Số đo — 24 query TRAKE, `exports_competition` (873 video)
+
+| cấu hình | gold có trong DS | recall@1 | recall@3 | video khác nhau /20 | hit@20 |
+|---|---:|---:|---:|---:|---:|
+| K=100 (mặc định cũ) | 0.250 | 0.250 | 0.250 | 0.46 | 0.250 |
+| K=500 | 0.792 | 0.750 | 0.750 | 1.58 | **0.750** |
+| K=500 + engine `processor` | 0.500 | 0.333 | — | 1.04 | 0.333 |
+| K=500 + hạn ngạch beam (5,2) | 0.708 | 0.667 | — | 5.04 | 0.542 |
+| K=500 + beam2000 + 1 dòng/video | 0.833 | 0.750 | 0.750 | 7.04 | 0.583 |
+| **+ chuỗi thiếu step** | **1.000** | **0.875** | **0.958** | **15.83** | 0.625 |
+
+Trần lý thuyết của `gold có trong DS` là 0.958 theo Stage B (một truy vấn không
+có gold ở bất kỳ step nào). **Đạt 1.000 vượt cả trần đó** — vì Stage B chỉ đếm
+vùng gold đúng cửa sổ, còn video gold vẫn lọt vào danh sách nhờ bằng chứng ở
+scene khác.
+
+### Ba kết quả ÂM, ghi lại để không ai thử lại
+
+1. **`AIC_TRAKE_ENGINE=processor`**: 0.500 so với 0.792. Tôi đã khuyên đo lại
+   nhánh này vì nghi phán quyết cũ là sản phẩm của benchmark 3 video. Nghi ngờ
+   sai — phán quyết cũ đúng, và đúng đậm hơn ở quy mô lớn. Cơ chế nghi ngờ:
+   `step_coverage` bão hoà khi hàng trăm video sai đều có 1 hit ở mỗi step.
+2. **`per_video_beam`**: có hại, bỏ hẳn. Nó không phân biệt "video nam châm
+   chiếm chỗ" với "video đúng cần tìm sâu". Bằng chứng: `V002_TRAKE_E02` từ 20
+   chuỗi có gold hạng 1 tụt còn 1 chuỗi và mất gold.
+3. **Hạn ngạch candidate theo video** (3/5/10 mỗi video): không tác dụng, số
+   liệu y hệt ở mọi mức K. Thiếu là thiếu độ phủ tuyệt đối, không phải phân bố.
+
+### Lấp lỗ
+
+Chuỗi thủng xuất thiếu frame thì `submission_validator` từ chối cả dòng, nên
+2 step tìm đúng cũng thành 0. `_fill_holes` lấp bằng keyframe THẬT: chỉ xét
+scene đã có bằng chứng cho truy vấn (nằm trong `documents`), chọn cái gần điểm
+nội suy theo tỉ lệ vị trí step, đánh dấu `refinement="interpolated"`.
+
+Đo được: 5/21 dòng từ thiếu frame thành đủ. `chain_r_scores` **không đổi ở
+24/24** — frame lấp không trúng cửa sổ GT lần nào, đúng như dự báo (cửa sổ chỉ
+±4 frame). Giá trị của nó nằm ở chỗ harness không nhìn thấy: harness không chạy
+validator, còn khi nộp thật thì 5 dòng kia trước đây bị loại thẳng.
+
+### Đánh đổi phải biết
+
+`hit@20` của cấu hình cuối là 0.625, THẤP hơn K=500 trần (0.750). Nguyên nhân:
+`max_chains_per_video=1` bỏ các biến thể frame của video đúng, mà chính chúng
+đang brute-force cửa sổ GT. Đây là hai chế độ khác nhau, không phải một cái tốt
+hơn cái kia:
+
+* **Người duyệt bằng mắt** -> cấu hình cuối. Gold có trong danh sách 100%, và
+  danh sách là 15.8 video thật sự khác nhau để xem.
+* **Nộp tự động, không ai xem** -> bỏ `max_chains_per_video`, giữ K=500.
+
+### Chưa làm
+
+Corpus chỉ có 3 video gold giữa 870 nhiễu, và 24 query. Mọi con số ở đây là tín
+hiệu định hướng, không phải bằng chứng thống kê.
