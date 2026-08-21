@@ -150,7 +150,7 @@
 .submission-list { display: flex; flex-direction: column; gap: 2px; max-height: 340px; }
 .submission-row {
   display: grid;
-  grid-template-columns: 28px minmax(0, 1fr) 24px 24px 24px;
+  grid-template-columns: 18px 38px minmax(0, 1fr) 24px 24px 24px;
   align-items: center;
   gap: var(--space-1);
   padding: 2px var(--space-2);
@@ -240,7 +240,93 @@
 .submission-row .icon-btn { color: var(--text-secondary); }
 .submission-row .icon-btn:hover:not(:disabled) { color: var(--text-primary); background: var(--surface-control-hover); }
 .submission-row .icon-btn:disabled { opacity: 0.3; }
-.submission-row { grid-template-columns: 28px minmax(0, 1fr) 26px 26px 26px; gap: var(--space-2); }
+.submission-row { grid-template-columns: 18px 38px minmax(0, 1fr) 26px 26px 26px; gap: var(--space-2); }
+.submission-row.is-ticked { background: var(--surface-raised); box-shadow: inset 2px 0 0 var(--accent-border, var(--border-strong)); }
+.submission-row.is-ticked.is-selected { background: var(--accent-soft); }
+
+/* Ô tick. `.submission-board input` ở trên đặt height 28px + padding cho ô
+   text, đè lên checkbox làm nó méo — phải trả lại kích thước gốc ở đây. */
+.submission-tick {
+  height: 13px !important;
+  width: 13px;
+  min-width: 13px;
+  padding: 0 !important;
+  margin: 0;
+  border-radius: 3px !important;
+  accent-color: var(--accent, #4c8dff);
+  cursor: pointer;
+}
+
+/* Hạng gõ tay: gõ số rồi Enter là dòng nhảy tới đúng hạng đó. Mũi tên lên/
+   xuống chỉ đi được một bậc mỗi lần bấm — đưa dòng 63 lên hạng 2 bằng mũi tên
+   là 61 lần bấm, nên ô này mới là đường chính, mũi tên chỉ để chỉnh sát. */
+.submission-rank-input {
+  height: 22px !important;
+  padding: 0 2px !important;
+  text-align: center;
+  font-size: var(--text-caption);
+  color: var(--text-tertiary);
+  background: transparent !important;
+  border-color: transparent !important;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+.submission-rank-input::-webkit-outer-spin-button,
+.submission-rank-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.submission-row:hover .submission-rank-input { border-color: var(--border-default) !important; }
+.submission-rank-input:focus {
+  color: var(--text-primary);
+  background: var(--surface-control) !important;
+  border-color: var(--accent-border) !important;
+}
+
+/* Thanh thao tác hàng loạt. */
+.submission-bulk {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface-raised);
+  border-radius: var(--radius-nested);
+  flex: 0 0 auto;
+}
+.submission-bulk-group { display: flex; align-items: center; gap: var(--space-2); }
+.submission-bulk-group .eyebrow { white-space: nowrap; }
+.submission-tick-all {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-caption);
+  color: var(--text-tertiary);
+  cursor: pointer;
+}
+.submission-bulk-answer { flex: 1 1 200px; min-width: 140px; max-width: 320px; }
+.submission-bulk-rank {
+  width: 56px;
+  text-align: center;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+.submission-bulk-rank::-webkit-outer-spin-button,
+.submission-bulk-rank::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.submission-bulk input:disabled { opacity: 0.45; cursor: not-allowed; }
+.submission-bulk > .icon-btn { margin-left: auto; }
+.submission-hint { margin-top: calc(-1 * var(--space-2)); }
+
+/* Dấu cho dòng có đáp án khác câu của model — không có nó thì sau khi sửa
+   hàng loạt, bảng trông y như kết quả gốc và không rà lại được đã sửa những
+   dòng nào. */
+.answer-edited {
+  flex: 0 0 auto;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-badge);
+  background: var(--accent-soft);
+  color: var(--accent, #4c8dff);
+  font-size: var(--text-micro);
+  font-weight: var(--weight-medium);
+}
 
 /* Biểu tượng trạng thái của một dòng nộp bài.
  *

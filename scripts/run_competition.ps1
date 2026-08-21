@@ -75,6 +75,9 @@ $env:AIC_BRANCH_TIMEOUT_MS        = "30000"
 # `ocr_fuzzy` p50 0 ms / max 10 ms. Nhanh rong gan nhu mien phi.
 $env:AIC_ENABLE_OCR_BRANCH        = "true"
 $env:AIC_ENABLE_OCR_FUZZY         = "true"
+# KHONG dat AIC_OCR_OVERLAY_DF o day: .env.fpt.local da giu 0.10, va do lai
+# tren 1236 scene sau khi nap OCR Qwen thi 0.10 van la lua chon dung (xem ghi
+# chu tai cho khai bao). Dat lai o day chi tao hai nguon su that.
 $env:HF_HUB_OFFLINE               = "1"
 $env:TRANSFORMERS_OFFLINE         = "1"
 $env:PYTHONIOENCODING             = "utf-8"

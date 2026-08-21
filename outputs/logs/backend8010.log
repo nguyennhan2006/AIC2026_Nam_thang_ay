@@ -513,3 +513,4 @@ INFO:     127.0.0.1:62159 - "GET /v1/media/raw/videos/L21_V001.mp4 HTTP/1.1" 206
 INFO:     127.0.0.1:50202 - "GET /v1/media/raw/videos/L21_V001.mp4 HTTP/1.1" 206 Partial Content
 INFO:     127.0.0.1:50202 - "GET /v1/media/raw/videos/L21_V001.mp4 HTTP/1.1" 206 Partial Content
 INFO:     127.0.0.1:55016 - "GET /v1/media/raw/videos/L21_V001.mp4 HTTP/1.1" 206 Partial Content
+INFO:     127.0.0.1:62821 - "GET /v1/health HTTP/1.1" 200 OK

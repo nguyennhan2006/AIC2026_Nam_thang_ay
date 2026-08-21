@@ -308,6 +308,10 @@ trước khi có dữ liệu thật. Chỉnh là đổi scoring nên phải đo 
 - [x] ✅ `submission_validator` — kiểm frame thuộc video bằng `frame_count` thật
 - [x] ✅ `evaluate-local` — chấm thử trước khi nộp
 - [x] ✅ Sắp thứ tự thủ công trong bảng nộp
+- [x] ✅ Gõ thẳng số hạng vào từng dòng — dòng được **chèn** vào vị trí đó, phần còn
+      lại dịch xuống (mũi tên lên/xuống chỉ đi một bậc, không dùng để nhảy xa được)
+- [x] ✅ Tick nhiều dòng (Shift để chọn cả dải) rồi sửa **một câu trả lời QA cho cả
+      loạt**, đưa cả khối tới một hạng, hoặc bỏ cả khối khỏi bài nộp
 - [x] ✅ Phát đoạn video theo kết quả (HTTP Range, nới ±5s lấy bối cảnh)
 - [x] ✅ Bảng trọng số nhánh theo modality
 - [x] ✅ Session replay — mọi tìm kiếm được ghi trace

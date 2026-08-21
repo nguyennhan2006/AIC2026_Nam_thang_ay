@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle, ArrowDown, ArrowUp, CheckCircle2, FileDown, HelpCircle, ImageOff,
-  MessageSquareText, Play, RotateCcw, SlidersHorizontal, X,
+  ListOrdered, MessageSquareText, Pencil, Play, RotateCcw, SlidersHorizontal, Trash2, X,
 } from "lucide-react";
 import type { ApiClientConfig } from "../api";
 import { ApiError, buildSubmission, mediaUrl } from "../api";
@@ -227,6 +227,21 @@ export function SubmissionBoard({ apiConfig, task, kis, qa, trake, avs, results 
   const [videoError, setVideoError] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
 
+  // Tick là tập ĐỘC LẬP với `selected`: `selected` chỉ quyết định panel xem
+  // bên phải (một dòng), tick quyết định dòng nào chịu thao tác hàng loạt.
+  // Gộp hai thứ này lại thì không sửa được 12 đáp án trong khi vẫn đang xem
+  // video của dòng thứ 3.
+  const [ticked, setTicked] = useState<Set<string>>(() => new Set());
+  // Neo cho shift-click: tick dòng 3 rồi shift-tick dòng 9 = tick cả dải.
+  const anchorRef = useRef<number | null>(null);
+  const tickAllRef = useRef<HTMLInputElement>(null);
+  const [bulkAnswer, setBulkAnswer] = useState("");
+  const [bulkRank, setBulkRank] = useState("");
+  // Hạng gõ tay: giữ ở dạng CHUỖI nháp, chỉ chốt khi Enter/blur. Sắp lại ngay
+  // từng phím gõ thì dòng chạy khỏi con trỏ giữa chừng — gõ "12" thì chữ "1"
+  // đã kịp đẩy dòng lên đầu bảng trước khi chữ "2" tới.
+  const [rankDraft, setRankDraft] = useState<{ key: string; text: string } | null>(null);
+
   const sourceRows = useMemo(() => toRows(task, kis, qa, trake), [task, kis, qa, trake]);
 
   // Kết quả mới về thì thứ tự thủ công cũ không còn ý nghĩa — nạp lại từ đầu.
@@ -234,7 +249,35 @@ export function SubmissionBoard({ apiConfig, task, kis, qa, trake, avs, results 
     setRows(sourceRows);
     setSelected(null);
     setResult(null);
+    setTicked(new Set());
+    setRankDraft(null);
+    anchorRef.current = null;
   }, [sourceRows]);
+
+  // Đáp án nguyên bản của model, để biết dòng nào đã bị sửa tay. So theo
+  // `key` chứ không theo vị trí — bảng này sắp lại thứ tự liên tục.
+  const sourceAnswers = useMemo(
+    () => new Map(sourceRows.map((row) => [row.key, row.answer ?? ""])),
+    [sourceRows]
+  );
+  const editedKeys = useMemo(
+    () =>
+      new Set(
+        rows.filter((row) => (row.answer ?? "") !== (sourceAnswers.get(row.key) ?? "")).map((row) => row.key)
+      ),
+    [rows, sourceAnswers]
+  );
+
+  const tickedCount = useMemo(
+    () => rows.reduce((total, row) => total + (ticked.has(row.key) ? 1 : 0), 0),
+    [rows, ticked]
+  );
+  // Ô "tick tất cả" phải phân biệt được ba trạng thái. Chỉ checked/unchecked
+  // thì tick 3/12 dòng trông y hệt không tick dòng nào, và người dùng bấm nó
+  // để "chọn hết" lại hoá ra xoá sạch lựa chọn vừa làm.
+  useEffect(() => {
+    if (tickAllRef.current) tickAllRef.current.indeterminate = tickedCount > 0 && tickedCount < rows.length;
+  }, [tickedCount, rows.length]);
 
   const hitByScene = useMemo(() => {
     const map = new Map<string, SearchHit>();
@@ -282,20 +325,119 @@ export function SubmissionBoard({ apiConfig, task, kis, qa, trake, avs, results 
     return () => element.removeEventListener("loadedmetadata", apply);
   }, [seekTo, videoSrc]);
 
-  function move(index: number, delta: number) {
+  /** Chèn một dòng vào đúng hạng, ĐẨY các dòng khác xuống — không hoán đổi.
+   *
+   *  Hoán đổi là thao tác sai cho việc xếp hạng: đưa dòng 17 lên hạng 2 bằng
+   *  hoán đổi sẽ ném dòng 2 xuống tận 17, phá thứ tự của 15 dòng ở giữa mà
+   *  người dùng vừa sắp. Chèn giữ nguyên thứ tự tương đối của phần còn lại.
+   */
+  function moveRowTo(key: string, targetIndex: number) {
     setRows((current) => {
+      const from = current.findIndex((row) => row.key === key);
+      if (from < 0) return current;
+      const to = Math.max(0, Math.min(targetIndex, current.length - 1));
+      if (to === from) return current;
       const next = [...current];
-      const target = index + delta;
-      if (target < 0 || target >= next.length) return current;
-      [next[index], next[target]] = [next[target], next[index]];
+      const [item] = next.splice(from, 1);
+      next.splice(to, 0, item);
       return next;
     });
     setResult(null);
   }
 
+  function move(index: number, delta: number) {
+    const row = rows[index];
+    if (row) moveRowTo(row.key, index + delta);
+  }
+
+  function untick(keys: Iterable<string>) {
+    setTicked((current) => {
+      const next = new Set(current);
+      for (const key of keys) next.delete(key);
+      return next.size === current.size ? current : next;
+    });
+  }
+
   function remove(index: number) {
+    const key = rows[index]?.key;
     setRows((current) => current.filter((_, position) => position !== index));
+    if (key) untick([key]);
     setResult(null);
+  }
+
+  /** Tick một dòng; `extend` (shift-click) tick cả dải từ neo tới đây. */
+  function toggleTick(index: number, extend: boolean) {
+    const row = rows[index];
+    if (!row) return;
+    // Đọc neo NGAY BÂY GIỜ, không đọc trong updater: updater của React chạy
+    // ở pha render, tức là sau dòng `anchorRef.current = index` bên dưới —
+    // đọc muộn thì neo luôn bằng chính dòng vừa bấm và shift-click không bao
+    // giờ mở rộng được dải.
+    const anchor = anchorRef.current;
+    anchorRef.current = index;
+    setTicked((current) => {
+      const next = new Set(current);
+      if (extend && anchor != null && anchor !== index && anchor < rows.length) {
+        const [low, high] = anchor < index ? [anchor, index] : [index, anchor];
+        const turnOn = !next.has(row.key);
+        for (let position = low; position <= high; position += 1) {
+          const target = rows[position];
+          if (!target) continue;
+          if (turnOn) next.add(target.key);
+          else next.delete(target.key);
+        }
+      } else if (next.has(row.key)) {
+        next.delete(row.key);
+      } else {
+        next.add(row.key);
+      }
+      return next;
+    });
+  }
+
+  /** Một câu trả lời cho TẤT CẢ dòng đã tick.
+   *
+   *  Model hay trả cùng một sự thật bằng nhiều cách viết ("3 người", "ba
+   *  người", "3 nguoi") trên các frame khác nhau. BTC chấm QA theo chuỗi
+   *  answer, nên sửa từng dòng một vừa chậm vừa dễ sót một biến thể.
+   */
+  function applyBulkAnswer() {
+    const value = bulkAnswer.trim();
+    if (task !== "QA" || value === "" || ticked.size === 0) return;
+    setRows((current) => current.map((row) => (ticked.has(row.key) ? { ...row, answer: value } : row)));
+    setResult(null);
+  }
+
+  /** Đưa CẢ khối đã tick tới hạng N, giữ thứ tự tương đối bên trong khối. */
+  function applyBulkRank() {
+    const wanted = Number.parseInt(bulkRank, 10);
+    if (!Number.isFinite(wanted) || ticked.size === 0) return;
+    setRows((current) => {
+      const block = current.filter((row) => ticked.has(row.key));
+      if (block.length === 0) return current;
+      const rest = current.filter((row) => !ticked.has(row.key));
+      const at = Math.max(0, Math.min(wanted - 1, rest.length));
+      return [...rest.slice(0, at), ...block, ...rest.slice(at)];
+    });
+    setResult(null);
+  }
+
+  function removeTicked() {
+    if (ticked.size === 0) return;
+    setRows((current) => current.filter((row) => !ticked.has(row.key)));
+    setTicked(new Set());
+    anchorRef.current = null;
+    setResult(null);
+  }
+
+  /** Chốt hạng gõ tay. Bị gọi hai lần khi bấm Enter rồi rời ô, nên nháp đã
+   *  xoá thì lần sau không được chạy lại — nếu không dòng bị đẩy đi hai lần. */
+  function commitRank(key: string) {
+    if (!rankDraft || rankDraft.key !== key) return;
+    const wanted = Number.parseInt(rankDraft.text, 10);
+    setRankDraft(null);
+    if (!Number.isFinite(wanted)) return;
+    moveRowTo(key, wanted - 1);
   }
 
   async function runBuild() {
@@ -311,11 +453,23 @@ export function SubmissionBoard({ apiConfig, task, kis, qa, trake, avs, results 
           .sort((a, b) => order.get(keyOf(a))! - order.get(keyOf(b))!)
           .map((item, index) => ({ ...item, rank: index + 1 }));
 
+      // QA: `answer` sửa tay ở bảng này phải THẮNG câu của model — đó mới là
+      // cột đi vào CSV. `canonical_answer` giữ nguyên vì nó chỉ là khoá truy
+      // vết về candidate gốc, không có mặt trong bài nộp.
+      const qaKey = (item: QaResultItem) => `${item.video_id}-${item.frame_idx}-${item.canonical_answer}`;
+      const answerByKey = new Map(rows.map((row) => [row.key, row.answer ?? ""]));
+
       const body =
         task === "TEXTUAL_KIS"
           ? { task, kis: pick(kis, (i) => `${i.video_id}-${i.frame_idx}`) }
           : task === "QA"
-            ? { task, qa: pick(qa, (i) => `${i.video_id}-${i.frame_idx}-${i.canonical_answer}`) }
+            ? {
+                task,
+                qa: pick(qa, qaKey).map((item) => {
+                  const edited = answerByKey.get(qaKey(item));
+                  return edited != null && edited !== item.answer ? { ...item, answer: edited } : item;
+                }),
+              }
             : { task, trake: pick(trake, (i) => `${i.video_id}-${i.rank}`) };
       setResult(await buildSubmission(apiConfig, body));
     } catch (err) {
@@ -356,19 +510,27 @@ export function SubmissionBoard({ apiConfig, task, kis, qa, trake, avs, results 
     zoneCounts.set(zone, (zoneCounts.get(zone) ?? 0) + 1);
   });
   const reordered = rows.length !== sourceRows.length || rows.some((row, i) => row.key !== sourceRows[i]?.key);
+  const allTicked = rows.length > 0 && tickedCount === rows.length;
 
   return (
     <div className="submission-board">
       <div className="submission-toolbar">
         <span className="eyebrow">{rows.length} dòng</span>
         {reordered && <Badge tone="warning">đã sắp lại tay</Badge>}
-        {reordered && (
+        {editedKeys.size > 0 && <Badge tone="accent">{editedKeys.size} đáp án sửa tay</Badge>}
+        {(reordered || editedKeys.size > 0) && (
           <IconButton
             icon={<RotateCcw size={14} />}
-            label="Khôi phục thứ tự của hệ thống"
+            label="Khôi phục thứ tự và đáp án của hệ thống"
             size="sm"
             variant="control"
-            onClick={() => { setRows(sourceRows); setResult(null); }}
+            onClick={() => {
+              setRows(sourceRows);
+              setTicked(new Set());
+              setRankDraft(null);
+              anchorRef.current = null;
+              setResult(null);
+            }}
           />
         )}
         <div className="submission-zones">
@@ -390,14 +552,122 @@ export function SubmissionBoard({ apiConfig, task, kis, qa, trake, avs, results 
         </Button>
       </div>
 
+      {/* Thanh hàng loạt: luôn hiện (kể cả khi chưa tick dòng nào) để ô "tick
+          tất cả" có chỗ đứng cố định. Các nút bên trong tự khoá khi chưa có
+          dòng nào được tick — thanh nhảy ra nhảy vào mỗi lần tick thì bảng
+          bên dưới cũng nhảy theo, mất chỗ đang nhắm chuột. */}
+      <div className="submission-bulk">
+        <label className="submission-tick-all" title="Tick / bỏ tick tất cả các dòng">
+          <input
+            ref={tickAllRef}
+            type="checkbox"
+            className="submission-tick"
+            checked={allTicked}
+            aria-label="Tick tất cả các dòng"
+            onChange={(event) => {
+              setTicked(event.target.checked ? new Set(rows.map((row) => row.key)) : new Set());
+              anchorRef.current = null;
+            }}
+          />
+          <span className="tabular">{tickedCount}/{rows.length}</span>
+        </label>
+
+        {task === "QA" && (
+          <div className="submission-bulk-group">
+            <input
+              type="text"
+              className="submission-bulk-answer"
+              value={bulkAnswer}
+              placeholder="Câu trả lời thống nhất…"
+              aria-label="Câu trả lời áp cho các dòng đã tick"
+              disabled={tickedCount === 0}
+              onChange={(event) => setBulkAnswer(event.target.value)}
+              onKeyDown={(event) => { if (event.key === "Enter") applyBulkAnswer(); }}
+            />
+            <Button
+              variant="secondary" size="sm" icon={<Pencil size={13} />}
+              disabled={tickedCount === 0 || bulkAnswer.trim() === ""}
+              onClick={applyBulkAnswer}
+            >
+              Áp cho {tickedCount} dòng
+            </Button>
+          </div>
+        )}
+
+        <div className="submission-bulk-group">
+          <span className="eyebrow">Đưa tới hạng</span>
+          <input
+            type="number"
+            className="submission-bulk-rank tabular"
+            min={1}
+            max={Math.max(rows.length, 1)}
+            value={bulkRank}
+            placeholder="1"
+            aria-label="Hạng đích cho các dòng đã tick"
+            disabled={tickedCount === 0}
+            onChange={(event) => setBulkRank(event.target.value)}
+            onKeyDown={(event) => { if (event.key === "Enter") applyBulkRank(); }}
+          />
+          <Button
+            variant="secondary" size="sm" icon={<ListOrdered size={13} />}
+            disabled={tickedCount === 0 || bulkRank.trim() === ""}
+            onClick={applyBulkRank}
+          >
+            Chèn
+          </Button>
+        </div>
+
+        <IconButton
+          icon={<Trash2 size={14} />}
+          label={`Bỏ ${tickedCount} dòng đã tick khỏi bài nộp`}
+          size="sm"
+          variant="control"
+          disabled={tickedCount === 0}
+          onClick={removeTicked}
+        />
+      </div>
+      <p className="muted small submission-hint">
+        Gõ số vào ô hạng của một dòng rồi Enter để chèn nó vào đúng vị trí đó — các dòng khác dịch
+        xuống, không bị hoán đổi. Giữ Shift khi tick để chọn cả dải.
+      </p>
+
       <div className="submission-split">
         <ol className="submission-list scroll-y">
-          {rows.map((row, index) => (
+          {rows.map((row, index) => {
+            const isTicked = ticked.has(row.key);
+            return (
             <li
               key={row.key}
-              className={row.key === selected ? "submission-row is-selected" : "submission-row"}
+              className={[
+                "submission-row",
+                row.key === selected ? "is-selected" : "",
+                isTicked ? "is-ticked" : "",
+              ].filter(Boolean).join(" ")}
             >
-              <span className="submission-rank tabular">{index + 1}</span>
+              <input
+                type="checkbox"
+                className="submission-tick"
+                checked={isTicked}
+                aria-label={`Chọn dòng ${index + 1} — ${row.videoId}`}
+                title="Tick để sửa/xếp hàng loạt (giữ Shift để chọn cả dải)"
+                onChange={(event) => toggleTick(index, (event.nativeEvent as MouseEvent).shiftKey === true)}
+              />
+              <input
+                type="number"
+                className="submission-rank-input tabular"
+                min={1}
+                max={rows.length}
+                value={rankDraft?.key === row.key ? rankDraft.text : index + 1}
+                aria-label={`Hạng của ${row.videoId}, hiện là ${index + 1}`}
+                title="Gõ hạng mới rồi Enter — các dòng khác dịch xuống"
+                onFocus={(event) => event.currentTarget.select()}
+                onChange={(event) => setRankDraft({ key: row.key, text: event.target.value })}
+                onBlur={() => commitRank(row.key)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") commitRank(row.key);
+                  if (event.key === "Escape") { setRankDraft(null); event.currentTarget.blur(); }
+                }}
+              />
               <button
                 type="button"
                 className="submission-main"
@@ -416,6 +686,9 @@ export function SubmissionBoard({ apiConfig, task, kis, qa, trake, avs, results 
                   {row.missingSteps && row.missingSteps.length > 0 &&
                     ` · thiếu bước ${row.missingSteps.join(", ")}`}
                 </span>
+                {editedKeys.has(row.key) && (
+                  <span className="answer-edited" title="Đáp án đã sửa tay, khác câu của model">sửa</span>
+                )}
               </button>
               <IconButton icon={<ArrowUp size={14} />} label="Lên một bậc" size="sm" variant="control"
                           disabled={index === 0} onClick={() => move(index, -1)} />
@@ -424,7 +697,8 @@ export function SubmissionBoard({ apiConfig, task, kis, qa, trake, avs, results 
               <IconButton icon={<X size={14} />} label="Bỏ khỏi bài nộp" size="sm" variant="control"
                           onClick={() => remove(index)} />
             </li>
-          ))}
+            );
+          })}
         </ol>
 
         <div className="submission-preview">
