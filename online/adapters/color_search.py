@@ -13,6 +13,8 @@ today) — see docs/15_RESEARCH_AGENDA.md before assuming this is enough.
 
 from __future__ import annotations
 
+import asyncio
+
 import re
 
 from online.domain.models import Candidate, Modality, QueryPlan, SceneDocument
@@ -78,6 +80,16 @@ class ColorSearchRetriever:
         query_tags = extract_color_tags(plan.normalized_query)
         if not query_tags:
             return []
+        # Quét toàn corpus là CPU-bound thuần: chạy thẳng trên event loop thì
+        # cả server đứng hình suốt quãng đó — không /v1/health, không phục vụ
+        # ảnh keyframe, không nhận nổi truy vấn của người thứ hai. Tiền lệ đã
+        # đo được ghi ngay trong module này: `ocr_fuzzy` chạy đồng bộ kéo
+        # `dense_visual` từ p50 224ms lên 8,7s và timeout 40/84 truy vấn.
+        return await asyncio.to_thread(self._search_sync, plan, limit, query_tags)
+
+    def _search_sync(
+        self, plan: QueryPlan, limit: int, query_tags: list[str]
+    ) -> list[Candidate]:
         query_set = set(query_tags)
         scored: list[tuple[float, SceneDocument]] = []
         for doc in self.documents:

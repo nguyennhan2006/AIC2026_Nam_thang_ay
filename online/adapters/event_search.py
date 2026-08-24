@@ -10,6 +10,8 @@ hydrate scene_id-anchored candidates), all sharing the event's BM25 score.
 
 from __future__ import annotations
 
+import asyncio
+
 from pathlib import Path
 from typing import Sequence
 
@@ -91,7 +93,8 @@ class EventSearchRetriever:
             return []
         limit = effective_limit(plan, self.execution_id, limit, self.branch_id)
         query = plan.events[0].text if len(plan.events) == 1 else plan.normalized_query
-        results = self.index.search(query, limit)
+        # BM25 Python thuần trên toàn bộ event — cùng lý do như bm25.py.
+        results = await asyncio.to_thread(self.index.search, query, limit)
         candidates: list[Candidate] = []
         for event, score in results:
             if plan.filters.video_ids and event.video_id not in plan.filters.video_ids:

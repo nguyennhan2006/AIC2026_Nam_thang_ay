@@ -304,6 +304,23 @@ trước khi có dữ liệu thật. Chỉnh là đổi scoring nên phải đo 
 
 ## 5. Tầng nộp bài và giao diện
 
+- [x] ✅ **Server mở cổng NGAY**, nạp ~4 phút ở luồng nền *(22/08)*. Trước đó cả
+      quãng nạp nằm trong `lifespan` nên trình duyệt chỉ báo "không kết nối được",
+      không phân biệt được "đang nạp" với "đã chết". Tiến độ: `GET /v1/startup`
+      (không cần token); endpoint thường CHỜ nạp xong chứ không 503
+- [x] ✅ **Nhánh retrieval không còn khoá event loop** *(22/08)*. `bm25`,
+      `ocr_fuzzy`, `color_search`, `event_search`, `caption_dense` và
+      `InMemoryVectorStore` đều quét toàn corpus; chạy thẳng trên loop nghĩa là
+      suốt quãng đó server đứng hình với MỌI người — đúng triệu chứng "load lâu"
+      khi cả đội dùng chung một server. Khoá bằng `tests/test_event_loop_not_blocked.py`
+- [x] ✅ **Solo từng nhánh** trong panel Trọng số — chạy riêng ASR / caption /
+      OCR / hình ảnh để xem nhánh đó tự đứng thì trả về gì
+- [x] ✅ **Khoanh vùng + đào sâu vào vài video** (`filters.video_ids` + nới trần
+      mỗi video + tăng top-K) để làm giàu đáp án trong video đã tin là đúng
+- [x] ✅ **Bản nháp sắp xếp dùng chung cả đội** — `/v1/submission-drafts`, ghi
+      JSONL trên đĩa nên sống qua restart
+- [x] ✅ **Đáp án QA hiện ngay trên lưới ảnh**, đồng bộ từ bảng nộp
+
 - [x] ✅ Xuất submission KIS / QA / TRAKE đúng contract
 - [x] ✅ `submission_validator` — kiểm frame thuộc video bằng `frame_count` thật
 - [x] ✅ `evaluate-local` — chấm thử trước khi nộp

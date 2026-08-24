@@ -125,6 +125,9 @@ Panel dùng chung, không theo task:
 | **BranchStatusPanel** | Thấy trực tiếp nhánh nào `success/timeout/failed` — đừng đoán qua số kết quả tụt |
 | **FrameTuner** | Tua **chính xác theo frame** trên toàn video (không chỉ trong cửa sổ scene). Dùng `fps` thật từ `GET /v1/videos` — **V003 chạy 25fps trong khi V001/V002 chạy 30fps**, hard-code 30 sẽ tua lệch 20% |
 | **SubmissionBoard** | Bảng nộp cuối, đổi frame→giây bằng chính scene chứa nó (không giả định fps); dòng TRAKE bấm được từng bước để xem lại cả chuỗi trước khi nộp. Tick nhiều dòng → sửa **một câu trả lời QA cho cả loạt** / đưa cả khối tới một hạng / bỏ cả khối; gõ số vào ô hạng của một dòng để **chèn** nó vào đúng vị trí đó |
+| **StartupBanner** | Thanh chờ đọc `GET /v1/startup`. Là thứ DUY NHẤT phân biệt "server đang nạp" với "server chết" trong ~4 phút đầu |
+| **VideoFocusBar** | Khoanh vùng truy vấn vào vài video, "Đào sâu" = lọc + nới trần mỗi video + tăng top-K (chỉ lọc thôi thì dedup KIS vẫn giữ đúng 5 dòng/video, nhìn như không chạy) |
+| **DraftBar** | Lưu/nạp bản nháp sắp xếp DÙNG CHUNG cả đội (server, không phải localStorage). Nạp bản của truy vấn khác thì báo rõ số dòng không khớp thay vì bỏ im lặng |
 | **CompareLab** | So cấu hình + trạng thái nhánh + thời gian giữa 2 session (thường: gốc vs. replay) — không diff kết quả, đó là việc của Results Explorer |
 | **EvidenceInspector** | `GET /v1/evidence/{id}` — mở lazy, request thật mỗi lần, không phải dữ liệu có sẵn |
 | **StreamLog** | Log SSE thô — xác nhận stream đang chạy thật theo tiến độ backend, không phải progress bar giả |

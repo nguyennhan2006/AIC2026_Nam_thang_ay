@@ -86,40 +86,88 @@ def _links_from_csv(path: Path) -> dict[str, str]:
     return links
 
 
-def download(session, url: str, destination: Path, *, label: str) -> int:
+def download(session, url: str, destination: Path, *, label: str, attempts: int = 12) -> int:
     """Tải `url` về `destination`, nối tiếp nếu đã có một phần.
 
-    Mirror hỗ trợ `Range` (đã kiểm trên cả 32 file), nên đứt giữa chừng chạy lại
-    là tiếp chứ không tải lại từ đầu.
+    Mirror hỗ trợ `Range` (đã kiểm trên cả 32 file), nên đứt giữa chừng là nối
+    tiếp chứ không tải lại từ đầu.
+
+    Vòng nối lại nằm NGAY ĐÂY chứ không bắt người dùng chạy lại lệnh: một mẻ
+    video là 77 GB, nhiều giờ, đủ lâu để chắc chắn gặp `IncompleteRead`. Thả
+    lỗi ra ngoài thì mất luôn mọi file còn lại trong mẻ — đo được ngày
+    2026-08-23: đứt ở `Videos_L25_a` giữa mẻ 14 file, 9 file sau không tải.
+
+    `timeout` đọc để 300s thay vì 3600s: ở 4 MB/s một chunk 8 MB mất 2s, đứng
+    im 5 phút nghĩa là kết nối đã chết — chờ thêm một tiếng chỉ phí thời gian,
+    trong khi mở lại từ byte dở dang là xong.
     """
 
+    import requests
+
     destination.parent.mkdir(parents=True, exist_ok=True)
-    done = destination.stat().st_size if destination.exists() else 0
     head = session.head(url, timeout=120, allow_redirects=True)
     head.raise_for_status()
     total = int(head.headers.get("Content-Length") or 0)
-    if total and done >= total:
+
+    started_at = destination.stat().st_size if destination.exists() else 0
+    if total and started_at >= total:
         print(f"  {label:32s} da co du ({total/2**30:.2f} GB)")
         return 0
 
-    response = session.get(
-        url, headers={"Range": f"bytes={done}-"} if done else {}, timeout=3600, stream=True
-    )
-    response.raise_for_status()
-    started, started_at = time.time(), done
-    with destination.open("ab" if done else "wb") as sink:
-        for chunk in response.iter_content(8 << 20):
-            sink.write(chunk)
-            done += len(chunk)
-            elapsed = max(time.time() - started, 1e-9)
-            rate = (done - started_at) / elapsed
-            print(
-                f"\r  {label:32s} {done/2**30:6.2f}/{total/2**30:.2f} GB "
-                f"({rate/2**20:5.1f} MB/s)   ",
-                end="",
-                flush=True,
+    done = started_at
+    started = time.time()
+    stalled = 0
+    for attempt in range(1, attempts + 1):
+        before = done
+        try:
+            response = session.get(
+                url,
+                headers={"Range": f"bytes={done}-"} if done else {},
+                timeout=(60, 300),
+                stream=True,
             )
+            response.raise_for_status()
+            with destination.open("ab" if done else "wb") as sink:
+                for chunk in response.iter_content(8 << 20):
+                    sink.write(chunk)
+                    done += len(chunk)
+                    elapsed = max(time.time() - started, 1e-9)
+                    rate = (done - started_at) / elapsed
+                    print(
+                        f"\r  {label:32s} {done/2**30:6.2f}/{total/2**30:.2f} GB "
+                        f"({rate/2**20:5.1f} MB/s)   ",
+                        end="",
+                        flush=True,
+                    )
+        except requests.RequestException as error:
+            # Lần thử không kéo thêm được byte nào mới là lần đáng lo; còn nhích
+            # được thì coi như vẫn đang tiến, chỉ là đường mạng phập phù.
+            stalled = stalled + 1 if done == before else 1
+            if attempt == attempts:
+                print()
+                raise
+            delay = min(60, 5 * 2 ** (stalled - 1))
+            print(f"\n  {label:32s} dut ({type(error).__name__}), noi tiep sau {delay}s "
+                  f"tu {done/2**30:.2f} GB [lan {attempt}/{attempts}]", flush=True)
+            time.sleep(delay)
+            continue
+        if not total or done >= total:
+            break
+        # Máy chủ đóng sạch sẽ nhưng chưa hết file: vẫn là đứt, vẫn phải nối.
+        stalled = stalled + 1 if done == before else 1
+        if attempt == attempts:
+            break
+        delay = min(60, 5 * 2 ** (stalled - 1))
+        print(f"\n  {label:32s} thieu {(total-done)/2**30:.2f} GB, noi tiep sau {delay}s "
+              f"[lan {attempt}/{attempts}]", flush=True)
+        time.sleep(delay)
+
     print()
+    if total and done < total:
+        raise SystemExit(
+            f"{label}: tai duoc {done/2**30:.2f}/{total/2**30:.2f} GB sau {attempts} lan thu. "
+            f"Chay lai lenh de noi tiep tu cho dang do."
+        )
     return done - started_at
 
 

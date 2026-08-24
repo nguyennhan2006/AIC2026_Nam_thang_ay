@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { normalizeStepColumn, normalizeWeights } from "./weightMath";
+import {
+  applySolo, isSoloActive, normalizeStepColumn, normalizeWeights, runningBranches, toggleSolo,
+} from "./weightMath";
 import type { WeightControlValue } from "./weightMath";
 
 function item(overrides: Partial<WeightControlValue> = {}): WeightControlValue {
@@ -76,5 +78,59 @@ describe("normalizeStepColumn", () => {
   it("returns the column unchanged when the sum is zero", () => {
     const column = { visual: 0, ocr: 0 };
     expect(normalizeStepColumn(column)).toEqual(column);
+  });
+});
+
+describe("solo — cô lập một engine", () => {
+  const ALL = ["dense_visual", "caption_bm25", "bm25_ocr", "bm25_asr"];
+
+  it("chưa solo thì mọi nhánh đều chạy", () => {
+    expect(isSoloActive({}, ALL)).toBe(false);
+    expect(runningBranches({}, ALL)).toEqual(ALL);
+  });
+
+  it("bấm solo ASR: chỉ ASR chạy, các nhánh khác tắt tường minh", () => {
+    const next = toggleSolo({}, ALL, "bm25_asr");
+    expect(isSoloActive(next, ALL)).toBe(true);
+    expect(runningBranches(next, ALL)).toEqual(["bm25_asr"]);
+    expect(next.branches?.dense_visual?.enabled).toBe(false);
+    expect(next.branches?.bm25_asr?.enabled).toBe(true);
+  });
+
+  it("solo thêm nhánh thứ hai thì chạy cả hai", () => {
+    const asr = toggleSolo({}, ALL, "bm25_asr");
+    const both = toggleSolo(asr, ALL, "caption_bm25");
+    expect(runningBranches(both, ALL).sort()).toEqual(["bm25_asr", "caption_bm25"]);
+  });
+
+  it("bỏ solo nhánh cuối cùng = bỏ solo hẳn, không để tập rỗng", () => {
+    const asr = toggleSolo({}, ALL, "bm25_asr");
+    const cleared = toggleSolo(asr, ALL, "bm25_asr");
+    expect(isSoloActive(cleared, ALL)).toBe(false);
+    expect(runningBranches(cleared, ALL)).toEqual(ALL);
+  });
+
+  it("solo đủ hết mọi nhánh = bỏ solo, không giữ cờ enabled thừa", () => {
+    let options = toggleSolo({}, ALL, "bm25_asr");
+    for (const id of ALL.filter((x) => x !== "bm25_asr")) {
+      options = toggleSolo(options, ALL, id);
+    }
+    expect(isSoloActive(options, ALL)).toBe(false);
+    for (const id of ALL) expect(options.branches?.[id]?.enabled).toBeUndefined();
+  });
+
+  it("bỏ solo GIỮ NGUYÊN trọng số đã chỉnh tay", () => {
+    const tuned = { branches: { dense_visual: { weight: 3 }, bm25_asr: { weight: 0.5 } } };
+    const soloed = toggleSolo(tuned, ALL, "bm25_asr");
+    const cleared = applySolo(soloed, ALL, []);
+    expect(cleared.branches?.dense_visual?.weight).toBe(3);
+    expect(cleared.branches?.bm25_asr?.weight).toBe(0.5);
+    expect(cleared.branches?.dense_visual?.enabled).toBeUndefined();
+  });
+
+  it("không đụng tới nhánh nằm ngoài danh sách được phép solo", () => {
+    // Nhánh server không đăng ký mà bị gán enabled sẽ làm /capabilities trả 422.
+    const next = toggleSolo({ branches: { la_mat: { weight: 2 } } }, ALL, "bm25_ocr");
+    expect(next.branches?.la_mat).toEqual({ weight: 2 });
   });
 });

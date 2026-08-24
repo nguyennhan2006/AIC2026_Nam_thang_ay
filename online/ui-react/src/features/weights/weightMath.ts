@@ -1,6 +1,8 @@
 // Toán thuần cho Weight Panel — tách riêng khỏi component để test được không
 // cần render (docs UI competition studio §9.2/§21.1).
 
+import type { SearchOptions } from "../../types";
+
 export interface WeightControlValue {
   branchId: string;
   label: string;
@@ -56,4 +58,76 @@ export function normalizeStepColumn(column: Record<string, number>): Record<stri
     result[key] = round4(value / sum);
   }
   return result;
+}
+
+/* ------------------------------------------------------------------ */
+/* Solo — chạy MỘT (hoặc vài) nhánh, tắt phần còn lại.
+ *
+ * Backend đã nhận `branches.<id>.enabled=false` từ lâu, nhưng UI chỉ có ô tích
+ * từng nhánh: muốn "chỉ tìm theo ASR" phải bỏ tích tám nhánh khác rồi tích lại
+ * đủ tám nhánh đó khi xong. Không ai làm vậy giữa lúc thi, nên trên thực tế
+ * không ai cô lập được một engine để xem nó tự đứng thì ra gì.
+ *
+ * Bỏ solo GỠ HẲN cờ `enabled` chứ không gán `true`: nhánh phải quay về đúng
+ * mặc định của server (có nhánh server tắt sẵn), và weight/top_k đã chỉnh tay
+ * phải còn nguyên.                                                          */
+/* ------------------------------------------------------------------ */
+
+
+/** Nhánh nào SẼ chạy với options hiện tại. */
+export function runningBranches(options: SearchOptions, allBranchIds: string[]): string[] {
+  return allBranchIds.filter((id) => options.branches?.[id]?.enabled !== false);
+}
+
+/** Đang cô lập nhánh = có ít nhất một nhánh bị tắt tường minh. */
+export function isSoloActive(options: SearchOptions, allBranchIds: string[]): boolean {
+  return allBranchIds.some((id) => options.branches?.[id]?.enabled === false);
+}
+
+/** Đặt tập nhánh được chạy. `soloed` rỗng = bỏ solo, trả tất cả về mặc định. */
+export function applySolo(
+  options: SearchOptions,
+  allBranchIds: string[],
+  soloed: string[]
+): SearchOptions {
+  const wanted = new Set(soloed);
+  const branches = { ...(options.branches ?? {}) };
+  for (const id of allBranchIds) {
+    const current = branches[id];
+    if (wanted.size === 0) {
+      if (current && "enabled" in current) {
+        const { enabled: _dropped, ...rest } = current;
+        if (Object.keys(rest).length > 0) branches[id] = rest;
+        else delete branches[id];
+      }
+      continue;
+    }
+    branches[id] = { ...current, enabled: wanted.has(id) };
+  }
+  return { ...options, branches };
+}
+
+/** Bấm nút Solo của một nhánh.
+ *
+ *  Chưa solo  -> chỉ nhánh đó chạy.
+ *  Đang solo  -> thêm/bớt nhánh đó khỏi tập đang chạy.
+ *  Bớt tới rỗng, hoặc thêm tới đủ tất cả -> bỏ solo (tập rỗng thì truy vấn
+ *  chắc chắn không ra gì, đó không phải điều người bấm muốn).
+ */
+export function toggleSolo(
+  options: SearchOptions,
+  allBranchIds: string[],
+  branchId: string
+): SearchOptions {
+  if (!isSoloActive(options, allBranchIds)) {
+    return applySolo(options, allBranchIds, [branchId]);
+  }
+  const running = runningBranches(options, allBranchIds);
+  const next = running.includes(branchId)
+    ? running.filter((id) => id !== branchId)
+    : [...running, branchId];
+  if (next.length === 0 || next.length === allBranchIds.length) {
+    return applySolo(options, allBranchIds, []);
+  }
+  return applySolo(options, allBranchIds, next);
 }

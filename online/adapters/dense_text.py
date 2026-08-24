@@ -331,6 +331,10 @@ class CaptionDenseRetriever:
     def _encode(self, query: str) -> np.ndarray:
         return np.asarray(self.encoder.encode([self.query_prefix + query])[0])
 
+    def _score_sync(self, vector, limit: int):
+        scores = self.matrix @ vector
+        return scores, np.argsort(-scores)[:limit]
+
     async def search(self, plan: QueryPlan, *, limit: int) -> list[Candidate]:
         if effective_weight(plan, self.execution_id, self.modality, self.branch_id) <= 0:
             return []
@@ -347,8 +351,10 @@ class CaptionDenseRetriever:
         vector = await asyncio.to_thread(self._encode, query)
 
         # Vector đã L2-normalize cả hai phía nên dot product = cosine.
-        scores = self.matrix @ vector
-        top = np.argsort(-scores)[:limit]
+        # `matrix @ vector` + `argsort` trên toàn bộ scene cũng phải rời event
+        # loop: ở corpus thi đấu riêng argsort đã sắp 87.742 phần tử mỗi truy
+        # vấn. numpy nhả GIL nên phần này chồng lấn thật giữa các request.
+        scores, top = await asyncio.to_thread(self._score_sync, vector, limit)
         return [
             Candidate(
                 candidate_id=f"{self.execution_id}:{self.scene_ids[position]}",

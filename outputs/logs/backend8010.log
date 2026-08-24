@@ -514,3 +514,619 @@ INFO:     127.0.0.1:50202 - "GET /v1/media/raw/videos/L21_V001.mp4 HTTP/1.1" 206
 INFO:     127.0.0.1:50202 - "GET /v1/media/raw/videos/L21_V001.mp4 HTTP/1.1" 206 Partial Content
 INFO:     127.0.0.1:55016 - "GET /v1/media/raw/videos/L21_V001.mp4 HTTP/1.1" 206 Partial Content
 INFO:     127.0.0.1:62821 - "GET /v1/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51165 - "OPTIONS /v1/search/capabilities HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60365 - "GET /v1/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49672 - "GET /v1/search/capabilities HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60365 - "GET /v1/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49672 - "OPTIONS /v1/search HTTP/1.1" 200 OK
+Encoding:   0%|          | 0/1 [00:00<?, ?it/s]Encoding: 100%|██████████| 1/1 [00:28<00:00, 28.89s/it]Encoding: 100%|██████████| 1/1 [00:28<00:00, 28.91s/it]
+INFO:     127.0.0.1:49672 - "POST /v1/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55322 - "GET /v1/media/processed/keyframes/L26_V083/frame_005248.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62732 - "GET /v1/media/processed/keyframes/L26_V034/frame_004860.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53450 - "GET /v1/media/processed/keyframes/L26_V035/frame_005670.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60560 - "GET /v1/media/processed/keyframes/L26_V409/frame_004709.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61936 - "GET /v1/media/processed/keyframes/L26_V466/frame_005760.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54855 - "GET /v1/media/processed/keyframes/L26_V054/frame_004590.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52935 - "GET /v1/media/processed/keyframes/L26_V061/frame_005389.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62732 - "GET /v1/media/processed/keyframes/L26_V216/frame_005487.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60560 - "GET /v1/media/processed/keyframes/L26_V356/frame_005376.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61936 - "GET /v1/media/processed/keyframes/L26_V147/frame_004182.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53450 - "GET /v1/media/processed/keyframes/L26_V497/frame_005456.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52935 - "GET /v1/media/processed/keyframes/L26_V142/frame_005690.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54855 - "GET /v1/media/processed/keyframes/L26_V405/frame_005938.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53450 - "GET /v1/media/processed/keyframes/L26_V422/frame_004352.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52935 - "GET /v1/media/processed/keyframes/L26_V450/frame_004487.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60560 - "GET /v1/media/processed/keyframes/L26_V142/frame_004864.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62732 - "GET /v1/media/processed/keyframes/L26_V232/frame_004736.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61936 - "GET /v1/media/processed/keyframes/L26_V119/frame_004736.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54855 - "GET /v1/media/processed/keyframes/L26_V328/frame_002176.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53450 - "GET /v1/media/processed/keyframes/L26_V169/frame_005342.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52935 - "GET /v1/media/processed/keyframes/L26_V127/frame_004352.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52935 - "GET /v1/media/processed/keyframes/L26_V335/frame_002944.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53450 - "GET /v1/media/processed/keyframes/L26_V045/frame_000078.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54855 - "GET /v1/media/processed/keyframes/L26_V313/frame_005248.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60588 - "OPTIONS /v1/videos HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57038 - "OPTIONS /v1/videos HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57038 - "GET /v1/videos HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60588 - "GET /v1/videos HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62664 - "OPTIONS /v1/evidence/L21_V001_S0017 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63864 - "GET /v1/search/capabilities HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51451 - "GET /v1/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65169 - "GET /v1/media/processed/keyframes/L25_V008/frame_023699.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51795 - "GET /v1/evidence/L21_V001_S0017 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53773 - "GET /v1/media/processed/keyframes/L22_V016/frame_027120.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61432 - "GET /v1/media/processed/keyframes/L22_V001/frame_007521.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51519 - "GET /v1/media/processed/keyframes/L27_V001/frame_000100.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65169 - "GET /v1/media/processed/keyframes/L27_V003/frame_000100.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61432 - "GET /v1/media/processed/keyframes/L22_V030/frame_015661.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53773 - "GET /v1/media/processed/keyframes/L27_V002/frame_000100.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51519 - "GET /v1/media/processed/keyframes/L27_V006/frame_000114.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65169 - "GET /v1/media/processed/keyframes/L27_V013/frame_000100.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61432 - "GET /v1/media/processed/keyframes/L27_V015/frame_000100.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51519 - "GET /v1/media/processed/keyframes/L22_V005/frame_019389.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53773 - "GET /v1/media/processed/keyframes/L21_V006/frame_028581.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65169 - "GET /v1/media/processed/keyframes/L21_V003/frame_025739.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61432 - "GET /v1/media/processed/keyframes/L22_V002/frame_019786.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53773 - "GET /v1/media/processed/keyframes/L27_V016/frame_000114.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51519 - "GET /v1/media/processed/keyframes/L27_V012/frame_000100.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65169 - "GET /v1/media/processed/keyframes/L30_V048/frame_005075.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61432 - "GET /v1/media/processed/keyframes/L21_V011/frame_015611.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53773 - "GET /v1/media/processed/keyframes/L27_V004/frame_000100.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51519 - "GET /v1/media/processed/keyframes/L27_V008/frame_000100.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61432 - "GET /v1/media/processed/keyframes/L27_V009/frame_000114.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65169 - "GET /v1/media/processed/keyframes/L27_V010/frame_000114.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64751 - "GET /v1/media/processed/keyframes/L27_V007/frame_000100.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65039 - "GET /v1/media/processed/keyframes/L21_V001/frame_002720.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53773 - "GET /v1/media/processed/keyframes/L21_V001/frame_000858.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61432 - "GET /v1/media/processed/keyframes/L22_V001/frame_031947.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53773 - "GET /v1/media/processed/keyframes/L27_V005/frame_000114.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51519 - "GET /v1/media/processed/keyframes/L22_V010/frame_007830.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65039 - "GET /v1/media/processed/keyframes/L27_V011/frame_000100.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64751 - "GET /v1/media/processed/keyframes/L22_V015/frame_011061.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65169 - "GET /v1/media/processed/keyframes/L21_V031/frame_009603.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61432 - "GET /v1/media/processed/keyframes/L22_V030/frame_003180.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65169 - "GET /v1/media/processed/keyframes/L21_V001/frame_000711.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51519 - "GET /v1/media/processed/keyframes/L21_V030/frame_010079.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64751 - "GET /v1/media/processed/keyframes/L21_V018/frame_021220.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65039 - "GET /v1/media/processed/keyframes/L22_V001/frame_019275.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53773 - "GET /v1/media/processed/keyframes/L27_V014/frame_000114.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61432 - "GET /v1/media/processed/keyframes/L30_V083/frame_005110.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65169 - "GET /v1/media/processed/keyframes/L22_V010/frame_007380.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51519 - "GET /v1/media/processed/keyframes/L22_V016/frame_010470.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64751 - "GET /v1/media/processed/keyframes/L30_V074/frame_001255.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65039 - "GET /v1/media/processed/keyframes/L21_V018/frame_010620.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53773 - "GET /v1/media/processed/keyframes/L22_V003/frame_008550.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61432 - "GET /v1/media/processed/keyframes/L22_V030/frame_027029.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65169 - "GET /v1/media/processed/keyframes/L21_V003/frame_016590.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64751 - "GET /v1/media/processed/keyframes/L22_V007/frame_015869.jpg HTTP/1.1" 200 OK
+Encoding:   0%|          | 0/1 [00:00<?, ?it/s]Encoding: 100%|██████████| 1/1 [00:17<00:00, 17.71s/it]Encoding: 100%|██████████| 1/1 [00:17<00:00, 17.75s/it]
+INFO:     127.0.0.1:51795 - "POST /v1/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51795 - "OPTIONS /v1/evidence/L30_V025_S0014 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62932 - "OPTIONS /v1/evidence/L30_V025_S0014 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62932 - "GET /v1/evidence/L30_V025_S0014 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51795 - "GET /v1/evidence/L30_V025_S0014 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55652 - "GET /v1/media/processed/keyframes/L30_V025/frame_001734.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61343 - "GET /v1/media/processed/keyframes/L30_V046/frame_005132.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60764 - "GET /v1/media/processed/keyframes/L21_V022/frame_010104.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53186 - "GET /v1/media/processed/keyframes/L22_V001/frame_030083.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59304 - "GET /v1/media/processed/keyframes/L30_V046/frame_003102.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49967 - "GET /v1/media/processed/keyframes/L21_V008/frame_031513.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55652 - "GET /v1/media/processed/keyframes/L30_V046/frame_002650.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53186 - "GET /v1/media/processed/keyframes/L30_V049/frame_001029.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61343 - "GET /v1/media/processed/keyframes/L30_V058/frame_001249.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59304 - "GET /v1/media/processed/keyframes/L30_V019/frame_003729.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49967 - "GET /v1/media/processed/keyframes/L30_V047/frame_000549.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60764 - "GET /v1/media/processed/keyframes/L21_V010/frame_025050.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53186 - "GET /v1/media/processed/keyframes/L22_V001/frame_030648.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55652 - "GET /v1/media/processed/keyframes/L29_V017/frame_014850.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61343 - "GET /v1/media/processed/keyframes/L22_V018/frame_002274.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60764 - "GET /v1/media/processed/keyframes/L21_V011/frame_023973.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53186 - "GET /v1/media/processed/keyframes/L22_V001/frame_031283.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59304 - "GET /v1/media/processed/keyframes/L30_V046/frame_006613.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49967 - "GET /v1/media/processed/keyframes/L30_V025/frame_001778.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55652 - "GET /v1/media/processed/keyframes/L30_V025/frame_001777.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51002 - "GET /v1/media/processed/keyframes/L29_V005/frame_013408.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50594 - "GET /v1/media/processed/keyframes/L22_V008/frame_017970.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57667 - "OPTIONS /v1/evidence/L30_V046_S0045 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57667 - "GET /v1/evidence/L30_V046_S0045 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57526 - "GET /v1/media/processed/keyframes/L22_V008/frame_018449.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57526 - "GET /v1/media/processed/keyframes/L30_V019/frame_004293.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64466 - "GET /v1/videos HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52624 - "OPTIONS /v1/videos/L30_V046/frames HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64466 - "GET /v1/videos HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52624 - "GET /v1/videos/L30_V046/frames HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49884 - "GET /v1/media/processed/keyframes/L30_V046/frame_003197.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59686 - "GET /v1/media/processed/keyframes/L30_V046/frame_000000.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58103 - "GET /v1/media/processed/keyframes/L30_V046/frame_000147.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55743 - "GET /v1/media/processed/keyframes/L30_V046/frame_000518.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61585 - "GET /v1/media/processed/keyframes/L30_V046/frame_000665.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55376 - "GET /v1/media/processed/keyframes/L30_V046/frame_000755.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59686 - "GET /v1/media/processed/keyframes/L30_V046/frame_000924.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58103 - "GET /v1/media/processed/keyframes/L30_V046/frame_001074.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55376 - "GET /v1/media/processed/keyframes/L30_V046/frame_001174.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55743 - "GET /v1/media/processed/keyframes/L30_V046/frame_001378.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58103 - "GET /v1/media/processed/keyframes/L30_V046/frame_001943.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61585 - "GET /v1/media/processed/keyframes/L30_V046/frame_001669.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49884 - "GET /v1/media/processed/keyframes/L30_V046/frame_001798.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59686 - "GET /v1/media/processed/keyframes/L30_V046/frame_002090.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55376 - "GET /v1/media/processed/keyframes/L30_V046/frame_002381.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58103 - "GET /v1/media/processed/keyframes/L30_V046/frame_003029.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49884 - "GET /v1/media/processed/keyframes/L30_V046/frame_002898.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59686 - "GET /v1/media/processed/keyframes/L30_V046/frame_003285.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55376 - "GET /v1/media/processed/keyframes/L30_V046/frame_003459.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61585 - "GET /v1/media/processed/keyframes/L30_V046/frame_003554.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55743 - "GET /v1/media/processed/keyframes/L30_V046/frame_003878.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49884 - "GET /v1/media/processed/keyframes/L30_V046/frame_004152.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58103 - "GET /v1/media/processed/keyframes/L30_V046/frame_004236.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59686 - "GET /v1/media/processed/keyframes/L30_V046/frame_004411.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55376 - "GET /v1/media/processed/keyframes/L30_V046/frame_004765.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61585 - "GET /v1/media/processed/keyframes/L30_V046/frame_004969.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55743 - "GET /v1/media/processed/keyframes/L30_V046/frame_005100.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58103 - "GET /v1/media/processed/keyframes/L30_V046/frame_005360.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59686 - "GET /v1/media/processed/keyframes/L30_V046/frame_005234.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49884 - "GET /v1/media/processed/keyframes/L30_V046/frame_005633.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55376 - "GET /v1/media/processed/keyframes/L30_V046/frame_005883.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61585 - "GET /v1/media/processed/keyframes/L30_V046/frame_006041.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55743 - "GET /v1/media/processed/keyframes/L30_V046/frame_006328.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55376 - "GET /v1/media/processed/keyframes/L30_V046/frame_006495.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61873 - "OPTIONS /v1/search/capabilities HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57808 - "GET /v1/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51067 - "GET /v1/media/processed/keyframes/L28_V002/frame_022410.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62419 - "GET /v1/media/processed/keyframes/L26_V195/frame_001666.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52072 - "GET /v1/media/processed/keyframes/L28_V001/frame_015130.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54200 - "GET /v1/search/capabilities HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58285 - "GET /v1/media/processed/keyframes/L28_V016/frame_003124.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61888 - "GET /v1/media/processed/keyframes/L26_V086/frame_002480.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65390 - "GET /v1/media/processed/keyframes/L28_V022/frame_012420.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52072 - "GET /v1/media/processed/keyframes/L28_V001/frame_009055.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62419 - "GET /v1/media/processed/keyframes/L26_V461/frame_001664.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65390 - "GET /v1/media/processed/keyframes/L28_V008/frame_023912.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51067 - "GET /v1/media/processed/keyframes/L22_V016/frame_016037.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61888 - "GET /v1/media/processed/keyframes/L26_V062/frame_002795.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58285 - "GET /v1/media/processed/keyframes/L26_V209/frame_002262.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62419 - "GET /v1/media/processed/keyframes/L26_V136/frame_001664.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52072 - "GET /v1/media/processed/keyframes/L28_V006/frame_027938.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61888 - "GET /v1/media/processed/keyframes/L28_V003/frame_007895.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52072 - "GET /v1/media/processed/keyframes/L26_V134/frame_002893.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65390 - "GET /v1/media/processed/keyframes/L26_V489/frame_001860.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62419 - "GET /v1/media/processed/keyframes/L29_V012/frame_006480.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58285 - "GET /v1/media/processed/keyframes/L26_V105/frame_002560.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51067 - "GET /v1/media/processed/keyframes/L28_V017/frame_028755.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61888 - "GET /v1/media/processed/keyframes/L26_V206/frame_001536.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65390 - "GET /v1/media/processed/keyframes/L21_V003/frame_001430.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52072 - "GET /v1/media/processed/keyframes/L26_V077/frame_002356.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62419 - "GET /v1/media/processed/keyframes/L28_V008/frame_006210.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58285 - "GET /v1/media/processed/keyframes/L28_V003/frame_005035.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61888 - "GET /v1/media/processed/keyframes/L26_V256/frame_002683.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51067 - "GET /v1/media/processed/keyframes/L28_V019/frame_005400.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65390 - "GET /v1/media/processed/keyframes/L28_V004/frame_008235.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52072 - "GET /v1/media/processed/keyframes/L29_V022/frame_026864.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54200 - "OPTIONS /v1/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58285 - "GET /v1/media/processed/keyframes/L28_V007/frame_022215.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62419 - "GET /v1/media/processed/keyframes/L26_V112/frame_003328.jpg HTTP/1.1" 200 OK
+Encoding:   0%|          | 0/1 [00:00<?, ?it/s]INFO:     127.0.0.1:61888 - "GET /v1/media/processed/keyframes/L28_V007/frame_024570.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51067 - "GET /v1/media/processed/keyframes/L28_V016/frame_029225.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62419 - "GET /v1/media/processed/keyframes/L26_V389/frame_003072.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65390 - "GET /v1/media/processed/keyframes/L28_V006/frame_021060.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52072 - "GET /v1/media/processed/keyframes/L28_V002/frame_002144.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58285 - "GET /v1/media/processed/keyframes/L26_V476/frame_002088.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61888 - "GET /v1/media/processed/keyframes/L28_V001/frame_013406.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51067 - "GET /v1/media/processed/keyframes/L28_V024/frame_012726.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58285 - "GET /v1/media/processed/keyframes/L21_V007/frame_002588.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62419 - "GET /v1/media/processed/keyframes/L26_V179/frame_003200.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52072 - "GET /v1/media/processed/keyframes/L21_V001/frame_004686.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65390 - "GET /v1/media/processed/keyframes/L26_V495/frame_002051.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61888 - "GET /v1/media/processed/keyframes/L26_V374/frame_003256.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58285 - "GET /v1/media/processed/keyframes/L26_V034/frame_003645.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62419 - "GET /v1/media/processed/keyframes/L26_V387/frame_002703.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52072 - "GET /v1/media/processed/keyframes/L26_V127/frame_001994.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65390 - "GET /v1/media/processed/keyframes/L21_V001/frame_022175.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58285 - "GET /v1/media/processed/keyframes/L26_V062/frame_003596.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61888 - "GET /v1/media/processed/keyframes/L29_V013/frame_022680.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62419 - "GET /v1/media/processed/keyframes/L26_V426/frame_003090.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52072 - "GET /v1/media/processed/keyframes/L22_V024/frame_006443.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65390 - "GET /v1/media/processed/keyframes/L26_V414/frame_002207.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52072 - "GET /v1/media/processed/keyframes/L26_V446/frame_002141.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58285 - "GET /v1/media/processed/keyframes/L26_V109/frame_002560.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62419 - "GET /v1/media/processed/keyframes/L28_V020/frame_013500.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61888 - "GET /v1/media/processed/keyframes/L28_V001/frame_028282.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65390 - "GET /v1/media/processed/keyframes/L28_V007/frame_021116.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58285 - "GET /v1/media/processed/keyframes/L28_V001/frame_007679.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52072 - "GET /v1/media/processed/keyframes/L26_V439/frame_003676.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61888 - "GET /v1/media/processed/keyframes/L28_V007/frame_005798.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62419 - "GET /v1/media/processed/keyframes/L28_V008/frame_004320.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65390 - "GET /v1/media/processed/keyframes/L27_V004/frame_014580.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58285 - "GET /v1/media/processed/keyframes/L29_V019/frame_010800.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52072 - "GET /v1/media/processed/keyframes/L26_V176/frame_002304.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61888 - "GET /v1/media/processed/keyframes/L28_V005/frame_013635.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62419 - "GET /v1/media/processed/keyframes/L21_V016/frame_005991.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65390 - "GET /v1/media/processed/keyframes/L24_V008/frame_006103.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58285 - "GET /v1/media/processed/keyframes/L21_V009/frame_006126.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61888 - "GET /v1/media/processed/keyframes/L26_V161/frame_002048.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52072 - "GET /v1/media/processed/keyframes/L27_V006/frame_005130.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58285 - "GET /v1/media/processed/keyframes/L29_V014/frame_025237.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62419 - "GET /v1/media/processed/keyframes/L24_V006/frame_002976.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65390 - "GET /v1/media/processed/keyframes/L22_V001/frame_004491.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65390 - "GET /v1/media/processed/keyframes/L28_V024/frame_014850.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61888 - "GET /v1/media/processed/keyframes/L30_V012/frame_004516.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62419 - "GET /v1/media/processed/keyframes/L27_V010/frame_009612.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52072 - "GET /v1/media/processed/keyframes/L25_V061/frame_016949.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58285 - "GET /v1/media/processed/keyframes/L29_V016/frame_019931.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61888 - "GET /v1/media/processed/keyframes/L22_V009/frame_025124.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65390 - "GET /v1/media/processed/keyframes/L30_V037/frame_001682.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62419 - "GET /v1/media/raw/videos/L21_V007.mp4 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:58285 - "GET /v1/media/processed/keyframes/L25_V013/frame_032099.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52072 - "GET /v1/media/processed/keyframes/L21_V003/frame_021469.jpg HTTP/1.1" 200 OK
+Encoding: 100%|██████████| 1/1 [00:09<00:00,  9.62s/it]Encoding: 100%|██████████| 1/1 [00:09<00:00,  9.62s/it]
+INFO:     127.0.0.1:54200 - "POST /v1/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63603 - "GET /v1/media/processed/keyframes/L26_V358/frame_005006.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64794 - "GET /v1/media/processed/keyframes/L26_V254/frame_002132.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50322 - "GET /v1/media/processed/keyframes/L26_V497/frame_003442.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64896 - "GET /v1/media/processed/keyframes/L26_V284/frame_002595.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57985 - "GET /v1/media/processed/keyframes/L26_V441/frame_002628.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58670 - "GET /v1/media/processed/keyframes/L26_V068/frame_002715.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63603 - "GET /v1/media/processed/keyframes/L21_V003/frame_001654.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64896 - "GET /v1/media/processed/keyframes/L21_V015/frame_034022.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57985 - "GET /v1/media/processed/keyframes/L26_V012/frame_002835.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50322 - "GET /v1/media/processed/keyframes/L26_V215/frame_002368.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64794 - "GET /v1/media/processed/keyframes/L26_V360/frame_002983.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58670 - "GET /v1/media/processed/keyframes/L26_V267/frame_003075.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63603 - "GET /v1/media/processed/keyframes/L26_V481/frame_002728.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57985 - "GET /v1/media/processed/keyframes/L26_V466/frame_003632.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64896 - "GET /v1/media/processed/keyframes/L26_V254/frame_003894.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50322 - "GET /v1/media/processed/keyframes/L26_V227/frame_003484.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63603 - "GET /v1/media/processed/keyframes/L26_V432/frame_002176.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58670 - "GET /v1/media/processed/keyframes/L26_V372/frame_003389.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57985 - "GET /v1/media/processed/keyframes/L26_V299/frame_003794.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64794 - "GET /v1/media/processed/keyframes/L26_V204/frame_002944.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64896 - "GET /v1/media/processed/keyframes/L26_V403/frame_003794.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50322 - "GET /v1/media/processed/keyframes/L26_V105/frame_001910.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63603 - "GET /v1/media/processed/keyframes/L26_V232/frame_001838.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57985 - "GET /v1/media/processed/keyframes/L26_V095/frame_002912.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64794 - "GET /v1/media/processed/keyframes/L26_V185/frame_003565.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58670 - "GET /v1/media/processed/keyframes/L26_V387/frame_002670.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64896 - "GET /v1/media/processed/keyframes/L26_V197/frame_002667.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50322 - "GET /v1/media/processed/keyframes/L26_V420/frame_003840.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63603 - "GET /v1/media/processed/keyframes/L26_V410/frame_002304.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64794 - "GET /v1/media/processed/keyframes/L26_V068/frame_002990.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58670 - "GET /v1/media/raw/videos/L21_V003.mp4 HTTP/1.1" 206 Partial Content
+INFO:     127.0.0.1:57985 - "GET /v1/media/processed/keyframes/L26_V152/frame_002432.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57985 - "GET /v1/media/raw/videos/L21_V003.mp4 HTTP/1.1" 206 Partial Content
+INFO:     127.0.0.1:57985 - "GET /v1/media/raw/videos/L21_V003.mp4 HTTP/1.1" 206 Partial Content
+INFO:     127.0.0.1:64794 - "GET /v1/media/processed/keyframes/L26_V359/frame_004078.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50322 - "GET /v1/media/processed/keyframes/L28_V004/frame_007455.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50322 - "GET /v1/media/raw/videos/L21_V003.mp4 HTTP/1.1" 206 Partial Content
+INFO:     127.0.0.1:64643 - "GET /v1/media/raw/videos/L21_V003.mp4 HTTP/1.1" 206 Partial Content
+INFO:     127.0.0.1:53670 - "GET /v1/media/processed/keyframes/L26_V238/frame_002176.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63038 - "GET /v1/media/processed/keyframes/L26_V499/frame_002545.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53670 - "GET /v1/media/raw/videos/L21_V001.mp4 HTTP/1.1" 206 Partial Content
+INFO:     127.0.0.1:63038 - "GET /v1/media/raw/videos/L21_V001.mp4 HTTP/1.1" 206 Partial Content
+INFO:     127.0.0.1:50361 - "GET /v1/media/raw/videos/L21_V001.mp4 HTTP/1.1" 206 Partial Content
+INFO:     127.0.0.1:64728 - "GET /v1/media/raw/videos/L21_V001.mp4 HTTP/1.1" 206 Partial Content
+INFO:     127.0.0.1:56984 - "GET /v1/media/processed/keyframes/L29_V010/frame_004787.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56984 - "GET /v1/media/raw/videos/L21_V001.mp4 HTTP/1.1" 206 Partial Content
+Encoding:   0%|          | 0/1 [00:00<?, ?it/s]Encoding: 100%|██████████| 1/1 [00:22<00:00, 22.97s/it]Encoding: 100%|██████████| 1/1 [00:22<00:00, 22.98s/it]
+INFO:     127.0.0.1:63250 - "POST /v1/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56451 - "GET /v1/media/processed/keyframes/L26_V389/frame_003037.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62035 - "GET /v1/media/processed/keyframes/L28_V001/frame_007559.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58786 - "GET /v1/media/processed/keyframes/L26_V134/frame_002944.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60076 - "GET /v1/media/processed/keyframes/L26_V206/frame_001512.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56840 - "GET /v1/media/processed/keyframes/L26_V116/frame_002858.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60131 - "GET /v1/media/processed/keyframes/L26_V161/frame_001920.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56451 - "GET /v1/media/processed/keyframes/L26_V481/frame_002711.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62035 - "GET /v1/media/processed/keyframes/L26_V034/frame_003629.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60131 - "GET /v1/media/processed/keyframes/L26_V480/frame_003100.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60076 - "GET /v1/media/processed/keyframes/L21_V030/frame_004437.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56840 - "GET /v1/media/processed/keyframes/L28_V014/frame_013094.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56451 - "GET /v1/media/processed/keyframes/L26_V447/frame_002304.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58786 - "GET /v1/media/processed/keyframes/L26_V238/frame_002169.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62035 - "GET /v1/media/processed/keyframes/L26_V017/frame_002295.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56840 - "GET /v1/media/processed/keyframes/L22_V004/frame_010422.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56451 - "GET /v1/media/processed/keyframes/L26_V163/frame_002560.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60131 - "GET /v1/media/processed/keyframes/L26_V208/frame_003584.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60076 - "GET /v1/media/processed/keyframes/L28_V016/frame_019624.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58786 - "GET /v1/media/processed/keyframes/L21_V007/frame_002414.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56451 - "GET /v1/media/processed/keyframes/L21_V022/frame_001442.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62035 - "GET /v1/media/processed/keyframes/L28_V010/frame_007779.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56840 - "GET /v1/media/processed/keyframes/L28_V008/frame_011745.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62035 - "GET /v1/media/processed/keyframes/L22_V027/frame_017487.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60076 - "GET /v1/media/processed/keyframes/L22_V005/frame_015315.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56451 - "GET /v1/media/processed/keyframes/L28_V006/frame_027810.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58786 - "GET /v1/media/processed/keyframes/L26_V359/frame_005078.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60131 - "GET /v1/media/processed/keyframes/L28_V008/frame_010125.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56840 - "GET /v1/media/processed/keyframes/L21_V028/frame_016179.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60076 - "GET /v1/media/raw/videos/L21_V001.mp4 HTTP/1.1" 206 Partial Content
+INFO:     127.0.0.1:56840 - "GET /v1/media/raw/videos/L21_V001.mp4 HTTP/1.1" 206 Partial Content
+INFO:     127.0.0.1:60131 - "GET /v1/media/raw/videos/L21_V001.mp4 HTTP/1.1" 206 Partial Content
+INFO:     127.0.0.1:60131 - "GET /v1/media/raw/videos/L21_V001.mp4 HTTP/1.1" 206 Partial Content
+INFO:     127.0.0.1:58786 - "GET /v1/media/raw/videos/L21_V001.mp4 HTTP/1.1" 206 Partial Content
+INFO:     127.0.0.1:56451 - "GET /v1/media/processed/keyframes/L29_V018/frame_003979.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62035 - "GET /v1/media/processed/keyframes/L28_V009/frame_000476.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62035 - "GET /v1/media/processed/keyframes/L22_V012/frame_015363.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56451 - "GET /v1/media/processed/keyframes/L28_V007/frame_020925.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62035 - "GET /v1/media/processed/keyframes/L28_V012/frame_012642.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56451 - "GET /v1/media/processed/keyframes/L28_V013/frame_024947.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62035 - "GET /v1/media/processed/keyframes/L28_V013/frame_023085.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56451 - "GET /v1/media/processed/keyframes/L28_V008/frame_018225.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62035 - "GET /v1/media/processed/keyframes/L28_V001/frame_001080.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63385 - "GET /v1/media/processed/keyframes/L28_V001/frame_019710.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54414 - "GET /v1/media/processed/keyframes/L21_V018/frame_005273.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63214 - "GET /v1/media/processed/keyframes/L28_V020/frame_008775.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58197 - "GET /v1/media/processed/keyframes/L29_V013/frame_022619.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54414 - "GET /v1/media/processed/keyframes/L22_V025/frame_030893.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62035 - "GET /v1/media/processed/keyframes/L21_V009/frame_005700.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58197 - "GET /v1/media/processed/keyframes/L28_V013/frame_010800.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56451 - "GET /v1/media/processed/keyframes/L28_V021/frame_010021.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58235 - "OPTIONS /v1/evidence/L21_V001_S0039 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58235 - "OPTIONS /v1/evidence/L21_V001_S0039 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58235 - "GET /v1/evidence/L21_V001_S0039 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58235 - "GET /v1/evidence/L21_V001_S0039 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61592 - "GET /v1/media/processed/keyframes/L21_V001/frame_004551.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65445 - "GET /v1/media/processed/keyframes/L22_V016/frame_027720.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65445 - "GET /v1/media/processed/keyframes/L28_V013/frame_002192.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55108 - "OPTIONS /v1/evidence/L21_V028_S0138 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55108 - "GET /v1/evidence/L21_V028_S0138 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50719 - "GET /v1/media/processed/keyframes/L21_V028/frame_015878.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50719 - "GET /v1/media/processed/keyframes/L21_V028/frame_016088.jpg HTTP/1.1" 200 OK
+Encoding:   0%|          | 0/1 [00:00<?, ?it/s]Encoding: 100%|██████████| 1/1 [00:06<00:00,  6.80s/it]Encoding: 100%|██████████| 1/1 [00:06<00:00,  6.81s/it]
+INFO:     127.0.0.1:56665 - "POST /v1/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56665 - "OPTIONS /v1/evidence/L21_V009_S0076 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55146 - "OPTIONS /v1/evidence/L21_V009_S0076 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60733 - "GET /v1/media/processed/keyframes/L25_V051/frame_035850.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55146 - "GET /v1/evidence/L21_V009_S0076 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56665 - "GET /v1/evidence/L21_V009_S0076 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60733 - "GET /v1/media/processed/keyframes/L25_V057/frame_005462.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60733 - "GET /v1/media/processed/keyframes/L21_V006/frame_002919.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60733 - "GET /v1/media/processed/keyframes/L28_V001/frame_002700.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60733 - "GET /v1/media/processed/keyframes/L22_V006/frame_006519.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60733 - "GET /v1/media/processed/keyframes/L28_V016/frame_003510.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60733 - "GET /v1/media/processed/keyframes/L21_V006/frame_001653.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60733 - "GET /v1/media/processed/keyframes/L25_V007/frame_045794.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60733 - "GET /v1/media/processed/keyframes/L25_V024/frame_017704.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60733 - "GET /v1/media/processed/keyframes/L25_V069/frame_021150.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60733 - "GET /v1/media/processed/keyframes/L25_V024/frame_015466.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60733 - "GET /v1/media/processed/keyframes/L25_V033/frame_017251.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60733 - "GET /v1/media/processed/keyframes/L29_V015/frame_026730.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60733 - "GET /v1/media/processed/keyframes/L25_V024/frame_020394.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60456 - "GET /v1/media/processed/keyframes/L21_V030/frame_004788.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63663 - "GET /v1/media/processed/keyframes/L25_V069/frame_012150.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63406 - "GET /v1/media/processed/keyframes/L25_V033/frame_026627.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65052 - "GET /v1/media/processed/keyframes/L25_V051/frame_039450.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55110 - "GET /v1/media/processed/keyframes/L25_V024/frame_004559.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60733 - "GET /v1/media/processed/keyframes/L25_V042/frame_042450.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65052 - "GET /v1/media/processed/keyframes/L21_V007/frame_002922.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55110 - "GET /v1/media/processed/keyframes/L25_V087/frame_014700.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63663 - "GET /v1/media/processed/keyframes/L25_V039/frame_010499.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63406 - "GET /v1/media/processed/keyframes/L25_V042/frame_016650.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60456 - "GET /v1/media/processed/keyframes/L25_V024/frame_010382.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60733 - "GET /v1/media/processed/keyframes/L25_V042/frame_007950.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63663 - "GET /v1/media/processed/keyframes/L25_V042/frame_022350.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55110 - "GET /v1/media/processed/keyframes/L25_V016/frame_023581.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65052 - "GET /v1/media/processed/keyframes/L29_V010/frame_025972.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60456 - "GET /v1/media/processed/keyframes/L21_V025/frame_003069.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63406 - "GET /v1/media/processed/keyframes/L25_V076/frame_027600.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60733 - "GET /v1/media/processed/keyframes/L25_V042/frame_027000.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63663 - "GET /v1/media/processed/keyframes/L25_V033/frame_008782.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55110 - "GET /v1/media/processed/keyframes/L25_V055/frame_002571.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60456 - "GET /v1/media/processed/keyframes/L25_V069/frame_010650.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65052 - "GET /v1/media/processed/keyframes/L25_V007/frame_030900.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63406 - "GET /v1/media/processed/keyframes/L25_V033/frame_022628.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60456 - "GET /v1/media/processed/keyframes/L26_V183/frame_005197.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55110 - "GET /v1/media/processed/keyframes/L25_V021/frame_023999.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63663 - "GET /v1/media/processed/keyframes/L22_V022/frame_022349.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65052 - "GET /v1/media/processed/keyframes/L25_V058/frame_006749.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60733 - "GET /v1/media/processed/keyframes/L28_V013/frame_013752.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60456 - "GET /v1/media/processed/keyframes/L22_V014/frame_002501.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63406 - "GET /v1/media/processed/keyframes/L25_V030/frame_003299.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55110 - "GET /v1/media/processed/keyframes/L25_V021/frame_006749.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63663 - "GET /v1/media/processed/keyframes/L25_V030/frame_010499.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60733 - "GET /v1/media/processed/keyframes/L28_V013/frame_011205.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65052 - "GET /v1/media/processed/keyframes/L25_V043/frame_033899.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60456 - "GET /v1/media/processed/keyframes/L25_V048/frame_018299.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63406 - "GET /v1/media/processed/keyframes/L25_V005/frame_035249.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60733 - "GET /v1/media/processed/keyframes/L25_V014/frame_009149.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55110 - "GET /v1/media/processed/keyframes/L29_V019/frame_026460.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63663 - "GET /v1/media/processed/keyframes/L25_V022/frame_006599.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60456 - "GET /v1/media/processed/keyframes/L25_V030/frame_014999.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63406 - "GET /v1/media/processed/keyframes/L25_V013/frame_010799.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60733 - "GET /v1/media/processed/keyframes/L25_V074/frame_039119.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55110 - "GET /v1/media/processed/keyframes/L25_V048/frame_016649.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63663 - "GET /v1/media/processed/keyframes/L25_V004/frame_003449.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65052 - "GET /v1/media/processed/keyframes/L21_V024/frame_009540.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56665 - "OPTIONS /v1/evidence/L25_V051_S0090 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56665 - "GET /v1/evidence/L25_V051_S0090 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63663 - "GET /v1/media/processed/keyframes/L25_V051/frame_035700.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60456 - "GET /v1/media/processed/keyframes/L25_V051/frame_036450.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63406 - "GET /v1/media/processed/keyframes/L25_V051/frame_036600.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55110 - "GET /v1/media/processed/keyframes/L25_V051/frame_036150.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65052 - "GET /v1/media/processed/keyframes/L25_V051/frame_036000.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60733 - "GET /v1/media/processed/keyframes/L25_V051/frame_036300.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63663 - "GET /v1/media/processed/keyframes/L25_V051/frame_036750.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61992 - "GET /v1/media/processed/keyframes/L21_V001/frame_000858.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59603 - "GET /v1/media/processed/keyframes/L21_V001/frame_002720.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50880 - "GET /v1/media/processed/keyframes/L21_V001/frame_000711.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64449 - "GET /v1/media/processed/keyframes/L26_V335/frame_004992.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51104 - "GET /v1/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62292 - "GET /v1/search/capabilities HTTP/1.1" 200 OK
+Encoding:   0%|          | 0/1 [00:00<?, ?it/s]INFO:     127.0.0.1:64839 - "GET /v1/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51104 - "GET /v1/search/capabilities HTTP/1.1" 200 OK
+
+Encoding:   0%|          | 0/1 [00:00<?, ?it/s][AEncoding: 100%|██████████| 1/1 [00:12<00:00, 12.85s/it]
+Encoding: 100%|██████████| 1/1 [00:05<00:00,  5.77s/it][AEncoding: 100%|██████████| 1/1 [00:12<00:00, 12.87s/it]
+Encoding: 100%|██████████| 1/1 [00:05<00:00,  5.77s/it]
+INFO:     127.0.0.1:50877 - "POST /v1/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60821 - "GET /v1/media/processed/keyframes/L22_V021/frame_020366.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62292 - "POST /v1/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60821 - "GET /v1/media/processed/keyframes/L30_V029/frame_005715.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55322 - "GET /v1/media/processed/keyframes/L25_V066/frame_005249.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58012 - "GET /v1/media/processed/keyframes/L25_V066/frame_002849.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60769 - "GET /v1/media/processed/keyframes/L21_V007/frame_008778.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59965 - "GET /v1/media/processed/keyframes/L22_V025/frame_023871.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64656 - "GET /v1/media/processed/keyframes/L29_V015/frame_011205.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50348 - "GET /v1/media/processed/keyframes/L22_V008/frame_021486.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55322 - "GET /v1/media/processed/keyframes/L27_V009/frame_007555.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58012 - "GET /v1/media/processed/keyframes/L30_V029/frame_001420.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60769 - "GET /v1/media/processed/keyframes/L29_V008/frame_013834.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64656 - "GET /v1/media/processed/keyframes/L29_V008/frame_016909.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50348 - "GET /v1/media/processed/keyframes/L29_V010/frame_014985.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59965 - "GET /v1/media/processed/keyframes/L21_V023/frame_025995.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59965 - "GET /v1/media/processed/keyframes/L22_V020/frame_013527.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55322 - "GET /v1/media/processed/keyframes/L22_V021/frame_019740.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58012 - "GET /v1/media/processed/keyframes/L29_V008/frame_015390.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60769 - "GET /v1/media/processed/keyframes/L29_V016/frame_008455.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64656 - "GET /v1/media/processed/keyframes/L27_V009/frame_004132.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50348 - "GET /v1/media/processed/keyframes/L22_V021/frame_021039.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59965 - "GET /v1/media/processed/keyframes/L22_V021/frame_020019.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55322 - "GET /v1/media/processed/keyframes/L29_V016/frame_006739.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60769 - "GET /v1/media/processed/keyframes/L27_V001/frame_010678.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64656 - "GET /v1/media/processed/keyframes/L26_V028/frame_001900.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58012 - "GET /v1/media/processed/keyframes/L29_V016/frame_011684.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50348 - "GET /v1/media/processed/keyframes/L28_V004/frame_007973.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59965 - "GET /v1/media/processed/keyframes/L26_V284/frame_003105.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55322 - "GET /v1/media/processed/keyframes/L28_V014/frame_011861.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60769 - "GET /v1/media/processed/keyframes/L29_V019/frame_022356.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64656 - "GET /v1/media/processed/keyframes/L26_V394/frame_004982.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55322 - "GET /v1/media/processed/keyframes/L26_V012/frame_002514.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59965 - "GET /v1/media/processed/keyframes/L28_V006/frame_012150.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50348 - "GET /v1/media/processed/keyframes/L26_V384/frame_000512.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58012 - "GET /v1/media/processed/keyframes/L28_V011/frame_016470.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60769 - "GET /v1/media/processed/keyframes/L21_V014/frame_031110.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64656 - "GET /v1/media/processed/keyframes/L26_V364/frame_002392.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50348 - "GET /v1/media/processed/keyframes/L26_V413/frame_006048.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55322 - "GET /v1/media/processed/keyframes/L26_V006/frame_001419.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59965 - "GET /v1/media/processed/keyframes/L21_V014/frame_030435.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58012 - "GET /v1/media/processed/keyframes/L21_V017/frame_018328.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60769 - "GET /v1/media/processed/keyframes/L28_V006/frame_017913.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64656 - "GET /v1/media/processed/keyframes/L21_V023/frame_026802.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59965 - "GET /v1/media/processed/keyframes/L22_V014/frame_008349.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55322 - "GET /v1/media/processed/keyframes/L29_V022/frame_010260.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58012 - "GET /v1/media/processed/keyframes/L27_V016/frame_005491.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50348 - "GET /v1/media/processed/keyframes/L29_V018/frame_011259.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64656 - "GET /v1/media/processed/keyframes/L29_V023/frame_011363.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60769 - "GET /v1/media/processed/keyframes/L22_V020/frame_020829.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59965 - "GET /v1/media/processed/keyframes/L24_V009/frame_000000.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55322 - "GET /v1/media/processed/keyframes/L26_V479/frame_005659.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50348 - "GET /v1/media/processed/keyframes/L27_V016/frame_003442.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58012 - "GET /v1/media/processed/keyframes/L25_V005/frame_004049.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60769 - "GET /v1/media/processed/keyframes/L26_V161/frame_002567.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55322 - "GET /v1/media/processed/keyframes/L29_V014/frame_010462.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64656 - "GET /v1/media/processed/keyframes/L26_V364/frame_000653.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59965 - "GET /v1/media/processed/keyframes/L22_V012/frame_023889.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58012 - "GET /v1/media/processed/keyframes/L26_V081/frame_002004.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50348 - "GET /v1/media/processed/keyframes/L22_V004/frame_024966.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60769 - "GET /v1/media/processed/keyframes/L21_V001/frame_035150.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59965 - "GET /v1/media/processed/keyframes/L22_V016/frame_009060.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55322 - "GET /v1/media/processed/keyframes/L25_V015/frame_003081.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64656 - "GET /v1/media/processed/keyframes/L25_V010/frame_002351.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58012 - "GET /v1/media/processed/keyframes/L22_V010/frame_020089.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60769 - "GET /v1/media/processed/keyframes/L26_V426/frame_004028.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50406 - "OPTIONS /v1/evidence/L22_V025_S0246 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52418 - "OPTIONS /v1/evidence/L22_V025_S0246 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52418 - "GET /v1/evidence/L22_V025_S0246 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50406 - "GET /v1/evidence/L22_V025_S0246 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62236 - "OPTIONS /v1/evidence/L29_V008_S0109 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62236 - "GET /v1/evidence/L29_V008_S0109 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52639 - "GET /v1/media/processed/keyframes/L29_V008/frame_013905.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53091 - "GET /v1/media/processed/keyframes/L22_V016/frame_028920.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53091 - "GET /v1/media/processed/keyframes/L24_V010/frame_010965.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53091 - "GET /v1/media/processed/keyframes/L25_V056/frame_035245.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53091 - "GET /v1/media/processed/keyframes/L25_V004/frame_009599.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53091 - "GET /v1/media/processed/keyframes/L26_V036/frame_002669.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53091 - "GET /v1/media/processed/keyframes/L29_V022/frame_012247.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53091 - "GET /v1/media/processed/keyframes/L26_V036/frame_006185.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53091 - "GET /v1/media/processed/keyframes/L25_V063/frame_002441.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50374 - "GET /v1/media/processed/keyframes/L29_V022/frame_015366.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53661 - "GET /v1/media/processed/keyframes/L21_V001/frame_032531.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57268 - "GET /v1/media/processed/keyframes/L26_V362/frame_002483.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58143 - "GET /v1/media/processed/keyframes/L26_V017/frame_005452.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58148 - "GET /v1/media/processed/keyframes/L26_V455/frame_001841.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53091 - "GET /v1/media/processed/keyframes/L24_V011/frame_000299.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56481 - "GET /v1/media/processed/keyframes/L29_V023/frame_025935.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60976 - "GET /v1/media/processed/keyframes/L28_V011/frame_014411.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50819 - "GET /v1/media/processed/keyframes/L28_V004/frame_010234.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59170 - "GET /v1/media/processed/keyframes/L28_V005/frame_008370.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64862 - "GET /v1/media/processed/keyframes/L29_V019/frame_008343.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50233 - "GET /v1/media/processed/keyframes/L21_V001/frame_031757.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60200 - "OPTIONS /v1/search/capabilities HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60200 - "GET /v1/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60659 - "GET /v1/search/capabilities HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60659 - "OPTIONS /v1/search HTTP/1.1" 200 OK
+Encoding:   0%|          | 0/1 [00:00<?, ?it/s]Encoding: 100%|██████████| 1/1 [00:08<00:00,  8.50s/it]Encoding: 100%|██████████| 1/1 [00:08<00:00,  8.51s/it]
+INFO:     127.0.0.1:60659 - "POST /v1/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60256 - "GET /v1/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56679 - "GET /v1/search/capabilities HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65361 - "GET /v1/media/raw/videos/L26_V313.mp4 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:50340 - "GET /v1/media/processed/keyframes/L26_V313/frame_005248.jpg HTTP/1.1" 200 OK
+Encoding:   0%|          | 0/1 [00:00<?, ?it/s]Encoding: 100%|██████████| 1/1 [00:19<00:00, 19.92s/it]Encoding: 100%|██████████| 1/1 [00:19<00:00, 19.94s/it]
+INFO:     127.0.0.1:56679 - "POST /v1/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57826 - "GET /v1/media/processed/keyframes/L26_V035/frame_005670.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57082 - "GET /v1/media/processed/keyframes/L26_V232/frame_004736.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51477 - "OPTIONS /v1/search HTTP/1.1" 200 OK
+Encoding:   0%|          | 0/1 [00:00<?, ?it/s]Encoding: 100%|██████████| 1/1 [00:19<00:00, 19.16s/it]Encoding: 100%|██████████| 1/1 [00:19<00:00, 19.16s/it]
+INFO:     127.0.0.1:51477 - "POST /v1/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60753 - "OPTIONS /v1/search/capabilities HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65022 - "OPTIONS /v1/videos HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53091 - "GET /v1/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58500 - "GET /v1/media/processed/keyframes/L22_V023/frame_017681.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61665 - "GET /v1/media/processed/keyframes/L22_V023/frame_025687.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49672 - "GET /v1/media/processed/keyframes/L22_V023/frame_026482.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52652 - "GET /v1/search/capabilities HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57504 - "GET /v1/media/processed/keyframes/L22_V023/frame_024420.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60315 - "GET /v1/media/processed/keyframes/L22_V023/frame_023821.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58296 - "OPTIONS /v1/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63430 - "GET /v1/media/processed/keyframes/L22_V023/frame_014040.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54574 - "GET /v1/videos HTTP/1.1" 200 OK
+Encoding:   0%|          | 0/1 [00:00<?, ?it/s]INFO:     127.0.0.1:63430 - "GET /v1/media/processed/keyframes/L22_V023/frame_015150.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61665 - "GET /v1/media/processed/keyframes/L22_V023/frame_013169.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49672 - "GET /v1/media/processed/keyframes/L22_V023/frame_020135.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58500 - "GET /v1/media/processed/keyframes/L22_V023/frame_022989.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57504 - "GET /v1/media/processed/keyframes/L22_V023/frame_010350.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60315 - "GET /v1/media/processed/keyframes/L22_V023/frame_006967.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49672 - "GET /v1/media/processed/keyframes/L22_V023/frame_019470.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63430 - "GET /v1/media/processed/keyframes/L22_V023/frame_027414.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61665 - "GET /v1/media/processed/keyframes/L22_V023/frame_028464.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57504 - "GET /v1/media/processed/keyframes/L22_V023/frame_030149.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60315 - "GET /v1/media/processed/keyframes/L22_V023/frame_029460.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58500 - "GET /v1/media/processed/keyframes/L22_V023/frame_002280.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63430 - "GET /v1/media/processed/keyframes/L22_V023/frame_021180.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49672 - "GET /v1/media/processed/keyframes/L22_V023/frame_008358.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57504 - "GET /v1/media/processed/keyframes/L22_V023/frame_003759.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61665 - "GET /v1/media/processed/keyframes/L22_V023/frame_022157.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60315 - "GET /v1/media/processed/keyframes/L22_V023/frame_005215.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58500 - "GET /v1/media/processed/keyframes/L22_V023/frame_016169.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49672 - "GET /v1/media/processed/keyframes/L22_V023/frame_002940.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63430 - "GET /v1/media/processed/keyframes/L22_V023/frame_016992.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57504 - "GET /v1/media/processed/keyframes/L22_V023/frame_005970.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61665 - "GET /v1/media/processed/keyframes/L22_V023/frame_009557.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60315 - "GET /v1/media/processed/keyframes/L22_V023/frame_007783.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58500 - "GET /v1/media/processed/keyframes/L22_V023/frame_004380.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49672 - "GET /v1/media/processed/keyframes/L22_V023/frame_011293.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63430 - "GET /v1/media/processed/keyframes/L22_V023/frame_012300.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57504 - "GET /v1/media/processed/keyframes/L22_V023/frame_018540.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60315 - "GET /v1/media/processed/keyframes/L22_V023/frame_000000.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49672 - "GET /v1/media/processed/keyframes/L22_V023/frame_000654.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61665 - "GET /v1/media/processed/keyframes/L22_V023/frame_001553.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58500 - "GET /v1/media/raw/videos/L22_V023.mp4 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:63430 - "GET /v1/media/raw/videos/L22_V023.mp4 HTTP/1.1" 404 Not Found
+Encoding: 100%|██████████| 1/1 [00:30<00:00, 30.54s/it]Encoding: 100%|██████████| 1/1 [00:30<00:00, 30.55s/it]
+INFO:     127.0.0.1:52652 - "POST /v1/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51796 - "GET /v1/media/processed/keyframes/L23_V019/frame_003574.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51796 - "GET /v1/media/processed/keyframes/L23_V024/frame_003750.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51796 - "GET /v1/media/processed/keyframes/L23_V018/frame_009300.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51796 - "GET /v1/media/processed/keyframes/L23_V019/frame_007692.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53981 - "GET /v1/media/processed/keyframes/L23_V012/frame_007600.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59548 - "GET /v1/media/processed/keyframes/L23_V025/frame_007375.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58850 - "GET /v1/media/processed/keyframes/L23_V018/frame_011825.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51796 - "GET /v1/media/processed/keyframes/L23_V003/frame_003711.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52369 - "GET /v1/media/processed/keyframes/L23_V013/frame_006025.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51637 - "GET /v1/media/processed/keyframes/L23_V023/frame_004125.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59548 - "GET /v1/media/processed/keyframes/L23_V004/frame_001000.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53981 - "GET /v1/media/processed/keyframes/L23_V019/frame_007198.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58850 - "GET /v1/media/processed/keyframes/L23_V009/frame_001586.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51796 - "GET /v1/media/processed/keyframes/L22_V024/frame_029858.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51637 - "GET /v1/media/processed/keyframes/L23_V004/frame_009250.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52369 - "GET /v1/media/processed/keyframes/L23_V025/frame_008500.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59548 - "GET /v1/media/processed/keyframes/L23_V019/frame_003450.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53981 - "GET /v1/media/processed/keyframes/L23_V025/frame_013500.jpg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59531 - "OPTIONS /v1/submissions/build HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59531 - "POST /v1/submissions/build HTTP/1.1" 200 OK

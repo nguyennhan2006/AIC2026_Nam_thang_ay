@@ -47,6 +47,8 @@ mặc định 0.35) và ``fuzzy_token_ratio`` (mặc định 0.8).
 
 from __future__ import annotations
 
+import asyncio
+
 import re
 import unicodedata
 from difflib import SequenceMatcher
@@ -211,6 +213,16 @@ class OcrFuzzyRetriever:
         queries = self._queries(plan)
         if not queries:
             return []
+        # Quét toàn corpus là CPU-bound thuần: chạy thẳng trên event loop thì
+        # cả server đứng hình suốt quãng đó — không /v1/health, không phục vụ
+        # ảnh keyframe, không nhận nổi truy vấn của người thứ hai. Tiền lệ đã
+        # đo được ghi ngay trong module này: `ocr_fuzzy` chạy đồng bộ kéo
+        # `dense_visual` từ p50 224ms lên 8,7s và timeout 40/84 truy vấn.
+        return await asyncio.to_thread(self._search_sync, plan, limit, queries)
+
+    def _search_sync(
+        self, plan: QueryPlan, limit: int, queries: list[str]
+    ) -> list[Candidate]:
         query_trigrams = [char_trigrams(q) for q in queries]
 
         # Bước 1: prefilter bằng trigram-overlap, giữ top (limit * multiplier).

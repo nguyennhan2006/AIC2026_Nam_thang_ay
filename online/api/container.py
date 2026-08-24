@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 import json
 from pathlib import Path
@@ -33,6 +34,7 @@ from online.adapters.rerank import (
     FptVlmReranker,
     QwenVlReranker,
 )
+from online.adapters.draft_store import JsonlDraftStore
 from online.adapters.session_store import InMemorySessionStore
 from online.adapters.vector_stores import InMemoryVectorStore, QdrantVectorStore
 from online.config import Settings
@@ -156,9 +158,24 @@ class AppContainer:
     vector_store: object
     event_repository: JsonlEventRepository | None = None
     dataset_manifest: dict | None = None
+    draft_store: JsonlDraftStore | None = None
 
 
-async def build_container(settings: Settings) -> AppContainer:
+async def build_container(
+    settings: Settings, progress: "Callable[[str], None] | None" = None
+) -> AppContainer:
+    """Dựng toàn bộ hệ.
+
+    `progress` nhận tên chặng đang chạy. Nó tồn tại vì việc này mất ~4 phút
+    trên corpus thi đấu và người dùng nhìn màn hình trắng suốt quãng đó không
+    phân biệt được "đang nạp" với "chết rồi" — xem `Boot` trong api/app.py.
+    """
+
+    def phase(name: str) -> None:
+        if progress is not None:
+            progress(name)
+
+    phase("metadata")
     repository = await JsonlSceneRepository.load(settings.metadata_jsonl)
     dataset_manifest = _read_dataset_manifest(settings.metadata_jsonl)
     # LLM mở rộng query bằng đồng nghĩa TIẾNG VIỆT — chỉ dựng một lần rồi dùng
@@ -191,6 +208,7 @@ async def build_container(settings: Settings) -> AppContainer:
     lexical_fields = ["caption", "asr", "keyword"]
     if settings.enable_ocr_branch:
         lexical_fields.insert(1, "ocr")
+    phase("lexical")
     lexical = []
     for field in lexical_fields:
         retriever = await LexicalRetriever.build(
@@ -221,6 +239,7 @@ async def build_container(settings: Settings) -> AppContainer:
             timeout_sec=settings.request_timeout_sec,
         )
     else:
+        phase("vectors")
         local_frame_rows, has_real_embeddings = await build_frame_vector_rows(
             repository, settings.data_root, embedding_name=settings.visual_embedding_name or None
         )
@@ -330,6 +349,7 @@ async def build_container(settings: Settings) -> AppContainer:
     # âm thầm khiến người đo tưởng đang chạy đủ nhánh. Cùng quy ước fail-fast
     # đã áp cho AIC_ENABLE_EVENT_SEARCH bên dưới.
     if has_real_embeddings and hasattr(encoder, "warmup"):
+        phase("encoder")
         try:
             encoder.warmup()
         except Exception as exc:  # noqa: BLE001 - đổi thành lỗi cấu hình có ngữ cảnh
@@ -484,6 +504,7 @@ async def build_container(settings: Settings) -> AppContainer:
         caption_dense.assert_dimension(probe)
         retrievers.append(caption_dense)
 
+    phase("events")
     events_path = settings.metadata_jsonl.with_name("events.jsonl")
     event_repository = await JsonlEventRepository.load(events_path) if events_path.exists() else None
     if settings.enable_event_search:
@@ -641,4 +662,5 @@ async def build_container(settings: Settings) -> AppContainer:
         vector_store=vector_store,
         event_repository=event_repository,
         dataset_manifest=dataset_manifest,
+        draft_store=JsonlDraftStore(settings.draft_store_path),
     )

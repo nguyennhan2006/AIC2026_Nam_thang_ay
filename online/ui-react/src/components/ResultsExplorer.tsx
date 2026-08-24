@@ -1,6 +1,6 @@
 import { SearchX } from "lucide-react";
 import type { ApiClientConfig } from "../api";
-import type { SearchHit, SequenceHit } from "../types";
+import type { SceneAnswer, SearchHit, SequenceHit } from "../types";
 import { EmptyState } from "../ui";
 import { ResultCard } from "./ResultCard";
 
@@ -24,6 +24,8 @@ export interface ResultsExplorerProps {
   topK: number;
   /** Người dùng đã tự đặt fusion.max_results_per_video chưa. */
   perVideoCapSet: boolean;
+  /** Đáp án QA theo `scene_id`, đồng bộ từ bảng nộp (FB-003). */
+  answerBySceneId?: Map<string, SceneAnswer>;
 }
 
 export function ResultsExplorer({
@@ -36,6 +38,7 @@ export function ResultsExplorer({
   pristine,
   topK,
   perVideoCapSet,
+  answerBySceneId,
 }: ResultsExplorerProps) {
   if (sequences.length > 0) {
     return (
@@ -61,6 +64,7 @@ export function ResultsExplorer({
                     onSelectSequenceStep?.(index, stepIndex);
                   }}
                   selected={hit.candidate_id === selectedCandidateId}
+                  answer={answerBySceneId?.get(hit.scene_id)}
                 />
               ))}
             </div>
@@ -104,6 +108,7 @@ export function ResultsExplorer({
             apiConfig={apiConfig}
             onInspect={onSelect}
             selected={hit.candidate_id === selectedCandidateId}
+            answer={answerBySceneId?.get(hit.scene_id)}
           />
         ))}
       </div>

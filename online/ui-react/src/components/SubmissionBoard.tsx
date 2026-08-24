@@ -1,18 +1,23 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle, ArrowDown, ArrowUp, CheckCircle2, FileDown, HelpCircle, ImageOff,
-  ListOrdered, MessageSquareText, Pencil, Play, RotateCcw, SlidersHorizontal, Trash2, X,
+  Crosshair, ListOrdered, MessageSquareText, Pencil, Play, RotateCcw, SlidersHorizontal,
+  Trash2, X,
 } from "lucide-react";
 import type { ApiClientConfig } from "../api";
 import { ApiError, buildSubmission, mediaUrl } from "../api";
 import { downloadCsv, submissionFilename } from "../exportCsv";
+import { DraftBar } from "./DraftBar";
 import type {
   AvsResultItem,
+  DraftRow,
   KisResultItem,
   PlaybackWindow,
   QaResultItem,
+  SceneAnswer,
   SearchHit,
   SubmissionBuildResponse,
+  SubmissionDraft,
   TaskType,
   TrakeResultItem,
   TrakeStep,
@@ -39,6 +44,19 @@ export interface SubmissionBoardProps {
    *  nạp từ kết quả tìm kiếm thô, nên mọi thao tác sắp xếp và loại bỏ ở đây
    *  bị bỏ qua — người dùng chỉnh một danh sách khác với danh sách sắp nộp. */
   onEditRows?: (rows: TunerRow[]) => void;
+  /** "Đào sâu": chạy lại truy vấn, khoanh vùng vào đúng các video của dòng đã
+   *  tick. Bảng nộp là chỗ ĐÚNG NHẤT để phát lệnh này — đây là nơi người dùng
+   *  vừa xem video và vừa quyết định dòng nào đáng tin, nên tập video ở đây
+   *  chính là "mấy video tôi thấy đã đúng chuẩn". */
+  onDeepDive?: (videoIds: string[]) => void;
+  /** Truy vấn đang chạy — lưu kèm bản nháp để người nạp lại biết chạy lại câu nào. */
+  query?: string;
+  /** Đáp án hiệu lực của từng dòng QA, đẩy lên để lưới ảnh hiện cùng một thứ.
+   *
+   *  Một chiều (bảng nộp -> lưới) là có chủ đích: chỉ có MỘT chỗ sửa đáp án.
+   *  Cho sửa ở cả hai nơi thì phải xử lý hai bên cùng sửa một dòng, mà lợi ích
+   *  không bù nổi — người soát vẫn quyết định ở bảng nộp, lưới chỉ để nhìn. */
+  onAnswersChange?: (answers: SceneAnswer[]) => void;
 }
 
 /** Biểu tượng của một dòng: nói ngay dòng này ĐÁNG TIN tới đâu.
@@ -218,7 +236,7 @@ function StepStrip({
   );
 }
 
-export function SubmissionBoard({ apiConfig, task, kis, qa, trake, avs, results = [], onSelectSequence, onEditRows }: SubmissionBoardProps) {
+export function SubmissionBoard({ apiConfig, task, kis, qa, trake, avs, results = [], onSelectSequence, onEditRows, onDeepDive, query = "", onAnswersChange }: SubmissionBoardProps) {
   const [result, setResult] = useState<SubmissionBuildResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -241,6 +259,7 @@ export function SubmissionBoard({ apiConfig, task, kis, qa, trake, avs, results 
   // từng phím gõ thì dòng chạy khỏi con trỏ giữa chừng — gõ "12" thì chữ "1"
   // đã kịp đẩy dòng lên đầu bảng trước khi chữ "2" tới.
   const [rankDraft, setRankDraft] = useState<{ key: string; text: string } | null>(null);
+  const [draftNote, setDraftNote] = useState<string | null>(null);
 
   const sourceRows = useMemo(() => toRows(task, kis, qa, trake), [task, kis, qa, trake]);
 
@@ -267,6 +286,24 @@ export function SubmissionBoard({ apiConfig, task, kis, qa, trake, avs, results 
       ),
     [rows, sourceAnswers]
   );
+
+  // Đẩy đáp án hiệu lực lên trên mỗi khi bảng đổi. Chạy cả khi task khác QA
+  // (đẩy mảng rỗng) để lưới không giữ lại đáp án của lần search QA trước.
+  useEffect(() => {
+    if (!onAnswersChange) return;
+    onAnswersChange(
+      task !== "QA"
+        ? []
+        : rows.map((row) => ({
+            sceneId: row.sceneId,
+            videoId: row.videoId,
+            frameIdx: row.frameIdx,
+            answer: row.answer ?? "",
+            modelAnswer: sourceAnswers.get(row.key) ?? "",
+            edited: (row.answer ?? "") !== (sourceAnswers.get(row.key) ?? ""),
+          }))
+    );
+  }, [rows, task, sourceAnswers, onAnswersChange]);
 
   const tickedCount = useMemo(
     () => rows.reduce((total, row) => total + (ticked.has(row.key) ? 1 : 0), 0),
@@ -440,6 +477,56 @@ export function SubmissionBoard({ apiConfig, task, kis, qa, trake, avs, results 
     moveRowTo(key, wanted - 1);
   }
 
+  /** Dòng hiện tại -> dạng lưu được. Giữ ĐÚNG thứ tự đang hiện trên bảng. */
+  function toDraftRows(): DraftRow[] {
+    return rows.map((row) => ({
+      video_id: row.videoId,
+      frame_idx: row.frameIdx,
+      frame_ids: row.frameIds ?? [],
+      answer: row.answer ?? null,
+    }));
+  }
+
+  /** Nạp một bản nháp lên bảng.
+   *
+   *  Chỉ áp được cho dòng CÓ THẬT trong kết quả hiện tại: một dòng nháp chỉ
+   *  mang `video_id`/`frame_idx`, còn để build CSV thì cần cả `QaResultItem`
+   *  gốc (rank, canonical_answer, evidence…) mà chỉ lần search tương ứng mới
+   *  có. Dựng dòng "ma" từ bản nháp sẽ khiến chúng biến mất im lặng lúc build.
+   *
+   *  Vì vậy: khớp được bao nhiêu thì áp bấy nhiêu, và NÓI RA số dòng không
+   *  khớp kèm truy vấn của bản nháp để người dùng chạy lại cho đủ.
+   */
+  function loadDraft(draft: SubmissionDraft) {
+    const byPosition = new Map<string, Row>();
+    for (const row of sourceRows) byPosition.set(`${row.videoId}#${row.frameIdx}`, row);
+
+    const ordered: Row[] = [];
+    let missing = 0;
+    for (const entry of draft.rows) {
+      const found = byPosition.get(`${entry.video_id}#${entry.frame_idx}`);
+      if (!found) {
+        missing += 1;
+        continue;
+      }
+      byPosition.delete(`${entry.video_id}#${entry.frame_idx}`);
+      ordered.push(entry.answer != null ? { ...found, answer: entry.answer } : found);
+    }
+
+    setRows(ordered);
+    setTicked(new Set());
+    setRankDraft(null);
+    anchorRef.current = null;
+    setResult(null);
+    setDraftNote(
+      missing === 0
+        ? `Đã nạp "${draft.name}": ${ordered.length} dòng.`
+        : `Đã nạp "${draft.name}": ${ordered.length}/${draft.rows.length} dòng khớp kết quả hiện tại. ` +
+          `${missing} dòng KHÔNG có trong kết quả này nên đã bị bỏ — chạy lại truy vấn của bản nháp ` +
+          `rồi nạp lại để có đủ.`
+    );
+  }
+
   async function runBuild() {
     setLoading(true);
     setError(null);
@@ -511,6 +598,8 @@ export function SubmissionBoard({ apiConfig, task, kis, qa, trake, avs, results 
   });
   const reordered = rows.length !== sourceRows.length || rows.some((row, i) => row.key !== sourceRows[i]?.key);
   const allTicked = rows.length > 0 && tickedCount === rows.length;
+  // Video (không trùng) của các dòng đã tick — đầu vào cho "Đào sâu".
+  const tickedVideoIds = [...new Set(rows.filter((row) => ticked.has(row.key)).map((row) => row.videoId))];
 
   return (
     <div className="submission-board">
@@ -617,6 +706,17 @@ export function SubmissionBoard({ apiConfig, task, kis, qa, trake, avs, results 
           </Button>
         </div>
 
+        {onDeepDive && (
+          <Button
+            variant="secondary" size="sm" icon={<Crosshair size={13} />}
+            disabled={tickedVideoIds.length === 0}
+            title="Tìm lại, chỉ trong các video của những dòng đã tick — nới trần mỗi video để moi thêm frame/đáp án"
+            onClick={() => onDeepDive(tickedVideoIds)}
+          >
+            Đào sâu {tickedVideoIds.length || ""} video
+          </Button>
+        )}
+
         <IconButton
           icon={<Trash2 size={14} />}
           label={`Bỏ ${tickedCount} dòng đã tick khỏi bài nộp`}
@@ -626,6 +726,15 @@ export function SubmissionBoard({ apiConfig, task, kis, qa, trake, avs, results 
           onClick={removeTicked}
         />
       </div>
+      <DraftBar
+        apiConfig={apiConfig}
+        task={task}
+        query={query}
+        rows={toDraftRows()}
+        onLoad={loadDraft}
+      />
+      {draftNote && <p className="muted small">{draftNote}</p>}
+
       <p className="muted small submission-hint">
         Gõ số vào ô hạng của một dòng rồi Enter để chèn nó vào đúng vị trí đó — các dòng khác dịch
         xuống, không bị hoán đổi. Giữ Shift khi tick để chọn cả dải.

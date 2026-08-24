@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { RotateCcw, Save, Scale, Trash2 } from "lucide-react";
+import { Headphones, RotateCcw, Save, Scale, Trash2 } from "lucide-react";
 import type { ApiClientConfig } from "../../api";
 import { ApiError, getCapabilities } from "../../api";
 import type { CapabilitiesResponse, QueryPlan, SearchOptions, TaskType } from "../../types";
-import { normalizeStepColumn, normalizeWeights } from "./weightMath";
+import {
+  applySolo, isSoloActive, normalizeStepColumn, normalizeWeights, runningBranches, toggleSolo,
+} from "./weightMath";
 import type { WeightControlValue } from "./weightMath";
 import { allPresets, deleteUserPreset, newPresetId, upsertUserPreset } from "./presets";
 import type { SearchPreset } from "./presets";
@@ -95,6 +97,20 @@ export function WeightPanel({ apiConfig, task, draftOptions, onDraftChange, hasU
     () => (capabilities?.branches ?? []).filter((branch) => branch.modality),
     [capabilities]
   );
+
+  // Solo chỉ thao tác trên nhánh CÓ THẬT và đang khả dụng: gán
+  // `enabled: false` cho một nhánh server không đăng ký thì
+  // `/v1/search/capabilities` trả 422 và mọi truy vấn hỏng.
+  const soloableIds = useMemo(
+    () => modalityBranches.filter((branch) => branch.available).map((branch) => branch.branch_id),
+    [modalityBranches]
+  );
+  const soloActive = isSoloActive(draftOptions, soloableIds);
+  const running = runningBranches(draftOptions, soloableIds);
+  const labelFor = (branchId: string) => {
+    const branch = modalityBranches.find((item) => item.branch_id === branchId);
+    return MODALITY_LABELS[branch?.modality ?? ""] ?? branchId;
+  };
 
   function updateBranch(branchId: string, patch: { enabled?: boolean; weight?: number }) {
     const branches = { ...(draftOptions.branches ?? {}) };
@@ -235,6 +251,21 @@ export function WeightPanel({ apiConfig, task, draftOptions, onDraftChange, hasU
             </Button>
           }
         >
+          {soloActive && (
+            <div className="solo-banner">
+              <Headphones size={12} />
+              <span>Chỉ chạy:</span>
+              {running.map((branchId) => (
+                <span key={branchId} className="solo-banner-branch">{labelFor(branchId)}</span>
+              ))}
+              <Button
+                size="sm" variant="ghost"
+                onClick={() => onDraftChange(applySolo(draftOptions, soloableIds, []))}
+              >
+                Bật lại tất cả
+              </Button>
+            </div>
+          )}
           {modalityBranches.map((branch) => (
             <WeightRow
               key={branch.branch_id}
@@ -245,6 +276,12 @@ export function WeightPanel({ apiConfig, task, draftOptions, onDraftChange, hasU
               onEnabledChange={(enabled) => updateBranch(branch.branch_id, { enabled })}
               locked={locked.has(branch.branch_id)}
               onLockToggle={() => toggleLock(branch.branch_id)}
+              soloed={soloActive && running.includes(branch.branch_id)}
+              onSoloToggle={
+                branch.available
+                  ? () => onDraftChange(toggleSolo(draftOptions, soloableIds, branch.branch_id))
+                  : undefined
+              }
               disabled={!branch.available}
               badge={branch.degraded ? "degraded" : undefined}
               title={branch.degraded ? branch.degraded_reason ?? undefined : branch.branch_id}

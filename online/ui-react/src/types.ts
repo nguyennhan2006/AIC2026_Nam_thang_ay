@@ -440,6 +440,71 @@ export function zoneForRank(rank: number): string {
   return match?.name ?? "beyond_100";
 }
 
+/** Đáp án QA gắn với một scene, để lưới ảnh và bảng nộp nói CÙNG một thứ.
+ *
+ * Trước đây lưới ảnh không hiện đáp án nào cả: người soát nhìn ảnh ở tab này,
+ * đọc đáp án ở tab kia, và sau khi sửa hàng loạt bên bảng nộp thì lưới vẫn
+ * hiện thứ cũ — hai màn hình nói hai chuyện về cùng một khung hình.
+ *
+ * `edited` phân biệt câu của model với câu người sửa tay: cả hai đều phải
+ * nhìn thấy được, vì người soát cần biết mình đang tin ai. */
+export interface SceneAnswer {
+  sceneId: string | null;
+  videoId: string;
+  frameIdx: number;
+  answer: string;
+  /** Câu gốc của model, giữ lại kể cả khi đã sửa. */
+  modelAnswer: string;
+  edited: boolean;
+}
+
+/** Bản nháp sắp xếp bài nộp — `/v1/submission-drafts` (FB-003).
+ *
+ * Ở SERVER chứ không localStorage: cả đội trỏ vào cùng một backend nên lưu ở
+ * đó là tự động thấy được của nhau, và bản soát tay sống qua restart. Nháp
+ * KHÔNG phải bài nộp: nó được phép còn dở, không qua validator, không giới
+ * hạn 100 dòng. */
+export interface DraftRow {
+  video_id: string;
+  frame_idx: number;
+  frame_ids: number[];
+  answer: string | null;
+}
+
+export interface SubmissionDraft {
+  draft_id: string;
+  name: string;
+  author: string;
+  task: TaskType;
+  query: string;
+  rows: DraftRow[];
+  created_at: string;
+  updated_at: string;
+}
+
+/** `draft_id` rỗng = tạo mới; có = ghi đè đúng bản đó. */
+export interface DraftSaveBody {
+  name: string;
+  author?: string;
+  task: TaskType;
+  query?: string;
+  rows: DraftRow[];
+  draft_id?: string | null;
+}
+
+/** `GET /v1/startup` — tiến độ nạp container.
+ *
+ * Tách khỏi `HealthResponse` vì trả lời được ở trạng thái mà health chưa trả
+ * lời được: server đã mở cổng nhưng chưa nạp xong dữ liệu. `phase` là tên
+ * chặng thô từ backend ("metadata"/"lexical"/"vectors"/"encoder"/"events"),
+ * dùng để hiện tiến độ chứ không phải để rẽ nhánh logic. */
+export interface StartupState {
+  status: "warming" | "ready" | "failed";
+  phase: string;
+  elapsed_sec: number;
+  error: string | null;
+}
+
 /** Metadata mức video, từ `GET /v1/videos`.
  *
  * `fps` phải lấy từ đây chứ không được giả định: V003 chạy 25 fps trong khi

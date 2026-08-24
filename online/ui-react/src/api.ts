@@ -10,6 +10,9 @@ import type {
   SubmissionBuildResponse,
   VideoFrame,
   VideoMeta,
+  DraftSaveBody,
+  StartupState,
+  SubmissionDraft,
   SubmissionIssue,
   TaskType,
 } from "./types";
@@ -139,6 +142,50 @@ export async function getSceneDetail(config: ApiClientConfig, sceneId: string): 
 export async function health(config: ApiClientConfig): Promise<HealthResponse> {
   const response = await fetch(`${normalizedBase(config)}/v1/health`);
   return parseOrThrow<HealthResponse>(response);
+}
+
+/** Tiến độ khởi động — endpoint DUY NHẤT trả lời được trong lúc server còn nạp.
+ *
+ *  `/v1/health` chờ tới khi container sẵn sàng (đúng ngữ nghĩa của health), nên
+ *  hỏi nó lúc mới bật server là treo tới 4 phút. Đây là đường để UI vẽ được
+ *  thanh chờ thay vì một màn hình trắng không phân biệt "đang nạp" với "chết".
+ *  Không cần token. */
+export async function startupState(
+  config: ApiClientConfig,
+  signal?: AbortSignal
+): Promise<StartupState> {
+  const response = await fetch(`${normalizedBase(config)}/v1/startup`, { signal });
+  return parseOrThrow<StartupState>(response);
+}
+
+// ---- Bản nháp sắp xếp, dùng chung cả đội — FB-003 ---------------------------
+
+export async function listDrafts(config: ApiClientConfig): Promise<SubmissionDraft[]> {
+  const response = await fetch(`${normalizedBase(config)}/v1/submission-drafts`, {
+    headers: headers(config),
+  });
+  const data = await parseOrThrow<{ drafts: SubmissionDraft[] }>(response);
+  return data.drafts;
+}
+
+export async function saveDraft(
+  config: ApiClientConfig,
+  body: DraftSaveBody
+): Promise<SubmissionDraft> {
+  const response = await fetch(`${normalizedBase(config)}/v1/submission-drafts`, {
+    method: "POST",
+    headers: headers(config),
+    body: JSON.stringify(body),
+  });
+  return parseOrThrow<SubmissionDraft>(response);
+}
+
+export async function deleteDraft(config: ApiClientConfig, draftId: string): Promise<void> {
+  const response = await fetch(
+    `${normalizedBase(config)}/v1/submission-drafts/${encodeURIComponent(draftId)}`,
+    { method: "DELETE", headers: headers(config) }
+  );
+  await parseOrThrow<{ deleted: string }>(response);
 }
 
 // ---- Search sessions — PR-09 ------------------------------------------------

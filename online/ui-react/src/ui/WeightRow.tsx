@@ -1,4 +1,4 @@
-import { Lock, LockOpen } from "lucide-react";
+import { Headphones, Lock, LockOpen } from "lucide-react";
 import { Slider, NumericInput } from "./Controls";
 
 export interface WeightRowProps {
@@ -9,6 +9,9 @@ export interface WeightRowProps {
   onEnabledChange?: (enabled: boolean) => void;
   locked?: boolean;
   onLockToggle?: () => void;
+  /** Nhánh này đang nằm trong tập được chạy một mình (xem weightMath.toggleSolo). */
+  soloed?: boolean;
+  onSoloToggle?: () => void;
   disabled?: boolean;
   /** Nhãn phụ hiện khi hover cả hàng (vd lý do branch bị degraded). */
   title?: string;
@@ -30,6 +33,8 @@ export function WeightRow({
   onEnabledChange,
   locked = false,
   onLockToggle,
+  soloed = false,
+  onSoloToggle,
   disabled = false,
   title,
   badge,
@@ -84,6 +89,26 @@ export function WeightRow({
         width="100%"
         onChange={(next) => onValueChange(next ?? 0)}
       />
+
+      {onSoloToggle ? (
+        <button
+          type="button"
+          className={soloed ? "weight-row-solo is-soloed" : "weight-row-solo"}
+          title={
+            soloed
+              ? `${label}: đang chạy một mình, bấm để bỏ solo`
+              : `Chỉ chạy ${label}, tắt các nhánh còn lại`
+          }
+          aria-label={soloed ? `Bỏ solo ${label}` : `Chỉ chạy ${label}`}
+          aria-pressed={soloed}
+          disabled={disabled}
+          onClick={onSoloToggle}
+        >
+          <Headphones size={12} />
+        </button>
+      ) : (
+        <span />
+      )}
 
       {onLockToggle ? (
         <button

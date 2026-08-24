@@ -5,7 +5,11 @@
 #
 #     .\scripts\run_competition.ps1
 #
-# Khoi dong mat ~4 phut. Doi dong "Application startup complete."
+# Cong mo NGAY (vai giay). Viec nap ~4 phut chay o luong nen, nen
+# "Application startup complete." KHONG con nghia la da san sang.
+# Hoi tien do bang:  curl -s http://127.0.0.1:8000/v1/startup
+# UI mo duoc luon va tu hien thanh cho; truy van bam ngay cung duoc,
+# no se tu chay khi nap xong.
 
 $ErrorActionPreference = "Stop"
 Set-Location -LiteralPath (Split-Path -Parent $PSScriptRoot)
@@ -84,6 +88,7 @@ $env:PYTHONIOENCODING             = "utf-8"
 
 Write-Host "metadata : $env:AIC_METADATA_JSONL"
 Write-Host "embedding: $env:AIC_VISUAL_EMBEDDING_NAME ($env:AIC_VISUAL_EMBEDDING_MODEL)"
-Write-Host "Khoi dong ~4 phut. Doi 'Application startup complete.'`n"
+Write-Host "Cong mo ngay; nap ~4 phut o luong nen."
+Write-Host "Tien do: curl -s http://127.0.0.1:8000/v1/startup`n"
 
 python -m uvicorn online.api.app:app --host 127.0.0.1 --port 8000

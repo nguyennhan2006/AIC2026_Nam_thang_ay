@@ -187,6 +187,10 @@ class Settings:
     # thành phụ thuộc mạng — bật có chủ đích rồi đo, xem online/adapters/fpt_query.py.
     # Cache bản dịch trên đĩa: mỗi lần eval trước đây dịch lại cả 40 truy vấn
     # dù nhiệt độ 0 nên kết quả tất định. Cũng che được lỗi dịch ~1/40 lượt.
+    # Bản nháp sắp xếp bài nộp, DÙNG CHUNG cả đội (FB-003). Nằm trên đĩa để
+    # sống qua restart — mất công soát tay của cả đội vì một lần đổi env là
+    # điều tính năng này sinh ra để tránh.
+    draft_store_path: Path = Path("storage/drafts/submission_drafts.jsonl")
     query_translation_cache_dir: Path | None = Path("storage/cache/query_translation")
     enable_query_translation: bool = False
     # Mở rộng query bằng LLM (đồng nghĩa TIẾNG VIỆT) thay cho lexicon VI→EN
@@ -384,6 +388,9 @@ class Settings:
                 "AIC_RERANK_VLM_MAX_FRAMES_PER_CANDIDATE", 3
             ),
             enable_vlm_rerank=_env_bool("AIC_RERANK_VLM_ENABLED", False),
+            draft_store_path=Path(
+                os.getenv("AIC_DRAFT_STORE_PATH", "storage/drafts/submission_drafts.jsonl")
+            ),
             query_translation_cache_dir=(
                 Path(os.environ["AIC_QUERY_TRANSLATION_CACHE_DIR"])
                 if os.getenv("AIC_QUERY_TRANSLATION_CACHE_DIR")

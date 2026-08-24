@@ -64,6 +64,9 @@ storage/exports_l21/
 storage/indexes_l21/
 storage/models/
 storage/cache/
+# Ban nhap sap xep bai nop (FB-003): du lieu van hanh cua doi, moi may
+# mot khac, khong phai ma nguon.
+storage/drafts/
 storage/processed/keyframes/L21_V001/
 storage/processed/keyframes/L21_V002/
 storage/processed/keyframes/L21_V003/

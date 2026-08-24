@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from array import array
 from collections import Counter
+import asyncio
 import math
 import re
 
@@ -292,7 +293,14 @@ class LexicalRetriever:
         query = plan.events[0].text if len(plan.events) == 1 else plan.normalized_query
         if self.query_transform is not None:
             query = self.query_transform(query)
-        results = self.index.search(query, limit * 2)
+        # `BM25Index.search` là Python thuần trên toàn bộ postings — ở corpus thi
+        # đấu (87.742 scene) nó chạy hàng trăm ms tới vài giây. Chạy thẳng trên
+        # event loop thì suốt quãng đó server ĐỨNG HÌNH với mọi người: không
+        # /v1/health, không phục vụ ảnh keyframe, không nhận nổi truy vấn của
+        # người thứ hai. Đẩy sang thread không làm một truy vấn nhanh lên (GIL
+        # vẫn giữ, đây không phải numpy), nhưng cho event loop xen vào giữa nên
+        # cả đội không bị một truy vấn của một người khoá cứng.
+        results = await asyncio.to_thread(self.index.search, query, limit * 2)
         filtered = []
         for scene, score in results:
             if plan.filters.video_ids and scene.video_id not in plan.filters.video_ids:

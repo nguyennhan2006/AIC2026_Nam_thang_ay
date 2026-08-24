@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import dataclasses
 import json
 import re
@@ -20,6 +21,11 @@ from online.domain.models import (
     TaskType,
     VQARequest,
     VQAResponse,
+)
+from online.domain.drafts import (
+    DraftListResponse,
+    DraftSaveRequest,
+    SubmissionDraft,
 )
 from online.domain.submission import (
     EvaluateLocalRequest,
@@ -63,14 +69,52 @@ from online.services.capabilities import (
 router = APIRouter(prefix="/v1")
 
 
-def get_container(request: Request) -> AppContainer:
+async def get_container(request: Request) -> AppContainer:
+    """Container, CHỜ nếu nó còn đang nạp ở luồng nền.
+
+    Chờ chứ không 503: người bấm Tìm kiếm lúc server mới lên muốn truy vấn
+    chạy khi hệ sẵn sàng, không muốn một lỗi phải tự bấm lại. Muốn biết tiến
+    độ mà không phải chờ thì hỏi `GET /v1/startup`.
+    """
+
     container = getattr(request.app.state, "container", None)
-    if container is None:
+    if container is not None:
+        return container
+    boot = getattr(request.app.state, "boot", None)
+    if boot is None or boot.task is None:
         raise HTTPException(status_code=503, detail="application is not ready")
-    return container
+    try:
+        # `shield` là bắt buộc: `await` thẳng một Task thì client ngắt kết nối
+        # giữa chừng sẽ HUỶ LUÔN việc nạp container, giết server cho tất cả
+        # những người còn lại.
+        return await asyncio.shield(boot.task)
+    except asyncio.CancelledError:
+        raise HTTPException(status_code=503, detail="server đang tắt") from None
+    except Exception as exc:  # noqa: BLE001 - lỗi khởi động, trả nguyên văn
+        raise HTTPException(
+            status_code=503, detail=f"nạp container thất bại lúc khởi động: {exc}"
+        ) from exc
 
 
 Container = Annotated[AppContainer, Depends(get_container)]
+
+
+@router.get("/startup")
+async def startup(request: Request) -> dict:
+    """Tiến độ khởi động — KHÔNG BAO GIỜ chờ, kể cả khi còn đang nạp.
+
+    Tách khỏi `/v1/health` vì hai câu hỏi khác nhau: health hỏi "hệ có khoẻ
+    không" (và phải chờ tới lúc trả lời được), startup hỏi "đã xong chưa" và
+    phải trả lời tức thì để UI vẽ được thanh chờ thay vì một màn hình trắng.
+    """
+
+    boot = getattr(request.app.state, "boot", None)
+    if boot is None:
+        # Container gắn tay (test, script) — không có pha khởi động nào cả.
+        ready = getattr(request.app.state, "container", None) is not None
+        return {"status": "ready" if ready else "warming", "phase": "unknown",
+                "elapsed_sec": 0.0, "error": None}
+    return boot.snapshot()
 
 
 @router.get("/health")
@@ -432,6 +476,41 @@ async def search_capabilities(container: Container) -> dict:
         },
         "events_available": container.event_repository is not None,
     }
+
+
+# ---------------------------------------------------------------------------
+# Bản nháp sắp xếp — dùng chung cả đội (FB-003)
+# ---------------------------------------------------------------------------
+#
+# Ở SERVER chứ không localStorage: cả đội trỏ vào cùng một backend, nên lưu ở
+# đây là tự động thấy được của nhau. Nháp KHÔNG đi qua submission_validator —
+# nó được phép còn dở, đó là mục đích của nó.
+
+
+def _draft_store(container: AppContainer):
+    store = container.draft_store
+    if store is None:
+        raise HTTPException(status_code=503, detail="kho bản nháp chưa được cấu hình")
+    return store
+
+
+@router.get("/submission-drafts", response_model=DraftListResponse)
+async def list_drafts(container: Container) -> DraftListResponse:
+    return DraftListResponse(drafts=await _draft_store(container).list())
+
+
+@router.post("/submission-drafts", response_model=SubmissionDraft)
+async def save_draft(request: DraftSaveRequest, container: Container) -> SubmissionDraft:
+    if not request.name.strip():
+        raise HTTPException(status_code=422, detail="bản nháp phải có tên để người khác tìm lại")
+    return await _draft_store(container).save(request)
+
+
+@router.delete("/submission-drafts/{draft_id}")
+async def delete_draft(draft_id: str, container: Container) -> dict:
+    if not await _draft_store(container).delete(draft_id):
+        raise HTTPException(status_code=404, detail=f"không có bản nháp {draft_id!r}")
+    return {"deleted": draft_id}
 
 
 def _submission_lookup(container: AppContainer):

@@ -238,12 +238,8 @@ class InMemoryVectorStore:
         pool.sort(key=lambda position: (-float(scores[position]), self._ids[rows[position]]))
         return pool[:limit]
 
-    async def search(
-        self,
-        vector: Sequence[float],
-        *,
-        limit: int,
-        filters: SearchFilters,
+    def _search_sync(
+        self, vector: Sequence[float], limit: int, filters: SearchFilters
     ) -> list[Candidate]:
         selected = self._selected_rows(filters)
         if selected is not None and not selected:
@@ -262,6 +258,22 @@ class InMemoryVectorStore:
             if candidate is not None:
                 candidates.append(candidate)
         return candidates
+
+    async def search(
+        self,
+        vector: Sequence[float],
+        *,
+        limit: int,
+        filters: SearchFilters,
+    ) -> list[Candidate]:
+        # Ma trận thi đấu là 176.707 × 1024 float32 (~700 MB): riêng `matrix @ q`
+        # đã hàng trăm ms, và khi có filter thì `self._matrix[selected]` còn COPY
+        # các hàng được chọn trước khi nhân. Chạy trên event loop nghĩa là suốt
+        # quãng đó không request nào khác nhúc nhích được.
+        #
+        # Khác với BM25, phần này thực sự CHẠY SONG SONG được: numpy nhả GIL
+        # trong lúc nhân ma trận, nên hai truy vấn cùng lúc chồng lấn thật.
+        return await asyncio.to_thread(self._search_sync, vector, limit, filters)
 
 
 def _qdrant_filter(filters: SearchFilters) -> dict | None:

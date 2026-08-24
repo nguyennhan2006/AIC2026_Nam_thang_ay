@@ -1,19 +1,21 @@
-import { ImageOff, TriangleAlert } from "lucide-react";
+import { ImageOff, MessageSquareText, TriangleAlert } from "lucide-react";
 import type { ApiClientConfig } from "../api";
 import { mediaUrl } from "../api";
-import type { SearchHit } from "../types";
+import type { SceneAnswer, SearchHit } from "../types";
 
 export interface ResultCardProps {
   hit: SearchHit;
   onInspect: (candidateId: string) => void;
   apiConfig: ApiClientConfig;
   selected?: boolean;
+  /** Đáp án QA của chính scene này, lấy từ bảng nộp (FB-003). */
+  answer?: SceneAnswer;
 }
 
 /** Card kết quả. Bắt buộc hiện: video_id, frame_idx, timestamp, branch
  * contribution, safe-frame score, evidence preview — cả card là một nút
  * (chọn để xem ở Preview), không phải div có nút con. */
-export function ResultCard({ hit, onInspect, apiConfig, selected = false }: ResultCardProps) {
+export function ResultCard({ hit, onInspect, apiConfig, selected = false, answer }: ResultCardProps) {
   const contributions = Object.entries(hit.branch_contributions).sort((a, b) => b[1] - a[1]);
   const maxContribution = contributions.length > 0 ? contributions[0][1] : 0;
 
@@ -61,6 +63,21 @@ export function ResultCard({ hit, onInspect, apiConfig, selected = false }: Resu
               </span>
             ))}
           </div>
+        )}
+
+        {answer && answer.answer !== "" && (
+          <span
+            className={answer.edited ? "result-answer is-edited" : "result-answer"}
+            title={
+              answer.edited
+                ? `Đáp án đã sửa tay ở bảng nộp. Câu của model: “${answer.modelAnswer}”`
+                : "Đáp án của model, chưa sửa"
+            }
+          >
+            <MessageSquareText size={10} />
+            <span className="truncate">{answer.answer}</span>
+            {answer.edited && <span className="result-answer-flag">sửa</span>}
+          </span>
         )}
 
         {hit.evidence.length > 0 && (

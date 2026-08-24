@@ -12,14 +12,18 @@ import { FrameTuner } from "./components/FrameTuner";
 import { HealthDrawer } from "./components/HealthDrawer";
 import { QueryStudio } from "./components/QueryStudio";
 import { ResultsExplorer } from "./components/ResultsExplorer";
+import { StartupBanner } from "./components/StartupBanner";
 import { StreamLog } from "./components/StreamLog";
+import { VideoFocusBar } from "./components/VideoFocusBar";
 import { SubmissionBoard } from "./components/SubmissionBoard";
 import { AvsWorkspace, KisWorkspace, QaWorkspace, TrakeWorkspace } from "./components/TaskWorkspaces";
 import { PreviewPanel } from "./features/inspector/PreviewPanel";
 import { DatasetStats } from "./features/search/DatasetStats";
 import { WeightPanel } from "./features/weights/WeightPanel";
 import { loadApiBase, loadApiToken, saveApiBase, saveApiToken } from "./storage";
-import type { HealthResponse, SearchOptions, SearchResponse, StreamEvent, TaskType } from "./types";
+import type {
+  HealthResponse, SceneAnswer, SearchFilters, SearchOptions, SearchResponse, StreamEvent, TaskType,
+} from "./types";
 import { PanelBody, PanelHeader, Surface, Tabs } from "./ui";
 import type { TabItem } from "./ui";
 
@@ -80,6 +84,12 @@ function App() {
   const [activeStepIndex, setActiveStepIndex] = useState<number | null>(null);
   const [streamEvents, setStreamEvents] = useState<StreamEvent[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  // Khoanh vùng tìm kiếm vào vài video người dùng đã tin là đúng (FB-004).
+  // Nằm ở App chứ không ở component con vì nó phải sống qua mọi lần đổi tab
+  // và đi thẳng vào body của request.
+  const [focusVideos, setFocusVideos] = useState<string[]>([]);
+  // Đáp án hiệu lực do bảng nộp công bố, để lưới ảnh hiện cùng một thứ (FB-003).
+  const [sceneAnswers, setSceneAnswers] = useState<SceneAnswer[]>([]);
   const abortRef = useRef<AbortController | null>(null);
   const demo = useRef(isDemoMode()).current;
   const demoRan = useRef(false);
@@ -120,11 +130,26 @@ function App() {
     );
   }
 
-  async function runSearch(queryOverride?: string) {
+  /** Ghi đè cho một lần chạy, dùng khi state React chưa kịp cập nhật.
+   *
+   *  "Đào sâu" đặt ba thứ (vùng khoanh, top-K, trần mỗi video) rồi chạy ngay.
+   *  Đọc lại từ state trong cùng một lượt xử lý sẽ lấy phải giá trị CŨ, nên
+   *  lần bấm đầu tiên chạy bằng cấu hình trước đó — đúng kiểu lỗi im lặng mà
+   *  người dùng chỉ thấy là "bấm đào sâu chẳng khác gì". */
+  interface RunOverrides {
+    videoIds?: string[];
+    topK?: number;
+    options?: SearchOptions;
+  }
+
+  async function runSearch(queryOverride?: string, overrides?: RunOverrides) {
     // Chỉ nhận string: nếu hàm này lỡ bị gắn thẳng làm event handler thì tham
     // số sẽ là một SyntheticEvent, và nó phải bị bỏ qua chứ không được đi
     // tiếp vào request body.
     const effectiveQuery = typeof queryOverride === "string" ? queryOverride : query;
+    const effectiveOptions = overrides?.options ?? draftOptions;
+    const effectiveTopK = overrides?.topK ?? topK;
+    const effectiveVideos = overrides?.videoIds ?? focusVideos;
     setSubmitting(true);
     setStatusIsError(false);
     setStatus(streaming ? "Đang stream…" : "Đang tìm kiếm…");
@@ -133,10 +158,19 @@ function App() {
     setSelectedCandidateId(null);
     setSelectedSequenceIndex(0);
     setActiveStepIndex(null);
-    setAppliedOptions(draftOptions);
+    setAppliedOptions(effectiveOptions);
     setHasSearched(true);
 
-    const body = { query: effectiveQuery, task, top_k: topK, debug, search_options: draftOptions };
+    const filters: SearchFilters | undefined =
+      effectiveVideos.length > 0 ? { video_ids: effectiveVideos } : undefined;
+    const body = {
+      query: effectiveQuery,
+      task,
+      top_k: effectiveTopK,
+      debug,
+      search_options: effectiveOptions,
+      ...(filters ? { filters } : {}),
+    };
     try {
       if (streaming) {
         abortRef.current?.abort();
@@ -179,6 +213,31 @@ function App() {
     } finally {
       setSubmitting(false);
     }
+  }
+
+  /** Đào sâu vào mấy video đã khoanh: lọc + nới trần + tăng top-K, rồi chạy.
+   *
+   *  Nới trần là phần bắt buộc chứ không phải phụ: dedup của KIS mặc định chỉ
+   *  giữ 5 kết quả mỗi video, nên nếu chỉ lọc `video_ids` thì đào sâu vào một
+   *  video vẫn trả đúng 5 dòng y như trước — không làm giàu được đáp án nào,
+   *  mà nhìn thì như tính năng không chạy. */
+  const DEEP_DIVE_PER_VIDEO = 100;
+  const DEEP_DIVE_MIN_TOP_K = 100;
+
+  function deepDive(videoIds: string[]) {
+    const unique = [...new Set(videoIds.filter(Boolean))];
+    if (unique.length === 0) return;
+    const nextTopK = Math.max(topK, DEEP_DIVE_MIN_TOP_K);
+    const nextOptions: SearchOptions = {
+      ...draftOptions,
+      fusion: { ...draftOptions.fusion, max_results_per_video: DEEP_DIVE_PER_VIDEO },
+    };
+    setFocusVideos(unique);
+    setTopK(nextTopK);
+    setDraftOptions(nextOptions);
+    setPage("search");
+    setResultTab("results");
+    void runSearch(query, { videoIds: unique, topK: nextTopK, options: nextOptions });
   }
 
   async function checkHealth() {
@@ -307,6 +366,12 @@ function App() {
     return [];
   }, [result, task]);
 
+  const answerBySceneId = useMemo(() => {
+    const map = new Map<string, SceneAnswer>();
+    for (const item of sceneAnswers) if (item.sceneId) map.set(item.sceneId, item);
+    return map;
+  }, [sceneAnswers]);
+
   const resultTabs: TabItem<ResultTab>[] = [
     { value: "results", label: "Lưới ảnh", count: result?.results.length, icon: <LayoutGrid size={13} /> },
     { value: "task", label: TASK_TAB_LABEL[task], count: taskItemCount, icon: <ListChecks size={13} /> },
@@ -330,6 +395,7 @@ function App() {
     >
       {page === "search" && (
         <div className="studio">
+            <StartupBanner apiConfig={apiConfig} onReady={() => { void checkHealth(); }} />
             <QueryStudio
               aside={<DatasetStats health={healthState} loading={healthStatus === "checking" && !healthState} />}
               apiBase={apiBase}
@@ -352,6 +418,14 @@ function App() {
               onHealthCheck={checkHealth}
               submitting={submitting}
               parsedEvents={result?.query_plan?.events ?? []}
+            />
+
+            <VideoFocusBar
+              videoIds={focusVideos}
+              onChange={setFocusVideos}
+              onDeepDive={deepDive}
+              suggestion={selectedHit?.video_id ?? null}
+              busy={submitting}
             />
 
             {status && (
@@ -393,6 +467,7 @@ function App() {
                     pristine={!hasSearched}
                     topK={topK}
                     perVideoCapSet={appliedOptions.fusion?.max_results_per_video != null}
+                    answerBySceneId={answerBySceneId}
                   />
                 )}
 
@@ -442,6 +517,9 @@ function App() {
                         setTunerHandoffKey((value) => value + 1);
                         setResultTab("tuner");
                       }}
+                      onDeepDive={deepDive}
+                      query={query}
+                      onAnswersChange={setSceneAnswers}
                     />
                   </PanelBody>
                 )}
@@ -518,6 +596,9 @@ function App() {
                     setPage("search");
                     setResultTab("tuner");
                   }}
+                  onDeepDive={deepDive}
+                  query={query}
+                  onAnswersChange={setSceneAnswers}
                 />
               </PanelBody>
             </Surface>
