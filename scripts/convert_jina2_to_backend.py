@@ -6,7 +6,7 @@ Chạy MỘT LẦN sau khi extract ZIP:
 Tạo:
     storage/caption_embedding_jina_v2/embeddings.npy   (float32, (151459, 1024))
     storage/caption_embedding_jina_v2/scene_ids.json  (json list)
-    storage/caption_embedding_jina_v2/manifest.json   (ghi đúng encoder_kind=jina_v3)
+    storage/caption_embedding_jina_v2/manifest.json   (ghi đúng encoder_kind=jina_clip_v2)
 
 Lý do cần chuyển:
   - Kaggle sinh caption_faiss.index (FAISS IndexFlatIP), dùng được cho offline eval.
@@ -101,7 +101,7 @@ def write_manifest():
         "status": "success",
         "metadata_source": "jinaai/jina-clip-v2 Kaggle embedding (caption_embedding_jina_v2_artifacts)",
         "model_id": "jinaai/jina-clip-v2",
-        "encoder_kind": "jina_v3",  # QUAN TRỌNG: phải khớp AIC_CAPTION_DENSE_ENCODER=jina_v3
+        "encoder_kind": "jina_clip_v2",  # phải khớp AIC_CAPTION_DENSE_ENCODER=jina_clip_v2
         "query_prefix": "",           # jina dùng task= chứ không phải prefix
         "index_fingerprint": "jina_v2_faiss_artifacts_20250825",
         "dimension": 1024,
@@ -109,7 +109,7 @@ def write_manifest():
     }
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(manifest, fh, indent=2, ensure_ascii=False)
-    print(f"  manifest.json: encoder_kind=jina_v3")
+    print(f"  manifest.json: encoder_kind=jina_clip_v2")
 
 
 def verify_coverage():
