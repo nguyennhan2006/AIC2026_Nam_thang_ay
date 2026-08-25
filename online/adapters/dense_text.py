@@ -209,14 +209,15 @@ class JinaClipV2Encoder:
         task: str = JINA_QUERY_TASK,
     ) -> None:
         import torch
-        from transformers import AutoModel
+        from transformers import AutoConfig, AutoModel
 
         self._torch = torch
-        # use_fast=False tránh AutoTokenizer — JinaCLIPModel không cần tokenizer
-        # vì encode_text() dùng internal tokenization. Không dùng AutoTokenizer
-        # để tránh lỗi "Unrecognized configuration class JinaCLIPConfig".
+        # Tách config và weights: config không tải tokenizer, weights qua from_pretrained.
+        # Fix lỗi "Unrecognized configuration class JinaCLIPConfig" khi
+        # AutoModel cố khởi tạo tokenizer mặc định.
+        config = AutoConfig.from_pretrained(model_path, trust_remote_code=True)
         self.model = AutoModel.from_pretrained(
-            model_path, trust_remote_code=True, use_fast=False
+            model_path, trust_remote_code=True, config=config
         )
         self.model = self.model.to(device).eval()
         self.device = device
