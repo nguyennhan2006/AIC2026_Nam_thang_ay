@@ -212,7 +212,12 @@ class JinaClipV2Encoder:
         from transformers import AutoModel
 
         self._torch = torch
-        self.model = AutoModel.from_pretrained(model_path, trust_remote_code=True)
+        # use_fast=False tránh AutoTokenizer — JinaCLIPModel không cần tokenizer
+        # vì encode_text() dùng internal tokenization. Không dùng AutoTokenizer
+        # để tránh lỗi "Unrecognized configuration class JinaCLIPConfig".
+        self.model = AutoModel.from_pretrained(
+            model_path, trust_remote_code=True, use_fast=False
+        )
         self.model = self.model.to(device).eval()
         self.device = device
         self.max_length = max_length
