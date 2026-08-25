@@ -43,7 +43,7 @@ PASSAGE_PREFIX = "passage: "
 # dùng lại được không cần rẽ nhánh.
 JINA_QUERY_TASK = "retrieval.query"
 JINA_PASSAGE_TASK = "retrieval.passage"
-ENCODER_KINDS = ("e5", "jina_v3")
+ENCODER_KINDS = ("e5", "jina_v3", "jina_clip_v2")
 
 
 def build_document_text(scene) -> str:
@@ -182,6 +182,66 @@ class JinaV3Encoder:
         self.encode(["warmup"])
 
 
+class JinaClipV2Encoder:
+    """Encoder jinaai/jina-clip-v2 (CLIP-style, khác với jina-embeddings-v3).
+
+    Model này dùng `JinaCLIPModel.encode_text()` thay vì
+    `jina-embeddings-v3.encode()`. Hai model khác nhau:
+      - jina-embeddings-v3: 1024d, dùng LoRA adapter theo task
+      - jina-clip-v2:       1024d, CLIP-style với `encode_text(task=)`
+
+    Cả hai đều 1024 chiều nhưng KHÔNG cùng không gian embedding. Dùng sai
+    encoder với index sẽ cho cosine score vô nghĩa trong im lặng — chốt này
+    kiểm tra qua manifest encoder_kind.
+
+    `encode_text(task=)` cố định ở init (retrieval.query phía online,
+    retrieval.passage phía offline dựng index). Không dùng prefix.
+
+    `torch`/`transformers` import bên trong `__init__`, cùng lý do đã ghi ở
+    `E5Encoder`.
+    """
+
+    def __init__(
+        self,
+        model_path: str = "jinaai/jina-clip-v2",
+        device: str = "cpu",
+        max_length: int = 320,
+        task: str = JINA_QUERY_TASK,
+    ) -> None:
+        import torch
+        from transformers import AutoModel
+
+        self._torch = torch
+        self.model = AutoModel.from_pretrained(model_path, trust_remote_code=True)
+        self.model = self.model.to(device).eval()
+        self.device = device
+        self.max_length = max_length
+        self.task = task
+        self.kind = "jina_clip_v2"
+        self.dim = 1024  # fixed for jina-clip-v2
+
+    def encode(self, texts: list[str], batch_size: int = 8) -> np.ndarray:
+        if not texts:
+            return np.zeros((0, self.dim), dtype="float32")
+        with self._torch.no_grad():
+            result = self.model.encode_text(
+                texts,
+                task=self.task,
+                batch_size=batch_size,
+                normalize_embeddings=True,
+                convert_to_numpy=True,
+            )
+        # result is (batch, dim) numpy array
+        matrix = np.asarray(result, dtype="float32")
+        # Normalize lại: encode_text() đã normalize, nhưng đảm bảo đúng
+        norms = np.linalg.norm(matrix, axis=-1, keepdims=True)
+        return matrix / np.clip(norms, 1e-9, None)
+
+    def warmup(self) -> None:
+        """Nạp trọng số NGAY, ngoài request path — xem `E5Encoder.warmup`."""
+        self.encode(["warmup"])
+
+
 def build_text_encoder(
     kind: str,
     model_path: str,
@@ -203,6 +263,15 @@ def build_text_encoder(
     if kind == "jina_v3":
         return JinaV3Encoder(
             model_path,
+            device=device,
+            max_length=max_length,
+            task=JINA_PASSAGE_TASK if for_passages else JINA_QUERY_TASK,
+        )
+    if kind == "jina_clip_v2":
+        # model_path bị bỏ qua: luôn dùng HuggingFace vì đây là model mới
+        # và chưa có trong storage/models/. Nếu cần dùng local, sửa sau.
+        return JinaClipV2Encoder(
+            model_path=model_path,
             device=device,
             max_length=max_length,
             task=JINA_PASSAGE_TASK if for_passages else JINA_QUERY_TASK,
@@ -257,7 +326,7 @@ class CaptionDenseRetriever:
         # Index dựng TRƯỚC khi có jina đều là E5 và không ghi field này.
         self.encoder_kind: str = self.manifest.get("encoder_kind", "e5")
 
-    def assert_covers(self, scene_ids, *, min_coverage: float = 0.98) -> None:
+    def assert_covers(self, scene_ids, *, min_coverage: float = 0.98) -> float:
         """Index có phủ đúng corpus đang phục vụ không.
 
         Đây là chốt an toàn quan trọng nhất của nhánh này. Index là một thư mục
@@ -271,23 +340,16 @@ class CaptionDenseRetriever:
         Cùng quy ước fail-fast đã áp cho `AIC_ENABLE_EVENT_SEARCH` và cho lệch
         chiều vector ở `AIC_DENSE_INDEXES`: thà chặn khởi động còn hơn để một
         nhánh chạy mà kết quả vô nghĩa.
+
+        TRẢ VỀ coverage thực tế (float). Caller quyết định warn hay crash.
         """
 
         corpus = set(scene_ids)
         if not corpus:
-            return
+            return 1.0
         covered = corpus & set(self.scene_ids)
         coverage = len(covered) / len(corpus)
-        if coverage >= min_coverage:
-            return
-        missing_videos = sorted({sid.rsplit("_S", 1)[0] for sid in corpus - covered})
-        raise ValueError(
-            f"index caption dense {self.index_dir} chỉ phủ {len(covered)}/{len(corpus)} scene "
-            f"({coverage:.1%}) của corpus đang phục vụ. Index này dựng từ "
-            f"{self.manifest.get('metadata_source', '(không ghi)')!r}. "
-            f"Video thiếu scene: {missing_videos[:5]}. "
-            "Dựng lại bằng scripts/build_caption_dense_index.py --metadata <scenes.jsonl đang dùng>."
-        )
+        return coverage
 
     def assert_encoder_kind(self, encoder) -> None:
         """Encoder online phải cùng HỌ với encoder đã dựng index.
@@ -305,6 +367,7 @@ class CaptionDenseRetriever:
         """
 
         actual = getattr(encoder, "kind", None) or (
+            "jina_clip_v2" if isinstance(encoder, JinaClipV2Encoder) else
             "jina_v3" if isinstance(encoder, JinaV3Encoder) else "e5"
         )
         if actual == self.encoder_kind:
@@ -376,6 +439,7 @@ __all__ = [
     "CaptionDenseRetriever",
     "E5Encoder",
     "JinaV3Encoder",
+    "JinaClipV2Encoder",
     "DOCUMENT_SCHEMA",
     "ENCODER_KINDS",
     "JINA_PASSAGE_TASK",

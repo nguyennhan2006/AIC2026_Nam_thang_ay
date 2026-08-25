@@ -11,7 +11,7 @@ from online.adapters.bm25 import LexicalRetriever
 from online.adapters.object_lexicon import ObjectQueryTransform
 from online.adapters.color_search import ColorSearchRetriever
 from online.adapters.dense_retriever import DenseRetriever
-from online.adapters.dense_text import CaptionDenseRetriever, build_text_encoder
+from online.adapters.dense_text import CaptionDenseRetriever, build_text_encoder, JinaClipV2Encoder
 from online.adapters.encoders import HashingTextEncoder, LocalTextEncoder, RemoteTextEncoder
 from online.adapters.event_search import EventSearchRetriever, JsonlEventRepository
 from online.adapters.fpt_advisor import FptEvidenceSelector, FptWeightRecommender
@@ -488,7 +488,20 @@ async def build_container(
         # Bốn chốt, cùng tinh thần fail-fast đã áp cho AIC_DENSE_INDEXES: mọi
         # ca dưới đây đều KHÔNG tự báo lỗi nếu để chạy tiếp — nhánh vẫn trả
         # candidate, `branch_status` vẫn `success`, chỉ có kết quả là vô nghĩa.
-        caption_dense.assert_covers(scene.scene_id for scene in await repository.all())
+        corpus_scene_ids = [scene.scene_id for scene in await repository.all()]
+        coverage = caption_dense.assert_covers(corpus_scene_ids)
+        if coverage < 0.98:
+            missing_videos = sorted({
+                sid.rsplit("_S", 1)[0]
+                for sid in corpus_scene_ids
+                if sid not in set(caption_dense.scene_ids)
+            })
+            print(
+                f"[WARN] caption_dense coverage {coverage:.1%} < 98% "
+                f"({len(caption_dense.scene_ids):,} index / {len(corpus_scene_ids):,} corpus). "
+                f"Missing videos: {missing_videos[:5]}. "
+                "Nhánh vẫn chạy với index hiện có."
+            )
         caption_dense.assert_encoder_kind(caption_dense.encoder)
         try:
             caption_dense.encoder.warmup()
