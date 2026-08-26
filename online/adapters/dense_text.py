@@ -478,6 +478,13 @@ class CaptionDenseRetriever:
         return np.asarray(self.encoder.encode([self.query_prefix + query])[0])
 
     def _score_sync(self, vector, limit: int):
+        # Validate dimensions before matmul
+        if self.matrix.shape[1] != vector.shape[-1]:
+            raise ValueError(
+                f"caption_dense matmul dimension mismatch: "
+                f"matrix has {self.matrix.shape[1]} cols but query vector has {vector.shape[-1]} dims. "
+                f"Check AIC_CAPTION_DENSE_ENCODER matches index."
+            )
         scores = self.matrix @ vector
         return scores, np.argsort(-scores)[:limit]
 

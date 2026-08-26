@@ -200,8 +200,17 @@ class InMemoryVectorStore:
 
         if _np is not None:
             query = _np.asarray(vector, dtype=_np.float32)
-            norm = float(_np.linalg.norm(query))
             matrix = self._matrix if selected is None else self._matrix[selected]
+
+            # Validate dimensions: query vector dim phải khớp matrix row dim
+            if matrix.shape[1] != query.shape[-1]:
+                raise ValueError(
+                    f"dimension mismatch: query vector dim={query.shape[-1]} "
+                    f"nhưng vector store row dim={matrix.shape[1]}. "
+                    f"Encoder và index phải dùng cùng model (CLIP=768, E5/jina=1024)."
+                )
+
+            norm = float(_np.linalg.norm(query))
             if norm == 0.0:
                 return _np.zeros(len(matrix), dtype=_np.float32)
             return matrix @ (query / norm)
