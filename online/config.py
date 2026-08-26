@@ -139,6 +139,7 @@ class Settings:
     request_timeout_sec: float
     candidate_limit: int
     rrf_k: int
+    retrieval_multiplier: int
     data_root: Path
     cors_origins: tuple[str, ...]
     api_key: str | None
@@ -366,6 +367,7 @@ class Settings:
             request_timeout_sec=timeout,
             candidate_limit=_env_int("AIC_CANDIDATE_LIMIT", 100),
             rrf_k=_env_int("AIC_RRF_K", 60),
+            retrieval_multiplier=_env_int("AIC_RETRIEVAL_MULTIPLIER", 10),
             data_root=Path(os.getenv("AIC_DATA_ROOT", "storage")).resolve(),
             cors_origins=tuple(x.strip() for x in os.getenv("AIC_CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").split(",") if x.strip()),
             api_key=os.getenv("AIC_ONLINE_API_KEY"),

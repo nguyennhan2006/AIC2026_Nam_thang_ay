@@ -88,7 +88,7 @@ class VlmRerankOptions(StrictModel):
     input_top_k: int = 20
     frames_per_candidate: int = 3
     output_top_k: int = 20
-    timeout_ms: int = 30000
+    timeout_ms: int = 300000
     weight: float = 1.0
     # PR-RECALL: Kiểm soát behavior của reranker
     drop_low_score: bool = False  # True = loại candidates có rerank_score thấp

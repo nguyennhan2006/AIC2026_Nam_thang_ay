@@ -229,6 +229,13 @@ class SearchService:
         # Orchestrator cô lập lỗi theo từng branch: một branch timeout không
         # còn kéo đổ cả request như `asyncio.gather` trần trước PR-03.
         lists, statuses = await self.orchestrator.execute(plan, retrieval_limit)
+
+        # DEBUG: Log retrieval stats
+        import logging
+        logger = logging.getLogger(__name__)
+        branch_counts = [(st.execution_id, st.candidate_count) for st in statuses]
+        logger.warning(f"_retrieve: retrieval_limit={retrieval_limit}, branch_counts={branch_counts}")
+
         fusion_options = plan.search_options.fusion
         # Chuẩn hóa trước, cắt ngưỡng sau, rồi mới fuse. Thứ tự này bắt buộc:
         # RRF dùng *hạng* trong danh sách của branch, nên cắt sau khi fuse sẽ
@@ -259,6 +266,18 @@ class SearchService:
             branches=plan.search_options.branches,
             minimum_matching_branches=fusion_options.minimum_matching_branches,
         )
+
+        # DEBUG: Log candidates để xem scene_ids có vấn đề gì không
+        if len(candidates) > 0:
+            logger.warning(f"_retrieve: after fusion={len(candidates)} candidates")
+            # Log sample candidates
+            sample = candidates[:5]
+            for c in sample:
+                logger.warning(f"  candidate: scene_id={c.scene_id}, video_id={c.video_id}, source={c.source}")
+            # Check xem có scene_id nào bất thường không
+            abnormal = [c for c in candidates if c.scene_id and not c.scene_id.startswith(('L21_', 'L25_', 'L26_', 'L27_', 'L30_'))]
+            if abnormal:
+                logger.warning(f"  ABNORMAL scene_ids: {[c.scene_id for c in abnormal[:5]]}")
         constraints = (
             extract_negative_constraints(plan.normalized_query)
             if plan.search_options.query.enable_negative_constraints else []
@@ -349,16 +368,57 @@ class SearchService:
         return min(document.keyframes, key=lambda frame: abs(frame.timestamp_sec - midpoint))
 
     async def _hydrate(self, candidates: list[Candidate], query: str = "") -> list[SearchHit]:
+        # Lấy tất cả scene_ids cần hydrate
+        scene_ids_needed = [candidate.scene_id for candidate in candidates if candidate.scene_id]
         documents = {
             item.scene_id: item
-            for item in await self.repository.get_many(
-                [candidate.scene_id for candidate in candidates if candidate.scene_id]
-            )
+            for item in await self.repository.get_many(scene_ids_needed)
         }
+
+        # Debug: log missing scenes
+        missing_scenes = [sid for sid in scene_ids_needed if sid not in documents]
+        if missing_scenes:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"_hydrate: {len(missing_scenes)}/{len(scene_ids_needed)} scenes not found in repository: {missing_scenes[:5]}...")
+            logger.warning(f"  sample scene_ids in candidates: {scene_ids_needed[:5]}")
+            # Thử kiểm tra từng missing scene
+            for sid in missing_scenes[:3]:
+                doc = await self.repository.get(sid)
+                logger.warning(f"  re-check scene {sid}: {'EXISTS' if doc else 'NOT FOUND'}")
+
         hits: list[SearchHit] = []
+        skipped_count = 0
         for rank, candidate in enumerate(candidates, start=1):
             document = documents.get(candidate.scene_id or "")
             if not document:
+                # Tạo hit với placeholder thay vì skip để đảm bảo đủ số lượng
+                skipped_count += 1
+                hits.append(SearchHit(
+                    rank=rank,
+                    candidate_id=candidate.candidate_id,
+                    scene_id=candidate.scene_id or "",
+                    video_id=candidate.video_id or "",
+                    video_path=None,
+                    event_id=candidate.event_id,
+                    scene_idx=0,
+                    start_frame=candidate.start_frame or 0,
+                    end_frame_exclusive=(candidate.end_frame or candidate.start_frame or 0) + 1,
+                    start_sec=0.0,
+                    end_sec=0.0,
+                    best_frame_idx=candidate.frame_idx or 0,
+                    best_keyframe_id=None,
+                    best_keyframe_path=None,
+                    best_timestamp_sec=candidate.timestamp_sec or 0.0,
+                    score=candidate.raw_score,
+                    keyframes=[],
+                    matched_modalities=[],
+                    matched_branches=[],
+                    evidence=[],
+                    component_scores=candidate.payload.get("component_scores", {}) if candidate.payload else {},
+                    branch_contributions=candidate.payload.get("branch_contributions", {}) if candidate.payload else {},
+                    warnings=[f"scene {candidate.scene_id} not found in repository, using placeholder"],
+                ))
                 continue
             payload = candidate.payload
             evidence = [Evidence.model_validate(item) for item in payload.get("evidence", [])]
@@ -404,6 +464,10 @@ class SearchService:
                     warnings=warnings,
                 )
             )
+        # Debug log
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f"_hydrate: {len(candidates)} candidates -> {len(hits)} hits (skipped={skipped_count})")
         return hits
 
     async def search(self, request: SearchRequest) -> SearchResponse:
@@ -623,7 +687,8 @@ class SearchService:
         candidates = rerank.candidates
 
         # PR-RECALL: Backfill cuối cùng từ pre-rerank
-        expected = min(100, len(pre_rerank))
+        # Luôn đảm bảo đủ top_k results
+        expected = request.top_k
         if len(candidates) < expected:
             warnings.append(
                 f"PR-RECALL backfill: {len(candidates)} -> {expected} (from pre-rerank)"
@@ -798,7 +863,8 @@ class SearchService:
         candidates = rerank.candidates
 
         # PR-RECALL: Backfill cuối cùng từ pre-rerank
-        expected = min(100, len(pre_rerank))
+        # Luôn đảm bảo đủ top_k results
+        expected = request.top_k
         if len(candidates) < expected:
             candidates = backfill_top_k(
                 ranked=candidates,
@@ -1119,8 +1185,8 @@ def _format_results(
         ordered = sorted(
             hits, key=lambda hit: _component_score(hit, candidate_keys), reverse=True
         )
-    if options.display_min_score is not None:
-        ordered = [hit for hit in ordered if hit.score >= options.display_min_score]
+    # NOTE: display_min_score bị bỏ qua để luôn trả đủ top_k results
+    # Nếu muốn filter theo score, sử dụng ngưỡng ở bước retrieval/fusion
     limit = min(top_k, options.display_top_k)
     return [
         hit.model_copy(update={"rank": rank})

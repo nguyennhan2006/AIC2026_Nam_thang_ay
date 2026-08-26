@@ -145,6 +145,16 @@ def deduplicate_for_task(
     original_order = list(candidates)
     original_ids = {c.candidate_id for c in candidates}
 
+    # DEBUG: Log event_id coverage
+    import logging
+    logger = logging.getLogger(__name__)
+    event_id_count = sum(1 for c in candidates if c.event_id)
+    logger.warning(
+        f"deduplicate_for_task: {len(candidates)} candidates, "
+        f"scope={policy['scope']}, max_per_video={policy.get('max_per_video')}, "
+        f"candidates_with_event_id={event_id_count}/{len(candidates)}"
+    )
+
     result = deduplicate(
         candidates,
         scope=str(policy["scope"]),
@@ -152,14 +162,21 @@ def deduplicate_for_task(
         max_per_event=policy["max_per_event"],  # type: ignore[arg-type]
     )
 
+    logger.warning(
+        f"deduplicate_for_task: {len(original_ids)} -> {len(result)} (before backfill)"
+    )
+
     # PR-RECALL: Backfill nếu cần
     if backfill and len(result) < len(original_ids):
         kept_ids = {c.candidate_id for c in result}
+        backfilled_count = 0
         for candidate in original_order:
             if candidate.candidate_id not in kept_ids:
                 result.append(candidate.model_copy(
                     update={"rank": len(result) + 1, "payload": {**candidate.payload, "backfilled_from_dedup": True}}
                 ))
+                backfilled_count += 1
+        logger.warning(f"deduplicate_for_task: backfilled {backfilled_count} candidates")
 
     return result
 

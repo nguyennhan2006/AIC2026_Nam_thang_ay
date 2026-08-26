@@ -7,7 +7,7 @@
 #
 # Cong mo NGAY (vai giay). Viec nap ~4 phut chay o luong nen, nen
 # "Application startup complete." KHONG con nghia la da san sang.
-# Hoi tien do bang:  curl -s http://127.0.0.1:8000/v1/startup
+# Hoi tien do bang:  curl -s http://127.0.0.1:8080/v1/startup
 # UI mo duoc luon va tu hien thanh cho; truy van bam ngay cung duoc,
 # no se tu chay khi nap xong.
 
@@ -65,7 +65,7 @@ $env:AIC_ENABLE_QUERY_TRANSLATION = "false"
 # 8000 ms la con so chon cho 765 scene. O 87.742 scene, dense_visual mat
 # 5,2-11,8 s; vuot han thi nhanh bien mat KHONG BAO LOI (branch_status=timeout,
 # API van 200, UI van co ket qua - chi la tang ngu nghia da tat).
-$env:AIC_BRANCH_TIMEOUT_MS        = "30000"
+$env:AIC_BRANCH_TIMEOUT_MS        = "300000"
 # Dat TUONG MINH "true", khong phai bo dong nay di. Pack co OCR 0% nen tat hai
 # nhanh nay nghe hop ly, nhung tat chung DOI TOPOLOGY nhanh:
 # `/v1/search/capabilities` tu choi moi `search_options` tro toi nhanh khong
@@ -85,10 +85,12 @@ $env:AIC_ENABLE_OCR_FUZZY         = "true"
 $env:HF_HUB_OFFLINE               = "1"
 $env:TRANSFORMERS_OFFLINE         = "1"
 $env:PYTHONIOENCODING             = "utf-8"
+# Retrieval lay nhieu hon de cai thien recall, fusion se chon top-k
+$env:AIC_RETRIEVAL_MULTIPLIER     = "10"
 
 Write-Host "metadata : $env:AIC_METADATA_JSONL"
 Write-Host "embedding: $env:AIC_VISUAL_EMBEDDING_NAME ($env:AIC_VISUAL_EMBEDDING_MODEL)"
 Write-Host "Cong mo ngay; nap ~4 phut o luong nen."
-Write-Host "Tien do: curl -s http://127.0.0.1:8000/v1/startup`n"
+Write-Host "Tien do: curl -s http://127.0.0.1:8080/v1/startup`n"
 
-python -m uvicorn online.api.app:app --host 127.0.0.1 --port 8000
+python -m uvicorn online.api.app:app --host 127.0.0.1 --port 8080

@@ -43,6 +43,13 @@ PASSAGE_PREFIX = "passage: "
 # dùng lại được không cần rẽ nhánh.
 JINA_QUERY_TASK = "retrieval.query"
 JINA_PASSAGE_TASK = "retrieval.passage"
+# Jina CLIP v2 KHÁC với Jina-v3 ở chỗ này:
+#   - retrieval.query: dùng cho QUERY (có instruction "Represent the query...")
+#   - retrieval.passage: KHÔNG TỒN TẠI trong config của jina-clip-v2
+# Phía document/index phải encode KHÔNG task instruction (task=None),
+# còn query mới cần "retrieval.query".
+JINA_CLIP_V2_QUERY_TASK = "retrieval.query"
+JINA_CLIP_V2_PASSAGE_TASK = None
 ENCODER_KINDS = ("e5", "jina_v3", "jina_clip_v2")
 
 
@@ -203,7 +210,7 @@ class JinaClipV2Encoder:
         model_path: str,
         device: str | None = None,
         max_length: int = 320,
-        task: str = JINA_QUERY_TASK,
+        task: str | None = JINA_QUERY_TASK,
     ) -> None:
         import torch
         from pathlib import Path
@@ -309,7 +316,7 @@ class JinaClipV2Encoder:
                     return_tensors="pt",
                 ).to(self.device)
 
-                embeddings = self.model.get_text_features(input_ids=tokens)
+                embeddings = self.model.get_text_features(**tokens)
                 embeddings = torch.nn.functional.normalize(embeddings, p=2, dim=-1)
 
                 vectors.append(
@@ -352,12 +359,18 @@ def build_text_encoder(
             task=JINA_PASSAGE_TASK if for_passages else JINA_QUERY_TASK,
         )
     if kind == "jina_clip_v2":
-        # Tự động dùng CUDA nếu có (JinaClipV2Encoder.auto-detect)
+        # Jina CLIP v2 không có retrieval.passage instruction.
+        # Phía document/index dùng task=None (không thêm instruction);
+        # phía query dùng "retrieval.query".
         return JinaClipV2Encoder(
             model_path=model_path,
             device=None,  # auto-detect CUDA
             max_length=max_length,
-            task=JINA_PASSAGE_TASK if for_passages else JINA_QUERY_TASK,
+            task=(
+                JINA_CLIP_V2_PASSAGE_TASK
+                if for_passages
+                else JINA_CLIP_V2_QUERY_TASK
+            ),
         )
     raise ValueError(f"encoder kind={kind!r} không hợp lệ; chọn một trong {ENCODER_KINDS}")
 

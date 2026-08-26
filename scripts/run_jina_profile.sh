@@ -28,7 +28,7 @@ export AIC_VISUAL_EMBEDDING_NAME="${AIC_VISUAL_EMBEDDING_NAME:-jina_clip_v2}"
 # định là quá sát — 10 nhánh chạy song song tranh CPU đã từng đẩy CLIP từ 200ms
 # lên 1.6-3.9s (xem online/services/retrieval_orchestrator.py), và nhánh vượt
 # deadline thì BIẾN MẤT TRONG IM LẶNG chứ không báo lỗi.
-export AIC_BRANCH_TIMEOUT_MS="${AIC_BRANCH_TIMEOUT_MS:-30000}"
+export AIC_BRANCH_TIMEOUT_MS="${AIC_BRANCH_TIMEOUT_MS:-300000}"
 
 exec python -m uvicorn online.api.app:app \
     --host "${HOST:-0.0.0.0}" --port "${PORT:-8000}"

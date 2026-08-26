@@ -5,7 +5,7 @@
 #
 #     .\scripts\run_ui.ps1
 #
-# Vi sao can script rieng: mo http://localhost:8000 se ra MOT UI KHAC - API tu
+# Vi sao can script rieng: mo http://localhost:8080 se ra MOT UI KHAC - API tu
 # mount `online/ui` (HTML thuan) tai `/ui` va cho `/` chuyen huong vao do. Do la
 # ban demo cu, khong co bang trong so nhanh, khong co tab chinh frame, khong co
 # duong nop bai. Xem docs/36 muc 8.
@@ -36,25 +36,25 @@ if ($newestDist -and $newestDist -lt $newestSrc) {
 # /v1/health la duong duy nhat khong doi token (xem app.py api_key_guard).
 $backendUp = $false
 try {
-    $null = Invoke-RestMethod -Uri "http://localhost:8000/v1/health" -TimeoutSec 2
+    $null = Invoke-RestMethod -Uri "http://localhost:8080/v1/health" -TimeoutSec 2
     $backendUp = $true
 } catch { }
 
 Write-Host ""
 Write-Host "UI:      http://localhost:5173"
 if ($backendUp) {
-    Write-Host "Backend: http://localhost:8000  (dang song)"
+    Write-Host "Backend: http://localhost:8080  (dang song)"
 } else {
-    Write-Host "Backend: KHONG thay gi o http://localhost:8000"
+    Write-Host "Backend: KHONG thay gi o http://localhost:8080"
     Write-Host "  - Backend chay ngay tren may nay : mo terminal khac roi chay run_competition.ps1"
     Write-Host "  - Backend chay tren Vast.ai      : mo tunnel o terminal khac, giu nguyen API base:"
-    Write-Host "        ssh -p <SSH_PORT> root@<HOST> -L 8000:localhost:8000 -N"
+    Write-Host "        ssh -p <SSH_PORT> root@<HOST> -L 8080:localhost:8080 -N"
     Write-Host "    hoac dien API base = http://<IP_VAST>:<CONG_DA_MAP> trong QueryStudio"
     Write-Host "    (can uvicorn --host 0.0.0.0 va cong da duoc map luc tao may)."
 }
 Write-Host ""
 Write-Host "Lan dau mo UI phai dien 2 o trong QueryStudio:"
-Write-Host "  API base : http://localhost:8000"
+Write-Host "  API base : http://localhost:8080"
 Write-Host "  Token    : lay bang lenh duoi (luu vao localStorage, chi phai dien mot lan)"
 Write-Host ""
 $envFile = Join-Path $repo ".env.fpt.local"
