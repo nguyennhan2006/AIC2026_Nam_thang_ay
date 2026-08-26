@@ -45,3 +45,5 @@ done
 
 echo "Server may not be ready. Check /workspace/server.log"
 tail -30 /workspace/server.log
+
+# Quick fix env - thêm FPT models vào .env.fpt.local
