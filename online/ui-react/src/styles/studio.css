@@ -17,7 +17,7 @@
   flex-direction: column;
   gap: var(--space-4);
   min-height: 0;
-  overflow: hidden;
+  overflow-y: auto;
 }
 
 /* Hàng truy vấn: ô nhập + dataset stats cùng hàng, stats rộng đúng bằng cột
@@ -66,7 +66,7 @@
 .query-textarea {
   width: 100%;
   min-height: 46px;
-  max-height: 92px;
+  max-height: 260px;
   background: transparent;
   border: none;
   padding: 0;
@@ -74,6 +74,7 @@
   font-size: var(--text-body);
   line-height: var(--leading-normal);
   resize: none;
+  overflow-y: auto;
 }
 .query-textarea:focus { border: none; background: transparent; }
 .query-footer {
@@ -110,7 +111,11 @@
   display: grid;
   grid-template-columns: var(--workbench-left-w) minmax(0, 1fr) var(--workbench-right-w);
   gap: var(--space-4);
-  min-height: 0;
+  /* Sàn tối thiểu: khi query-row phình to (query dài, nhiều dòng), khối này
+     không được bóp về 0 nữa — nó giữ chiều cao dùng được và nhường việc
+     "chỗ không đủ" cho .studio cuộn (xem overflow-y ở trên), thay vì kết quả
+     bị ép nhỏ tới mức không xem được. */
+  min-height: 420px;
   overflow: hidden;
 }
 .studio-body > * { min-width: 0; min-height: 0; }

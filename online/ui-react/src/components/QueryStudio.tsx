@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { KeyboardEvent, ReactNode } from "react";
 import { Braces, HelpCircle, Link2, Radio, Search, Sparkles, X } from "lucide-react";
 import type { QueryPlan, TaskType } from "../types";
@@ -56,10 +56,18 @@ function loadMode(): "simple" | "advanced" {
  * không có nhiều hàng pill cùng trọng số thị giác. */
 export function QueryStudio(props: QueryStudioProps) {
   const [mode, setMode] = useState<"simple" | "advanced">(loadMode);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     localStorage.setItem(MODE_KEY, mode);
   }, [mode]);
+
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [props.query]);
 
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
     if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
@@ -119,7 +127,9 @@ export function QueryStudio(props: QueryStudioProps) {
           </div>
 
           <textarea
+            ref={textareaRef}
             className="query-textarea"
+            rows={1}
             value={props.query}
             maxLength={QUERY_MAX_LENGTH}
             placeholder={TASK_HINTS[props.task]}

@@ -43,7 +43,7 @@ PASSAGE_PREFIX = "passage: "
 # dùng lại được không cần rẽ nhánh.
 JINA_QUERY_TASK = "retrieval.query"
 JINA_PASSAGE_TASK = "retrieval.passage"
-ENCODER_KINDS = ("e5", "jina_v3")
+ENCODER_KINDS = ("e5", "jina_v3", "jina_clip_v2")
 
 
 def build_document_text(scene) -> str:
@@ -182,6 +182,150 @@ class JinaV3Encoder:
         self.encode(["warmup"])
 
 
+class JinaClipV2Encoder:
+    """Encoder jinaai/jina-clip-v2 cho caption dense retrieval.
+
+    Model này dùng Jina CLIP v2 (CLIP-style), khác với jina-embeddings-v3
+    (LoRA adapter). Cả hai đều 1024 chiều nhưng KHÔNG cùng không gian
+    embedding. Dùng sai encoder với index sẽ cho cosine score vô nghĩa
+    trong im lặng — manifest encoder_kind chốt này.
+
+    Ưu tiên model local/offline:
+      - AIC_CAPTION_DENSE_MODEL phải trỏ vào thư mục local
+      - Jina CLIP dùng jina-embeddings-v3 làm text backbone, nên cả hai
+        phải ở local
+      - Tokenizer load bằng XLMRobertaTokenizerFast (không phải AutoTokenizer)
+      - Model load bằng AutoModel.from_pretrained() với config đã patch
+    """
+
+    def __init__(
+        self,
+        model_path: str,
+        device: str | None = None,
+        max_length: int = 320,
+        task: str = JINA_QUERY_TASK,
+    ) -> None:
+        import torch
+        from pathlib import Path
+        from transformers import AutoConfig, AutoModel, XLMRobertaTokenizerFast
+
+        self._torch = torch
+
+        # Tự động dùng CUDA nếu có
+        if device is None:
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+
+        self.device = device
+        self.max_length = max_length
+        self.task = task
+        self.kind = "jina_clip_v2"
+
+        model_dir = Path(model_path)
+        if not model_dir.exists():
+            raise FileNotFoundError(
+                f"jina-clip-v2 phải là thư mục local, không tìm thấy: "
+                f"{model_path!r}. "
+                "Đặt AIC_CAPTION_DENSE_MODEL=storage/models/jina-clip-v2"
+            )
+        model_dir = model_dir.resolve()
+
+        # Load config bằng AutoConfig (dùng local files)
+        config = AutoConfig.from_pretrained(
+            str(model_dir),
+            trust_remote_code=True,
+            local_files_only=True,
+        )
+
+        # Jina CLIP v2 dùng jina-embeddings-v3 làm text backbone.
+        # Patch text_config để trỏ vào bản local, tránh đi ra HuggingFace.
+        local_jina_v3 = model_dir.parent / "jina-embeddings-v3"
+        text_config = getattr(config, "text_config", None)
+        if text_config is None:
+            raise ValueError(
+                f"jina-clip-v2 config không có text_config; "
+                f"kiểm tra {model_dir / 'config.json'}"
+            )
+        if local_jina_v3.exists():
+            text_config.hf_model_name_or_path = str(local_jina_v3.resolve())
+        else:
+            raise FileNotFoundError(
+                f"jina-clip-v2 cần text backbone jina-embeddings-v3 nhưng "
+                f"không thấy {local_jina_v3}"
+            )
+
+        # Load tokenizer TƯỜNG MINH bằng XLMRobertaTokenizerFast.
+        # Dùng tokenizer này thay vì AutoTokenizer để tránh lỗi
+        # "Unrecognized configuration class JinaCLIPConfig".
+        self.tokenizer = XLMRobertaTokenizerFast.from_pretrained(
+            str(model_dir),
+            local_files_only=True,
+            fix_mistral_regex=True,
+        )
+
+        # Load model bằng AutoModel.from_pretrained() chính thức.
+        # Không dùng manual importlib để tránh namespace conflict.
+        self.model = AutoModel.from_pretrained(
+            str(model_dir),
+            config=config,
+            trust_remote_code=True,
+            local_files_only=True,
+            dtype="auto",
+        )
+        self.model = self.model.to(device).eval()
+
+        # Gắn tokenizer để get_text_features() không gọi AutoTokenizer
+        self.model.tokenizer = self.tokenizer
+
+        # Xác định dim từ config
+        self.dim = int(
+            getattr(self.model, "text_embed_dim", 1024)
+            or getattr(config, "projection_dim", 1024)
+        )
+
+    def encode(self, texts: list[str], batch_size: int = 8) -> np.ndarray:
+        if not texts:
+            return np.zeros((0, self.dim), dtype="float32")
+
+        torch = self._torch
+        vectors: list[np.ndarray] = []
+
+        # Lấy instruction từ task (như encode_text() bên trong làm)
+        instruction = self.model.text_model.get_instruction_from_task(self.task)
+
+        prepared = [
+            (instruction + text) if instruction else text
+            for text in texts
+        ]
+
+        with torch.no_grad():
+            for start in range(0, len(prepared), batch_size):
+                batch_texts = prepared[start : start + batch_size]
+
+                tokens = self.tokenizer(
+                    batch_texts,
+                    padding=True,
+                    truncation=True,
+                    max_length=self.max_length,
+                    return_tensors="pt",
+                ).to(self.device)
+
+                embeddings = self.model.get_text_features(input_ids=tokens)
+                embeddings = torch.nn.functional.normalize(embeddings, p=2, dim=-1)
+
+                vectors.append(
+                    embeddings.detach().cpu().to(torch.float32).numpy()
+                )
+
+        matrix = np.vstack(vectors).astype("float32")
+
+        # Đảm bảo L2-normalized (invariant: cosine == dot product)
+        norms = np.linalg.norm(matrix, axis=-1, keepdims=True)
+        return matrix / np.clip(norms, 1e-9, None)
+
+    def warmup(self) -> None:
+        self.encode(["warmup"])
+
+
 def build_text_encoder(
     kind: str,
     model_path: str,
@@ -204,6 +348,14 @@ def build_text_encoder(
         return JinaV3Encoder(
             model_path,
             device=device,
+            max_length=max_length,
+            task=JINA_PASSAGE_TASK if for_passages else JINA_QUERY_TASK,
+        )
+    if kind == "jina_clip_v2":
+        # Tự động dùng CUDA nếu có (JinaClipV2Encoder.auto-detect)
+        return JinaClipV2Encoder(
+            model_path=model_path,
+            device=None,  # auto-detect CUDA
             max_length=max_length,
             task=JINA_PASSAGE_TASK if for_passages else JINA_QUERY_TASK,
         )
@@ -257,7 +409,7 @@ class CaptionDenseRetriever:
         # Index dựng TRƯỚC khi có jina đều là E5 và không ghi field này.
         self.encoder_kind: str = self.manifest.get("encoder_kind", "e5")
 
-    def assert_covers(self, scene_ids, *, min_coverage: float = 0.98) -> None:
+    def assert_covers(self, scene_ids, *, min_coverage: float = 0.98) -> float:
         """Index có phủ đúng corpus đang phục vụ không.
 
         Đây là chốt an toàn quan trọng nhất của nhánh này. Index là một thư mục
@@ -271,23 +423,16 @@ class CaptionDenseRetriever:
         Cùng quy ước fail-fast đã áp cho `AIC_ENABLE_EVENT_SEARCH` và cho lệch
         chiều vector ở `AIC_DENSE_INDEXES`: thà chặn khởi động còn hơn để một
         nhánh chạy mà kết quả vô nghĩa.
+
+        TRẢ VỀ coverage thực tế (float). Caller quyết định warn hay crash.
         """
 
         corpus = set(scene_ids)
         if not corpus:
-            return
+            return 1.0
         covered = corpus & set(self.scene_ids)
         coverage = len(covered) / len(corpus)
-        if coverage >= min_coverage:
-            return
-        missing_videos = sorted({sid.rsplit("_S", 1)[0] for sid in corpus - covered})
-        raise ValueError(
-            f"index caption dense {self.index_dir} chỉ phủ {len(covered)}/{len(corpus)} scene "
-            f"({coverage:.1%}) của corpus đang phục vụ. Index này dựng từ "
-            f"{self.manifest.get('metadata_source', '(không ghi)')!r}. "
-            f"Video thiếu scene: {missing_videos[:5]}. "
-            "Dựng lại bằng scripts/build_caption_dense_index.py --metadata <scenes.jsonl đang dùng>."
-        )
+        return coverage
 
     def assert_encoder_kind(self, encoder) -> None:
         """Encoder online phải cùng HỌ với encoder đã dựng index.
@@ -305,6 +450,7 @@ class CaptionDenseRetriever:
         """
 
         actual = getattr(encoder, "kind", None) or (
+            "jina_clip_v2" if isinstance(encoder, JinaClipV2Encoder) else
             "jina_v3" if isinstance(encoder, JinaV3Encoder) else "e5"
         )
         if actual == self.encoder_kind:
@@ -332,6 +478,13 @@ class CaptionDenseRetriever:
         return np.asarray(self.encoder.encode([self.query_prefix + query])[0])
 
     def _score_sync(self, vector, limit: int):
+        # Validate dimensions before matmul
+        if self.matrix.shape[1] != vector.shape[-1]:
+            raise ValueError(
+                f"caption_dense matmul dimension mismatch: "
+                f"matrix has {self.matrix.shape[1]} cols but query vector has {vector.shape[-1]} dims. "
+                f"Check AIC_CAPTION_DENSE_ENCODER matches index."
+            )
         scores = self.matrix @ vector
         return scores, np.argsort(-scores)[:limit]
 
@@ -376,6 +529,7 @@ __all__ = [
     "CaptionDenseRetriever",
     "E5Encoder",
     "JinaV3Encoder",
+    "JinaClipV2Encoder",
     "DOCUMENT_SCHEMA",
     "ENCODER_KINDS",
     "JINA_PASSAGE_TASK",

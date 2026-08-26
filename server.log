@@ -1,0 +1,55 @@
+INFO:     Started server process [18004]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+2026-08-26 11:20:45,787 INFO online.api.boot boot phase: metadata (0.0s)
+2026-08-26 11:21:24,811 INFO online.api.boot boot phase: lexical (39.0s)
+2026-08-26 11:21:33,033 INFO online.api.boot boot phase: vectors (47.3s)
+2026-08-26 11:22:09,933 INFO online.api.boot boot phase: encoder (84.2s)
+Using a slow image processor as `use_fast` is unset and a slow processor was saved with this model. `use_fast=True` will be the default behavior in v4.52, even if the model was saved with a slow processor. This will result in minor differences in outputs. You'll still be able to use a slow processor with `use_fast=False`.
+2026-08-26 11:22:38,880 ERROR online.api.boot n\u1ea1p container th\u1ea5t b\u1ea1i
+Traceback (most recent call last):
+  File "D:\Sinh viên CNhan\AIC\Data\AIC2026_Nam_thang_ay\online\api\app.py", line 88, in run_build
+    container = await asyncio.to_thread(build_blocking)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python314\Lib\asyncio\threads.py", line 25, in to_thread
+    return await loop.run_in_executor(None, func_call)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python314\Lib\concurrent\futures\thread.py", line 86, in run
+    result = ctx.run(self.task)
+  File "C:\Python314\Lib\concurrent\futures\thread.py", line 73, in run
+    return fn(*args, **kwargs)
+  File "D:\Sinh viên CNhan\AIC\Data\AIC2026_Nam_thang_ay\online\api\app.py", line 80, in build_blocking
+    return asyncio.run(build_container(resolved, progress=set_phase))
+           ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python314\Lib\asyncio\runners.py", line 204, in run
+    return runner.run(main)
+           ~~~~~~~~~~^^^^^^
+  File "C:\Python314\Lib\asyncio\runners.py", line 127, in run
+    return self._loop.run_until_complete(task)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Python314\Lib\asyncio\base_events.py", line 719, in run_until_complete
+    return future.result()
+           ~~~~~~~~~~~~~^^
+  File "D:\Sinh viên CNhan\AIC\Data\AIC2026_Nam_thang_ay\online\api\container.py", line 482, in build_container
+    build_text_encoder(
+    ~~~~~~~~~~~~~~~~~~^
+        settings.caption_dense_encoder,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        settings.caption_dense_model,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        for_passages=False,
+        ^^^^^^^^^^^^^^^^^^^
+    ),
+    ^
+  File "D:\Sinh viên CNhan\AIC\Data\AIC2026_Nam_thang_ay\online\adapters\dense_text.py", line 356, in build_text_encoder
+    return JinaClipV2Encoder(
+        model_path=model_path,
+    ...<2 lines>...
+        task=JINA_PASSAGE_TASK if for_passages else JINA_QUERY_TASK,
+    )
+  File "D:\Sinh viên CNhan\AIC\Data\AIC2026_Nam_thang_ay\online\adapters\dense_text.py", line 225, in __init__
+    raise FileNotFoundError(
+    ...<3 lines>...
+    )
+FileNotFoundError: jina-clip-v2 ph\u1ea3i là thý m\u1ee5c local, không t\xecm th\u1ea5y: 'jinaai/jina-clip-v2'. Ð\u1eb7t AIC_CAPTION_DENSE_MODEL=storage/models/jina-clip-v2

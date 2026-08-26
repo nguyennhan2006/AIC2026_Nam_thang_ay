@@ -1,0 +1,59 @@
+{
+  "video_info": {
+    "video_id": "L25_V060",
+    "fps": 25.0,
+    "total_frames": 39569,
+    "duration_sec": 1582.81,
+    "resolution": "1280x720",
+    "audio_present": true
+  },
+  "scene_info": {
+    "scene_id": "L25_V060_S0075",
+    "scene_idx": 75,
+    "start_frame": 21126,
+    "end_frame": 35439,
+    "duration_sec": 572.52,
+    "num_keyframes": 96
+  },
+  "frame_info": {
+    "frame_idx": 28500,
+    "timestamp_sec": 1140.0,
+    "keyframe_id": "L25_V060_S0075_F028500",
+    "image_path": "storage/processed/keyframes/L25_V060/frame_028500.jpg"
+  },
+  "caption": "Giảng viên nam mặc áo sơ mi trắng và cà vạt đang trình bày trước màn hình chiếu, trên đó hiển thị slide về “Vấn đề việc làm và hướng giải quyết” trong chương trình ôn thi THPT 2024 môn Địa lý.",
+  "caption_embedding": {
+    "position": 88125,
+    "dimension": 1024,
+    "normalized": true,
+    "source": "Jina CLIP v2"
+  },
+  "visual_embedding": {
+    "position": 274,
+    "video": "L25_V060.npy",
+    "dimension": 1024,
+    "normalized": true,
+    "source": "E5/Jina-v3",
+    "visual_caption_similarity": 0.3127
+  },
+  "objects": [
+    {
+      "label": "Clothing",
+      "confidence": 0.71
+    },
+    {
+      "label": "Person",
+      "confidence": 0.6
+    },
+    {
+      "label": "Man",
+      "confidence": 0.5
+    },
+    {
+      "label": "Human face",
+      "confidence": 0.41
+    }
+  ],
+  "ocr": [],
+  "asr": "not_available"
+}

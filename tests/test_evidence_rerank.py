@@ -150,17 +150,21 @@ class RerankCascadeTests(unittest.TestCase):
         self.assertTrue(any("AIC_RERANK_TEXT_URL" in item for item in outcome.warnings))
 
     def test_text_reranker_reorders_and_keeps_the_tail(self) -> None:
-        # Điểm đảo ngược thứ tự fusion.
+        # PR-RECALL: Reranker kết hợp fusion + rerank scores.
+        # Với alpha=0.7, beta=0.3 và min-max normalized rerank scores:
+        # - S0001: fusion=0.9, rerank_norm=0 -> combined ~0.63
+        # - S0002: fusion=0.8, rerank_norm=0.125 -> combined ~0.60
+        # - S0003: fusion=0.7, rerank_norm=1.0 -> combined ~0.79
+        # => S0003 lên top vì rerank cao nhất, thứ tự 2-3 bị đảo vì fusion
         pipeline = RerankPipeline(self.builder, text_reranker=FakeTextReranker([0.1, 0.2, 0.9]))
         outcome = run(pipeline.run("q", self.candidates, self._options(
             text=TextRerankOptions(enabled=True, input_top_k=3, output_top_k=2)
         )))
         self.assertEqual(
             [item.scene_id for item in outcome.candidates],
-            ["L01_V001_S0003", "L01_V001_S0002", "L01_V001_S0001"],
+            ["L01_V001_S0003", "L01_V001_S0001", "L01_V001_S0002"],
         )
-        # output_top_k cắt cái gì thì cái đó tụt xuống chứ không bị vứt —
-        # giữ recall cho các mốc chấm 50/100.
+        # PR-RECALL: Tất cả candidates được giữ lại (không bị cắt)
         self.assertEqual(len(outcome.candidates), 3)
         self.assertEqual([item.rank for item in outcome.candidates], [1, 2, 3])
 

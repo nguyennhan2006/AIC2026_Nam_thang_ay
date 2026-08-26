@@ -74,9 +74,12 @@ class TextRerankOptions(StrictModel):
     enabled: bool = True
     model_id: str = "bge-reranker-v2-m3"
     input_top_k: int = 300
-    output_top_k: int = 80
+    output_top_k: int = 100  # Giữ đủ 100 candidates cho submission
     min_score: float | None = None
     weight: float = 1.0
+    # PR-RECALL: Kiểm soát behavior của reranker
+    drop_low_score: bool = False  # True = loại candidates có rerank_score thấp
+    drop_missing_context: bool = False  # True = loại candidates không có context
 
 
 class VlmRerankOptions(StrictModel):
@@ -87,6 +90,9 @@ class VlmRerankOptions(StrictModel):
     output_top_k: int = 20
     timeout_ms: int = 30000
     weight: float = 1.0
+    # PR-RECALL: Kiểm soát behavior của reranker
+    drop_low_score: bool = False  # True = loại candidates có rerank_score thấp
+    drop_missing_context: bool = False  # True = loại candidates không có context
 
 
 class RerankOptions(StrictModel):
@@ -94,6 +100,12 @@ class RerankOptions(StrictModel):
     text: TextRerankOptions = Field(default_factory=TextRerankOptions)
     vlm: VlmRerankOptions = Field(default_factory=VlmRerankOptions)
     temporal_verifier: bool = True
+    # PR-RECALL: Trọng số kết hợp fusion_score + rerank_score
+    # alpha * fusion_score + beta * rerank_score
+    alpha: float = Field(default=0.7, ge=0.0, le=1.0)
+    beta: float = Field(default=0.3, ge=0.0, le=1.0)
+    # PR-RECALL: Preserve unscored candidates với fusion_score
+    preserve_unscored: bool = True
 
 
 class TemporalOptions(StrictModel):

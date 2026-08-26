@@ -31,6 +31,7 @@ class Settings:
     request_timeout_sec: float
     candidate_limit: int
     rrf_k: int
+    retrieval_multiplier: int
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -64,4 +65,5 @@ class Settings:
             request_timeout_sec=timeout,
             candidate_limit=_env_int("AIC_CANDIDATE_LIMIT", 100),
             rrf_k=_env_int("AIC_RRF_K", 60),
+            retrieval_multiplier=_env_int("AIC_RETRIEVAL_MULTIPLIER", 10),
         )

@@ -53,6 +53,7 @@ experiments/*/outputs/
 # tests/test_check_secret_leak.py). Không commit thư mục này; outputs/evaluation/
 # thì GIỮ track — đó là bằng chứng kết quả PR, không phải log tạm.
 outputs/checkpoints/
+outputs/caption_v2_pilot/
 
 # ---- PR-12/13: nghệ tạo phẩm dữ liệu thật L21_V001 (stage pack/embedding/
 # index/weights model) — nặng, sinh lại được từ input/ + script, không commit.
@@ -60,6 +61,9 @@ outputs/checkpoints/
 # `storage/indexes/`, `storage/raw/videos/README.md` — đó là fixture ví dụ đã
 # track sẵn cho test.
 storage/packs/
+# Jina v2 caption embedding artifacts — 1.1 GB binary, download from
+# D:/Sinh viên CNhan/download/caption_embedding_jina_v2_artifacts.zip
+storage/caption_embedding_jina_v2/
 storage/exports_l21/
 storage/indexes_l21/
 storage/models/
@@ -123,3 +127,4 @@ outputs/evaluation/quick/
 # mà chính README của nó nói là không dùng để ra quyết định được.
 outputs/evaluation/_superseded/*.json
 outputs/evaluation/_superseded/**/*.json
+.claude/settings.local.json
