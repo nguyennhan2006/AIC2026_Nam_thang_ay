@@ -209,13 +209,25 @@ class JinaClipV2Encoder:
         task: str = JINA_QUERY_TASK,
     ) -> None:
         import torch
-        from transformers import AutoConfig
+        from transformers import AutoConfig, AutoTokenizer
 
         self._torch = torch
-        # Đọc config để validate model_path tồn tại (AutoConfig sẽ fail sớm nếu không)
+        # Validate model_path tồn tại
         AutoConfig.from_pretrained(model_path, trust_remote_code=True)
 
-        # Tạo fake package structure để relative imports hoạt động
+        # Monkey-patch AutoTokenizer.from_pretrained để trả None cho JinaCLIPConfig.
+        # JinaCLIPModel không cần tokenizer ngoài vì dùng internal tokenization.
+        # Lỗi gốc: AutoTokenizer không có handler cho JinaCLIPConfig.
+        _original_from_pretrained = AutoTokenizer.from_pretrained
+
+        def _patched_from_pretrained(*args, **kwargs):
+            try:
+                return _original_from_pretrained(*args, **kwargs)
+            except Exception:
+                # Nếu AutoTokenizer fail (vd JinaCLIPConfig), trả None.
+                # JinaCLIPModel sẽ dùng internal tokenizer của nó.
+                return None
+
         import os, sys, importlib.util
         hf_home = os.environ.get("HF_HOME", os.path.expanduser("~/.cache/huggingface"))
         modules_dir = os.path.join(hf_home, "modules", "transformers_modules")
@@ -226,15 +238,14 @@ class JinaClipV2Encoder:
              if not d.startswith("_")][0],
         )
 
-        # Tạo fake jinaai package để relative imports hoạt động
+        # Tạo fake package để relative imports hoạt động
         impl_pkg_name = "jinaai.jina_hyphen_clip_hyphen_implementation"
         if impl_pkg_name not in sys.modules:
-            impl_pkg = type(sys)("jinaai.jina_hyphen_clip_hyphen_implementation")
+            impl_pkg = type(sys)(impl_pkg_name)
             impl_pkg.__path__ = [jina_impl_dir]
-            impl_pkg.__package__ = "jinaai.jina_hyphen_clip_hyphen_implementation"
+            impl_pkg.__package__ = impl_pkg_name
             sys.modules[impl_pkg_name] = impl_pkg
 
-            # Load configuration module trước (không có relative imports)
             config_path = os.path.join(jina_impl_dir, "configuration_clip.py")
             spec = importlib.util.spec_from_file_location(
                 "jinaai.jina_hyphen_clip_hyphen_implementation.configuration_clip",
@@ -244,7 +255,7 @@ class JinaClipV2Encoder:
             sys.modules["jinaai.jina_hyphen_clip_hyphen_implementation.configuration_clip"] = config_mod
             spec.loader.exec_module(config_mod)
 
-        # Load modeling_clip (sẽ import được configuration_clip từ fake package)
+        # Load JinaCLIPModel với monkey-patched AutoTokenizer
         modeling_path = os.path.join(jina_impl_dir, "modeling_clip.py")
         spec = importlib.util.spec_from_file_location(
             "jinaai.jina_hyphen_clip_hyphen_implementation.modeling_clip",
@@ -255,8 +266,12 @@ class JinaClipV2Encoder:
         spec.loader.exec_module(modeling_module)
         JinaCLIPModel = modeling_module.JinaCLIPModel
 
-        # KHÔNG truyền config — JinaCLIPModel.from_pretrained() tự load config riêng.
-        self.model = JinaCLIPModel.from_pretrained(model_path).to(device).eval()
+        # Patch trước khi gọi from_pretrained
+        AutoTokenizer.from_pretrained = _patched_from_pretrained
+        try:
+            self.model = JinaCLIPModel.from_pretrained(model_path).to(device).eval()
+        finally:
+            AutoTokenizer.from_pretrained = _original_from_pretrained
         self.device = device
         self.max_length = max_length
         self.task = task
