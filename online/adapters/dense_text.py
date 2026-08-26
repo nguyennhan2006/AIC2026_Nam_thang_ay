@@ -183,124 +183,141 @@ class JinaV3Encoder:
 
 
 class JinaClipV2Encoder:
-    """Encoder jinaai/jina-clip-v2 (CLIP-style, khác với jina-embeddings-v3).
+    """Encoder jinaai/jina-clip-v2 cho caption dense retrieval.
 
-    Model này dùng `JinaCLIPModel.encode_text()` thay vì
-    `jina-embeddings-v3.encode()`. Hai model khác nhau:
-      - jina-embeddings-v3: 1024d, dùng LoRA adapter theo task
-      - jina-clip-v2:       1024d, CLIP-style với `encode_text(task=)`
+    Model này dùng Jina CLIP v2 (CLIP-style), khác với jina-embeddings-v3
+    (LoRA adapter). Cả hai đều 1024 chiều nhưng KHÔNG cùng không gian
+    embedding. Dùng sai encoder với index sẽ cho cosine score vô nghĩa
+    trong im lặng — manifest encoder_kind chốt này.
 
-    Cả hai đều 1024 chiều nhưng KHÔNG cùng không gian embedding. Dùng sai
-    encoder với index sẽ cho cosine score vô nghĩa trong im lặng — chốt này
-    kiểm tra qua manifest encoder_kind.
-
-    `encode_text(task=)` cố định ở init (retrieval.query phía online,
-    retrieval.passage phía offline dựng index). Không dùng prefix.
-
-    `torch`/`transformers` import bên trong `__init__`, cùng lý do đã ghi ở
-    `E5Encoder`.
+    Ưu tiên model local/offline:
+      - AIC_CAPTION_DENSE_MODEL phải trỏ vào thư mục local
+      - Jina CLIP dùng jina-embeddings-v3 làm text backbone, nên cả hai
+        phải ở local
+      - Tokenizer load bằng XLMRobertaTokenizerFast (không phải AutoTokenizer)
+      - Model load bằng AutoModel.from_pretrained() với config đã patch
     """
 
     def __init__(
         self,
-        model_path: str = "jinaai/jina-clip-v2",
+        model_path: str,
         device: str = "cpu",
         max_length: int = 320,
         task: str = JINA_QUERY_TASK,
     ) -> None:
         import torch
-        from transformers import AutoConfig
-        from transformers import XLMRobertaTokenizerFast
+        from pathlib import Path
+        from transformers import AutoConfig, AutoModel, XLMRobertaTokenizerFast
 
         self._torch = torch
         self.device = device
         self.max_length = max_length
         self.task = task
         self.kind = "jina_clip_v2"
-        self.dim = 1024  # fixed for jina-clip-v2
 
-        # Validate model_path tồn tại
-        AutoConfig.from_pretrained(model_path, trust_remote_code=True)
+        model_dir = Path(model_path)
+        if not model_dir.exists():
+            raise FileNotFoundError(
+                f"jina-clip-v2 phải là thư mục local, không tìm thấy: "
+                f"{model_path!r}. "
+                "Đặt AIC_CAPTION_DENSE_MODEL=storage/models/jina-clip-v2"
+            )
+        model_dir = model_dir.resolve()
+
+        # Load config bằng AutoConfig (dùng local files)
+        config = AutoConfig.from_pretrained(
+            str(model_dir),
+            trust_remote_code=True,
+            local_files_only=True,
+        )
+
+        # Jina CLIP v2 dùng jina-embeddings-v3 làm text backbone.
+        # Patch text_config để trỏ vào bản local, tránh đi ra HuggingFace.
+        local_jina_v3 = model_dir.parent / "jina-embeddings-v3"
+        text_config = getattr(config, "text_config", None)
+        if text_config is None:
+            raise ValueError(
+                f"jina-clip-v2 config không có text_config; "
+                f"kiểm tra {model_dir / 'config.json'}"
+            )
+        if local_jina_v3.exists():
+            text_config.hf_model_name_or_path = str(local_jina_v3.resolve())
+        else:
+            raise FileNotFoundError(
+                f"jina-clip-v2 cần text backbone jina-embeddings-v3 nhưng "
+                f"không thấy {local_jina_v3}"
+            )
 
         # Load tokenizer TƯỜNG MINH bằng XLMRobertaTokenizerFast.
-        # Jina CLIP v2 dùng tokenizer này, không phải AutoTokenizer generic.
-        # fix_mistral_regex=True tránh warning về regex pattern.
+        # Dùng tokenizer này thay vì AutoTokenizer để tránh lỗi
+        # "Unrecognized configuration class JinaCLIPConfig".
         self.tokenizer = XLMRobertaTokenizerFast.from_pretrained(
-            model_path,
+            str(model_dir),
             local_files_only=True,
             fix_mistral_regex=True,
         )
 
-        # Load JinaCLIPModel trực tiếp từ transformers_modules cache.
-        # Cách này tránh AutoTokenizer ném lỗi khi AutoModel cố suy
-        # tokenizer từ JinaCLIPConfig.
-        import os, sys, importlib.util
-        hf_home = os.environ.get("HF_HOME", os.path.expanduser("~/.cache/huggingface"))
-        modules_dir = os.path.join(hf_home, "modules", "transformers_modules")
-        jina_impl_dir = os.path.join(
-            modules_dir,
-            "jinaai/jina_hyphen_clip_hyphen_implementation",
-            [d for d in os.listdir(modules_dir + "/jinaai/jina_hyphen_clip_hyphen_implementation")
-             if not d.startswith("_")][0],
+        # Load model bằng AutoModel.from_pretrained() chính thức.
+        # Không dùng manual importlib để tránh namespace conflict.
+        self.model = AutoModel.from_pretrained(
+            str(model_dir),
+            config=config,
+            trust_remote_code=True,
+            local_files_only=True,
+            dtype="auto",
         )
-
-        # Tạo fake package để relative imports hoạt động
-        impl_pkg_name = "jinaai.jina_hyphen_clip_hyphen_implementation"
-        if impl_pkg_name not in sys.modules:
-            impl_pkg = type(sys)(impl_pkg_name)
-            impl_pkg.__path__ = [jina_impl_dir]
-            impl_pkg.__package__ = impl_pkg_name
-            sys.modules[impl_pkg_name] = impl_pkg
-
-            # Load configuration_clip trước (không có relative imports)
-            config_path = os.path.join(jina_impl_dir, "configuration_clip.py")
-            spec = importlib.util.spec_from_file_location(
-                "jinaai.jina_hyphen_clip_hyphen_implementation.configuration_clip",
-                config_path,
-            )
-            config_mod = importlib.util.module_from_spec(spec)
-            sys.modules[
-                "jinaai.jina_hyphen_clip_hyphen_implementation.configuration_clip"
-            ] = config_mod
-            spec.loader.exec_module(config_mod)
-
-        # Load modeling_clip (sẽ import được configuration_clip từ fake package)
-        modeling_path = os.path.join(jina_impl_dir, "modeling_clip.py")
-        spec = importlib.util.spec_from_file_location(
-            "jinaai.jina_hyphen_clip_hyphen_implementation.modeling_clip",
-            modeling_path,
-        )
-        modeling_module = importlib.util.module_from_spec(spec)
-        sys.modules[
-            "jinaai.jina_hyphen_clip_hyphen_implementation.modeling_clip"
-        ] = modeling_module
-        spec.loader.exec_module(modeling_module)
-        JinaCLIPModel = modeling_module.JinaCLIPModel
-
-        self.model = JinaCLIPModel.from_pretrained(model_path)
-        # Gắn tokenizer để model không tự gọi AutoTokenizer lần nữa
-        self.model.tokenizer = self.tokenizer
         self.model = self.model.to(device).eval()
+
+        # Gắn tokenizer để get_text_features() không gọi AutoTokenizer
+        self.model.tokenizer = self.tokenizer
+
+        # Xác định dim từ config
+        self.dim = int(
+            getattr(self.model, "text_embed_dim", 1024)
+            or getattr(config, "projection_dim", 1024)
+        )
 
     def encode(self, texts: list[str], batch_size: int = 8) -> np.ndarray:
         if not texts:
             return np.zeros((0, self.dim), dtype="float32")
-        with self._torch.no_grad():
-            result = self.model.encode_text(
-                texts,
-                task=self.task,
-                batch_size=batch_size,
-                normalize_embeddings=True,
-                convert_to_numpy=True,
-            )
-        # result is (batch, dim) numpy array
-        matrix = np.asarray(result, dtype="float32")
-        # Normalize lại: encode_text() đã normalize, nhưng đảm bảo đúng
+
+        torch = self._torch
+        vectors: list[np.ndarray] = []
+
+        # Lấy instruction từ task (như encode_text() bên trong làm)
+        instruction = self.model.text_model.get_instruction_from_task(self.task)
+
+        prepared = [
+            (instruction + text) if instruction else text
+            for text in texts
+        ]
+
+        with torch.no_grad():
+            for start in range(0, len(prepared), batch_size):
+                batch_texts = prepared[start : start + batch_size]
+
+                tokens = self.tokenizer(
+                    batch_texts,
+                    padding=True,
+                    truncation=True,
+                    max_length=self.max_length,
+                    return_tensors="pt",
+                ).to(self.device)
+
+                embeddings = self.model.get_text_features(input_ids=tokens)
+                embeddings = torch.nn.functional.normalize(embeddings, p=2, dim=-1)
+
+                vectors.append(
+                    embeddings.detach().cpu().to(torch.float32).numpy()
+                )
+
+        matrix = np.vstack(vectors).astype("float32")
+
+        # Đảm bảo L2-normalized (invariant: cosine == dot product)
         norms = np.linalg.norm(matrix, axis=-1, keepdims=True)
         return matrix / np.clip(norms, 1e-9, None)
 
     def warmup(self) -> None:
-        """Nạp trọng số NGAY, ngoài request path — xem `E5Encoder.warmup`."""
         self.encode(["warmup"])
 
 
@@ -330,8 +347,8 @@ def build_text_encoder(
             task=JINA_PASSAGE_TASK if for_passages else JINA_QUERY_TASK,
         )
     if kind == "jina_clip_v2":
-        # model_path bị bỏ qua: luôn dùng HuggingFace vì đây là model mới
-        # và chưa có trong storage/models/. Nếu cần dùng local, sửa sau.
+        # Dùng model_path từ env (AIC_CAPTION_DENSE_MODEL).
+        # model_path phải trỏ vào thư mục local storage/models/jina-clip-v2.
         return JinaClipV2Encoder(
             model_path=model_path,
             device=device,
