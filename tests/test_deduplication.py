@@ -119,13 +119,14 @@ class TaskPolicyTests(unittest.TestCase):
         ]
 
     def test_kis_collapses_an_event_to_one_result(self) -> None:
-        result = deduplicate_for_task(self._event_heavy(), TaskType.TEXTUAL_KIS)
+        # PR-RECALL: dedup không backfill mặc định trong tests này
+        result = deduplicate_for_task(self._event_heavy(), TaskType.TEXTUAL_KIS, backfill=False)
         self.assertEqual(len(result), 1)
 
     def test_qa_keeps_several_evidence_frames_of_one_event(self) -> None:
         # QA cần nhiều bằng chứng trong cùng event; siết như KIS sẽ vứt mất
         # frame chứa câu trả lời.
-        result = deduplicate_for_task(self._event_heavy(), TaskType.QA)
+        result = deduplicate_for_task(self._event_heavy(), TaskType.QA, backfill=False)
         self.assertEqual(len(result), 3)
 
     def test_trake_does_not_dedup_at_all(self) -> None:
@@ -138,7 +139,7 @@ class TaskPolicyTests(unittest.TestCase):
                       event=f"E{index}", score=1.0 - index / 20, rank=index + 1)
             for index in range(8)
         ]
-        result = deduplicate_for_task(items, TaskType.AVS)
+        result = deduplicate_for_task(items, TaskType.AVS, backfill=False)
         counts: dict[str, int] = {}
         for item in result:
             counts[item.video_id] = counts.get(item.video_id, 0) + 1
@@ -146,9 +147,9 @@ class TaskPolicyTests(unittest.TestCase):
 
     def test_request_can_override_the_task_policy(self) -> None:
         items = self._event_heavy()
-        self.assertEqual(len(deduplicate_for_task(items, TaskType.TEXTUAL_KIS)), 1)
+        self.assertEqual(len(deduplicate_for_task(items, TaskType.TEXTUAL_KIS, backfill=False)), 1)
         self.assertEqual(
-            len(deduplicate_for_task(items, TaskType.TEXTUAL_KIS, scope_override="none")), 5
+            len(deduplicate_for_task(items, TaskType.TEXTUAL_KIS, scope_override="none", backfill=False)), 5
         )
 
 

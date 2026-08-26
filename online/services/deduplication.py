@@ -15,6 +15,9 @@ Chính sách theo task (khác nhau thật, không phải một hàm dùng chung)
 * ``TRAKE`` — không dedup ở đây; mỗi step là một truy vấn riêng và hai step
   hoàn toàn có thể ở cùng một scene.
 * ``AVS`` — dedup event mạnh nhất, vì điểm phụ thuộc độ đa dạng.
+
+**PR-RECALL**: Dedup luôn kèm backfill để đảm bảo Top-100 không bị mất
+candidate chỉ vì trùng lặp.
 """
 
 from __future__ import annotations
@@ -126,20 +129,39 @@ def deduplicate_for_task(
     *,
     scope_override: str | None = None,
     max_per_video_override: int | None = None,
+    backfill: bool = True,
 ) -> list[Candidate]:
-    """Áp chính sách của task, cho phép request ghi đè scope/trần video."""
+    """Áp chính sách của task, cho phép request ghi đè scope/trần video.
 
+    **PR-RECALL**: Nếu `backfill=True`, backfill từ thứ tự gốc để đảm bảo
+    Top-100 không bị mất candidate vì dedup.
+    """
     policy = dict(TASK_POLICIES[task])
     if scope_override is not None:
         policy["scope"] = scope_override
     if max_per_video_override is not None:
         policy["max_per_video"] = max_per_video_override
-    return deduplicate(
+
+    original_order = list(candidates)
+    original_ids = {c.candidate_id for c in candidates}
+
+    result = deduplicate(
         candidates,
         scope=str(policy["scope"]),
         max_per_video=policy["max_per_video"],  # type: ignore[arg-type]
         max_per_event=policy["max_per_event"],  # type: ignore[arg-type]
     )
+
+    # PR-RECALL: Backfill nếu cần
+    if backfill and len(result) < len(original_ids):
+        kept_ids = {c.candidate_id for c in result}
+        for candidate in original_order:
+            if candidate.candidate_id not in kept_ids:
+                result.append(candidate.model_copy(
+                    update={"rank": len(result) + 1, "payload": {**candidate.payload, "backfilled_from_dedup": True}}
+                ))
+
+    return result
 
 
 __all__ = ["TASK_POLICIES", "deduplicate", "deduplicate_for_task"]

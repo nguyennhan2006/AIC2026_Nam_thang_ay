@@ -34,7 +34,7 @@ from online.services.qa import QaProcessor
 from online.services.query_planner import RuleBasedQueryPlanner, compute_modality_weights
 from online.services.registry import RetrieverRegistry
 from online.services.normalizers import ScoreNormalizers
-from online.services.rerank_pipeline import RerankPipeline
+from online.services.rerank_pipeline import RerankPipeline, backfill_top_k
 from online.services.score_normalization import normalize_all
 from online.services.retrieval_orchestrator import RetrievalOrchestrator, _branch_identity
 from online.services.rules import RuleConfig, apply_bonus_penalty
@@ -604,18 +604,46 @@ class SearchService:
             ),
             max_per_video_override=fusion_options.max_results_per_video,
         )
+        # PR-RECALL: Chụp candidates TRƯỚC rerank để backfill nếu cần
+        pre_rerank = list(candidates)
+
         # Rerank chạy SAU dedup: đưa 10 scene liền kề của cùng một sự kiện vào
         # cross-encoder là đốt ngân sách model cho cùng một nội dung.
         rerank = await self.rerank_pipeline.run(
             plan.normalized_query, candidates, plan.search_options.rerank
         )
         candidates = rerank.candidates
+
+        # PR-RECALL: Backfill cuối cùng từ pre-rerank
+        expected = min(100, len(pre_rerank))
+        if len(candidates) < expected:
+            warnings.append(
+                f"PR-RECALL backfill: {len(candidates)} -> {expected} (from pre-rerank)"
+            )
+            candidates = backfill_top_k(
+                ranked=candidates,
+                fallback=pre_rerank,
+                k=expected,
+            )
+        # PR-RECALL: Invariant check
+        if len(candidates) < expected:
+            raise RuntimeError(
+                f"candidate loss detected: available={expected}, final={len(candidates)}"
+            )
+
         if trace is not None:
             trace["post_rerank"] = [
                 {"candidate_id": c.candidate_id, "video_id": c.video_id,
                  "score": round(c.raw_score, 6)}
                 for c in candidates[:100]
             ]
+            trace["pipeline_counts"] = {
+                "retrieved": sum(st.candidate_count for st in statuses),
+                "after_fusion": len(pre_rerank),
+                "after_dedup": len(pre_rerank),  # dedup có backfill nên không cần tách
+                "after_rerank": len(rerank.candidates),
+                "final": len(candidates),
+            }
         hits = await self._hydrate(candidates[: request.top_k], plan.normalized_query)
         results = _format_results(hits, request.top_k, plan.search_options.results)
         warnings = (
@@ -743,6 +771,9 @@ class SearchService:
         )
         yield {"type": "fusion_completed", "query_id": query_id, "candidate_count": len(candidates)}
 
+        # PR-RECALL: Chụp candidates TRƯỚC rerank để backfill nếu cần
+        pre_rerank = list(candidates)
+
         rerank = await self.rerank_pipeline.run(
             plan.normalized_query, candidates, plan.search_options.rerank
         )
@@ -755,6 +786,20 @@ class SearchService:
                 ],
             }
         candidates = rerank.candidates
+
+        # PR-RECALL: Backfill cuối cùng từ pre-rerank
+        expected = min(100, len(pre_rerank))
+        if len(candidates) < expected:
+            candidates = backfill_top_k(
+                ranked=candidates,
+                fallback=pre_rerank,
+                k=expected,
+            )
+        # PR-RECALL: Invariant check
+        if len(candidates) < expected:
+            raise RuntimeError(
+                f"candidate loss detected: available={expected}, final={len(candidates)}"
+            )
         hits = await self._hydrate(candidates[: request.top_k], plan.normalized_query)
         results = _format_results(hits, request.top_k, plan.search_options.results)
         yield {"type": "evidence_ready", "query_id": query_id, "count": len(results)}
