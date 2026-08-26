@@ -209,17 +209,38 @@ class JinaClipV2Encoder:
         task: str = JINA_QUERY_TASK,
     ) -> None:
         import torch
-        from transformers import AutoConfig, AutoModel
+        from transformers import AutoConfig
 
         self._torch = torch
-        # Tách config và weights: config không tải tokenizer, weights qua from_pretrained.
-        # Fix lỗi "Unrecognized configuration class JinaCLIPConfig" khi
-        # AutoModel cố khởi tạo tokenizer mặc định.
+        # Dùng AutoConfig để đọc cấu hình, sau đó import trực tiếp JinaCLIPModel
+        # từ transformers_modules để tránh AutoTokenizer ném lỗi
+        # "Unrecognized configuration class JinaCLIPConfig".
         config = AutoConfig.from_pretrained(model_path, trust_remote_code=True)
-        self.model = AutoModel.from_pretrained(
-            model_path, trust_remote_code=True, config=config
+
+        # Tìm đường dẫn module code của jina-clip
+        import os, sys, importlib.util
+        hf_home = os.environ.get("HF_HOME", os.path.expanduser("~/.cache/huggingface"))
+        modules_dir = os.path.join(hf_home, "modules", "transformers_modules")
+        jina_impl_dir = [
+            d for d in os.listdir(modules_dir + "/jinaai/jina_hyphen_clip_hyphen_implementation")
+            if not d.startswith("_")
+        ][0]
+        modeling_path = os.path.join(
+            modules_dir,
+            "jinaai/jina_hyphen_clip_hyphen_implementation",
+            jina_impl_dir,
+            "modeling_clip.py",
         )
-        self.model = self.model.to(device).eval()
+
+        # Load trực tiếp JinaCLIPModel từ transformers_modules
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("jina_clip_model", modeling_path)
+        modeling_module = importlib.util.module_from_spec(spec)
+        sys.modules["jina_clip_model"] = modeling_module
+        spec.loader.exec_module(modeling_module)
+        JinaCLIPModel = modeling_module.JinaCLIPModel
+
+        self.model = JinaCLIPModel.from_pretrained(model_path, config=config).to(device).eval()
         self.device = device
         self.max_length = max_length
         self.task = task
