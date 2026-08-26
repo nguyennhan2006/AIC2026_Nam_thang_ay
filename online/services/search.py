@@ -83,6 +83,7 @@ class SearchService:
         media_root=None,
         branch_timeout_ms: int | None = None,
         evidence_select_top_n: int = 10,
+        retrieval_multiplier: int = 10,
     ) -> None:
         if not retrievers:
             raise ValueError("at least one retriever is required")
@@ -160,6 +161,10 @@ class SearchService:
         self.planner = planner or RuleBasedQueryPlanner()
         self.candidate_limit = candidate_limit
         self.rrf_k = rrf_k
+        # Retrieval lấy nhiều hơn top_k để cải thiện recall. Fusion sau đó
+        # mới chọn top_k từ pool lớn hơn. Ví dụ: multiplier=10, top_k=100 ->
+        # retrieval lấy 1000, fusion giữ 100.
+        self.retrieval_multiplier = retrieval_multiplier
         # Phương án E (bonus/penalty sau RRF), optional — None giữ nguyên hành vi
         # cũ; xem online/services/rules.py và docs/15_RESEARCH_AGENDA.md mục 5.
         self.rule_config = rule_config
@@ -218,9 +223,12 @@ class SearchService:
     async def _retrieve(
         self, plan: QueryPlan, limit: int
     ) -> tuple[list[Candidate], list[BranchStatus]]:
+        # Retrieval lấy nhiều hơn limit để cải thiện recall. Fusion sau đó
+        # mới chọn top_k từ pool lớn hơn.
+        retrieval_limit = limit * self.retrieval_multiplier
         # Orchestrator cô lập lỗi theo từng branch: một branch timeout không
         # còn kéo đổ cả request như `asyncio.gather` trần trước PR-03.
-        lists, statuses = await self.orchestrator.execute(plan, limit)
+        lists, statuses = await self.orchestrator.execute(plan, retrieval_limit)
         fusion_options = plan.search_options.fusion
         # Chuẩn hóa trước, cắt ngưỡng sau, rồi mới fuse. Thứ tự này bắt buộc:
         # RRF dùng *hạng* trong danh sách của branch, nên cắt sau khi fuse sẽ
@@ -735,7 +743,9 @@ class SearchService:
 
         lists: list[list[Candidate]] = []
         statuses: list[BranchStatus] = []
-        async for candidates, status in self.orchestrator.stream(plan, self.candidate_limit):
+        # Retrieval lấy nhiều hơn để cải thiện recall
+        retrieval_limit = self.candidate_limit * self.retrieval_multiplier
+        async for candidates, status in self.orchestrator.stream(plan, retrieval_limit):
             lists.append(candidates)
             statuses.append(status)
             yield {

@@ -666,6 +666,7 @@ async def build_container(
         media_root=settings.data_root,
         weight_recommender=weight_recommender,
         evidence_selector=evidence_selector,
+        retrieval_multiplier=settings.retrieval_multiplier,
     )
     return AppContainer(
         settings=settings,
