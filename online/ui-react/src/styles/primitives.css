@@ -236,7 +236,7 @@
   --slider-tone: var(--accent);
 }
 .slider::-webkit-slider-runnable-track {
-  height: 4px;
+  height: 6px;
   border-radius: var(--radius-pill);
   background: linear-gradient(
     to right,
@@ -247,21 +247,21 @@
   );
 }
 .slider::-moz-range-track {
-  height: 4px;
+  height: 6px;
   border-radius: var(--radius-pill);
   background: var(--surface-control);
 }
 .slider::-moz-range-progress {
-  height: 4px;
+  height: 6px;
   border-radius: var(--radius-pill);
   background: var(--slider-tone);
 }
 .slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 11px;
-  height: 11px;
-  margin-top: -3.5px;
+  width: 15px;
+  height: 15px;
+  margin-top: -4.5px;
   border-radius: var(--radius-pill);
   background: #fff;
   border: none;
@@ -269,8 +269,8 @@
   transition: transform var(--transition-fast), box-shadow var(--transition-fast);
 }
 .slider::-moz-range-thumb {
-  width: 11px;
-  height: 11px;
+  width: 15px;
+  height: 15px;
   border-radius: var(--radius-pill);
   background: #fff;
   border: none;
@@ -380,7 +380,7 @@
    Nhờ cột cố định, ô số không bao giờ bị slider đè và nhãn không wrap. */
 .weight-row {
   display: grid;
-  grid-template-columns: 18px 92px minmax(0, 1fr) 48px 24px 24px;
+  grid-template-columns: 18px 78px minmax(64px, 1fr) 48px 24px 24px;
   align-items: center;
   gap: var(--space-2);
   height: 26px;
