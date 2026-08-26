@@ -212,10 +212,8 @@ class JinaClipV2Encoder:
         from transformers import AutoConfig
 
         self._torch = torch
-        # Dùng AutoConfig để đọc cấu hình, sau đó import trực tiếp JinaCLIPModel
-        # từ transformers_modules để tránh AutoTokenizer ném lỗi
-        # "Unrecognized configuration class JinaCLIPConfig".
-        config = AutoConfig.from_pretrained(model_path, trust_remote_code=True)
+        # Đọc config để validate model_path tồn tại (AutoConfig sẽ fail sớm nếu không)
+        AutoConfig.from_pretrained(model_path, trust_remote_code=True)
 
         # Tạo fake package structure để relative imports hoạt động
         import os, sys, importlib.util
@@ -257,7 +255,8 @@ class JinaClipV2Encoder:
         spec.loader.exec_module(modeling_module)
         JinaCLIPModel = modeling_module.JinaCLIPModel
 
-        self.model = JinaCLIPModel.from_pretrained(model_path, config=config).to(device).eval()
+        # KHÔNG truyền config — JinaCLIPModel.from_pretrained() tự load config riêng.
+        self.model = JinaCLIPModel.from_pretrained(model_path).to(device).eval()
         self.device = device
         self.max_length = max_length
         self.task = task
