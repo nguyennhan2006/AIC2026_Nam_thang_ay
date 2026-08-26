@@ -209,25 +209,31 @@ class JinaClipV2Encoder:
         task: str = JINA_QUERY_TASK,
     ) -> None:
         import torch
-        from transformers import AutoConfig, AutoTokenizer
+        from transformers import AutoConfig
+        from transformers import XLMRobertaTokenizerFast
 
         self._torch = torch
+        self.device = device
+        self.max_length = max_length
+        self.task = task
+        self.kind = "jina_clip_v2"
+        self.dim = 1024  # fixed for jina-clip-v2
+
         # Validate model_path tồn tại
         AutoConfig.from_pretrained(model_path, trust_remote_code=True)
 
-        # Monkey-patch AutoTokenizer.from_pretrained để trả None cho JinaCLIPConfig.
-        # JinaCLIPModel không cần tokenizer ngoài vì dùng internal tokenization.
-        # Lỗi gốc: AutoTokenizer không có handler cho JinaCLIPConfig.
-        _original_from_pretrained = AutoTokenizer.from_pretrained
+        # Load tokenizer TƯỜNG MINH bằng XLMRobertaTokenizerFast.
+        # Jina CLIP v2 dùng tokenizer này, không phải AutoTokenizer generic.
+        # fix_mistral_regex=True tránh warning về regex pattern.
+        self.tokenizer = XLMRobertaTokenizerFast.from_pretrained(
+            model_path,
+            local_files_only=True,
+            fix_mistral_regex=True,
+        )
 
-        def _patched_from_pretrained(*args, **kwargs):
-            try:
-                return _original_from_pretrained(*args, **kwargs)
-            except Exception:
-                # Nếu AutoTokenizer fail (vd JinaCLIPConfig), trả None.
-                # JinaCLIPModel sẽ dùng internal tokenizer của nó.
-                return None
-
+        # Load JinaCLIPModel trực tiếp từ transformers_modules cache.
+        # Cách này tránh AutoTokenizer ném lỗi khi AutoModel cố suy
+        # tokenizer từ JinaCLIPConfig.
         import os, sys, importlib.util
         hf_home = os.environ.get("HF_HOME", os.path.expanduser("~/.cache/huggingface"))
         modules_dir = os.path.join(hf_home, "modules", "transformers_modules")
@@ -246,37 +252,35 @@ class JinaClipV2Encoder:
             impl_pkg.__package__ = impl_pkg_name
             sys.modules[impl_pkg_name] = impl_pkg
 
+            # Load configuration_clip trước (không có relative imports)
             config_path = os.path.join(jina_impl_dir, "configuration_clip.py")
             spec = importlib.util.spec_from_file_location(
                 "jinaai.jina_hyphen_clip_hyphen_implementation.configuration_clip",
-                config_path
+                config_path,
             )
             config_mod = importlib.util.module_from_spec(spec)
-            sys.modules["jinaai.jina_hyphen_clip_hyphen_implementation.configuration_clip"] = config_mod
+            sys.modules[
+                "jinaai.jina_hyphen_clip_hyphen_implementation.configuration_clip"
+            ] = config_mod
             spec.loader.exec_module(config_mod)
 
-        # Load JinaCLIPModel với monkey-patched AutoTokenizer
+        # Load modeling_clip (sẽ import được configuration_clip từ fake package)
         modeling_path = os.path.join(jina_impl_dir, "modeling_clip.py")
         spec = importlib.util.spec_from_file_location(
             "jinaai.jina_hyphen_clip_hyphen_implementation.modeling_clip",
-            modeling_path
+            modeling_path,
         )
         modeling_module = importlib.util.module_from_spec(spec)
-        sys.modules["jinaai.jina_hyphen_clip_hyphen_implementation.modeling_clip"] = modeling_module
+        sys.modules[
+            "jinaai.jina_hyphen_clip_hyphen_implementation.modeling_clip"
+        ] = modeling_module
         spec.loader.exec_module(modeling_module)
         JinaCLIPModel = modeling_module.JinaCLIPModel
 
-        # Patch trước khi gọi from_pretrained
-        AutoTokenizer.from_pretrained = _patched_from_pretrained
-        try:
-            self.model = JinaCLIPModel.from_pretrained(model_path).to(device).eval()
-        finally:
-            AutoTokenizer.from_pretrained = _original_from_pretrained
-        self.device = device
-        self.max_length = max_length
-        self.task = task
-        self.kind = "jina_clip_v2"
-        self.dim = 1024  # fixed for jina-clip-v2
+        self.model = JinaCLIPModel.from_pretrained(model_path)
+        # Gắn tokenizer để model không tự gọi AutoTokenizer lần nữa
+        self.model.tokenizer = self.tokenizer
+        self.model = self.model.to(device).eval()
 
     def encode(self, texts: list[str], batch_size: int = 8) -> np.ndarray:
         if not texts:
