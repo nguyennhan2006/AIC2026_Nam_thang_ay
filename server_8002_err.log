@@ -1,0 +1,40 @@
+INFO:     Started server process [7112]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+2026-08-25 22:11:52,274 INFO online.api.boot boot phase: metadata (0.0s)
+INFO:     Uvicorn running on http://127.0.0.1:8002 (Press CTRL+C to quit)
+2026-08-25 22:12:42,307 INFO online.api.boot boot phase: lexical (50.0s)
+2026-08-25 22:12:50,429 INFO online.api.boot boot phase: vectors (58.2s)
+2026-08-25 22:13:24,267 INFO online.api.boot boot phase: encoder (92.0s)
+Using a slow image processor as `use_fast` is unset and a slow processor was saved with this model. `use_fast=True` will be the default behavior in v4.52, even if the model was saved with a slow processor. This will result in minor differences in outputs. You'll still be able to use a slow processor with `use_fast=False`.
+`torch_dtype` is deprecated! Use `dtype` instead!
+2026-08-25 22:13:49,657 INFO transformers_modules.jinaai.jina_hyphen_clip_hyphen_implementation.39e6a55ae971b59bea6e44675d237c99762e7ee2.configuration_clip `text_config` is `None`. Initializing the `JinaCLIPTextConfig` with default values.
+2026-08-25 22:13:49,657 INFO transformers_modules.jinaai.jina_hyphen_clip_hyphen_implementation.39e6a55ae971b59bea6e44675d237c99762e7ee2.configuration_clip `vision_config` is `None`. initializing the `JinaCLIPVisionConfig` with default values.
+`torch_dtype` is deprecated! Use `dtype` instead!
+C:\Users\ASUS\.cache\huggingface\modules\transformers_modules\jinaai\jina_hyphen_clip_hyphen_implementation\39e6a55ae971b59bea6e44675d237c99762e7ee2\modeling_clip.py:137: UserWarning: Flash attention requires CUDA, disabling
+  warnings.warn('Flash attention requires CUDA, disabling')
+C:\Users\ASUS\.cache\huggingface\modules\transformers_modules\jinaai\jina_hyphen_clip_hyphen_implementation\39e6a55ae971b59bea6e44675d237c99762e7ee2\modeling_clip.py:172: UserWarning: xFormers requires CUDA, disabling
+  warnings.warn('xFormers requires CUDA, disabling')
+Encoding:   0%|          | 0/1 [00:00<?, ?it/s]Encoding: 100%|██████████| 1/1 [00:06<00:00,  6.68s/it]Encoding: 100%|██████████| 1/1 [00:06<00:00,  6.69s/it]
+Encoding:   0%|          | 0/1 [00:00<?, ?it/s]Encoding: 100%|██████████| 1/1 [00:02<00:00,  2.73s/it]Encoding: 100%|██████████| 1/1 [00:02<00:00,  2.73s/it]
+2026-08-25 22:30:20,206 INFO online.api.boot boot phase: events (1107.9s)
+2026-08-25 22:30:42,292 INFO online.api.boot sẵn sàng phục vụ sau 1130.0s
+Encoding:   0%|          | 0/1 [00:00<?, ?it/s]Encoding: 100%|██████████| 1/1 [01:00<00:00, 60.57s/it]Encoding: 100%|██████████| 1/1 [01:00<00:00, 60.57s/it]
+2026-08-25 22:35:54,768 ERROR asyncio Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
+Traceback (most recent call last):
+  File "C:\Python314\Lib\asyncio\events.py", line 94, in _run
+    self._context.run(self._callback, *self._args)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python314\Lib\asyncio\proactor_events.py", line 165, in _call_connection_lost
+    self._sock.shutdown(socket.SHUT_RDWR)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+ConnectionResetError: [WinError 10054] An existing connection was forcibly closed by the remote host
+Encoding:   0%|          | 0/1 [00:00<?, ?it/s]
+Encoding:   0%|          | 0/1 [00:00<?, ?it/s][AEncoding: 100%|██████████| 1/1 [02:53<00:00, 173.24s/it]Encoding: 100%|██████████| 1/1 [02:53<00:00, 173.27s/it]
+
+Encoding: 100%|██████████| 1/1 [02:45<00:00, 165.79s/it][AEncoding: 100%|██████████| 1/1 [02:45<00:00, 165.91s/it]
+Encoding:   0%|          | 0/1 [00:00<?, ?it/s]
+Encoding:   0%|          | 0/1 [00:00<?, ?it/s][AEncoding: 100%|██████████| 1/1 [05:21<00:00, 321.50s/it]Encoding: 100%|██████████| 1/1 [05:21<00:00, 321.70s/it]
+
+Encoding: 100%|██████████| 1/1 [04:51<00:00, 291.18s/it][AEncoding: 100%|██████████| 1/1 [04:51<00:00, 291.39s/it]

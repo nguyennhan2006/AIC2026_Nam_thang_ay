@@ -74,7 +74,7 @@ class TextRerankOptions(StrictModel):
     enabled: bool = True
     model_id: str = "bge-reranker-v2-m3"
     input_top_k: int = 300
-    output_top_k: int = 80
+    output_top_k: int = 100  # Giữ đủ 100 candidates cho submission
     min_score: float | None = None
     weight: float = 1.0
 

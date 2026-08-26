@@ -127,3 +127,4 @@ outputs/evaluation/quick/
 # mà chính README của nó nói là không dùng để ra quyết định được.
 outputs/evaluation/_superseded/*.json
 outputs/evaluation/_superseded/**/*.json
+.claude/settings.local.json

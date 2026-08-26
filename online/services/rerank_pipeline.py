@@ -81,14 +81,23 @@ class RerankPipeline:
     def available_stages(self) -> dict[str, bool]:
         return {"text": self.text_reranker is not None, "vlm": self.vlm_reranker is not None}
 
-    async def _packs_for(self, candidates: list[Candidate]) -> list[EvidencePack]:
-        packs: list[EvidencePack] = []
+    async def _packs_for(
+        self, candidates: list[Candidate]
+    ) -> tuple[list[Candidate], list[EvidencePack]]:
+        """Build evidence packs, returning only candidates that got packs.
+
+        Returns:
+            Tuple of (valid_candidates, valid_packs) — same length, 1:1 mapping.
+        """
+        valid_candidates: list[Candidate] = []
+        valid_packs: list[EvidencePack] = []
         for candidate in candidates:
             # Không cần neighbor context ở tầng rerank: nó chỉ làm dài prompt.
             pack = await self.evidence_builder.build(candidate, with_neighbors=False)
             if pack is not None:
-                packs.append(pack)
-        return packs
+                valid_candidates.append(candidate)
+                valid_packs.append(pack)
+        return valid_candidates, valid_packs
 
     async def run(
         self, query: str, candidates: list[Candidate], options: RerankOptions
@@ -103,18 +112,40 @@ class RerankPipeline:
             tail = outcome.candidates[options.text.input_top_k :]
             started = perf_counter()
             try:
-                packs = await self._packs_for(head)
-                scores = await self.text_reranker.score(query, packs)
-                reranked = _reorder(head, scores)
-                kept = reranked[: options.text.output_top_k]
-                # Phần bị cắt khỏi output_top_k KHÔNG bị vứt: nó tụt xuống sau
-                # phần đã rerank, giữ recall cho các mốc 50/100.
-                outcome.candidates = _renumber(kept + reranked[options.text.output_top_k :] + tail)
-                outcome.packs.update({pack.candidate_id: pack for pack in packs})
-                outcome.stages.append(RerankStageResult(
-                    "text", True, len(head), len(kept),
-                    int((perf_counter() - started) * 1000),
-                ))
+                valid_head, valid_packs = await self._packs_for(head)
+
+                if len(valid_head) < len(head):
+                    # Some candidates have no evidence — put them at the end, unscored
+                    unscored = [c for c in head if c not in valid_head]
+                    outcome.stages.append(RerankStageResult(
+                        "text",
+                        True,
+                        len(head),
+                        len(valid_head),
+                        int((perf_counter() - started) * 1000),
+                        warning=f"text reranker skipped {len(unscored)}/{len(head)} candidates without evidence",
+                    ))
+                else:
+                    outcome.stages.append(RerankStageResult(
+                        "text", True, len(head), len(valid_head),
+                        int((perf_counter() - started) * 1000),
+                    ))
+
+                if not valid_packs:
+                    # No valid packs at all — keep head as-is
+                    outcome.packs.update({pack.candidate_id: pack for pack in valid_packs})
+                else:
+                    scores = await self.text_reranker.score(query, valid_packs)
+                    if len(scores) != len(valid_head):
+                        raise ValueError(
+                            f"text reranker cardinality mismatch: "
+                            f"{len(valid_head)} valid candidates but {len(scores)} scores"
+                        )
+                    reranked = _reorder(valid_head, scores)
+                    # Giữ TẤT CẢ candidates từ head (không cắt ở output_top_k)
+                    # unscored candidates được đặt ở cuối phần reranked
+                    outcome.candidates = _renumber(reranked + unscored + tail)
+                    outcome.packs.update({pack.candidate_id: pack for pack in valid_packs})
             except DependencyUnavailableError as exc:
                 outcome.stages.append(RerankStageResult(
                     "text", False, len(head), len(head),
@@ -133,33 +164,44 @@ class RerankPipeline:
             tail = outcome.candidates[options.vlm.input_top_k :]
             started = perf_counter()
             try:
-                packs = await self._packs_for(head)
-                results = await self.vlm_reranker.score(query, packs)
-                scores = [float(item.get("relevance", 0.0)) for item in results]
-                reranked = _reorder(head, scores)
-                enriched = [
-                    candidate.model_copy(
-                        update={
-                            "payload": {
-                                **candidate.payload,
-                                "vlm_verdict": {
-                                    key: value
-                                    for key, value in results[index].items()
-                                    if key != "candidate_id"
-                                },
+                valid_head, valid_packs = await self._packs_for(head)
+
+                if not valid_packs:
+                    outcome.stages.append(RerankStageResult(
+                        "vlm", True, len(head), 0,
+                        int((perf_counter() - started) * 1000),
+                        warning="no valid evidence packs for VLM reranking",
+                    ))
+                else:
+                    results = await self.vlm_reranker.score(query, valid_packs)
+                    scores = [float(item.get("relevance", 0.0)) for item in results]
+                    if len(scores) != len(valid_head):
+                        raise ValueError(
+                            f"VLM reranker cardinality mismatch: "
+                            f"{len(valid_head)} valid candidates but {len(scores)} scores"
+                        )
+                    reranked = _reorder(valid_head, scores)
+                    enriched = [
+                        candidate.model_copy(
+                            update={
+                                "payload": {
+                                    **candidate.payload,
+                                    "vlm_verdict": {
+                                        key: value
+                                        for key, value in results[index].items()
+                                        if key != "candidate_id"
+                                    },
+                                }
                             }
-                        }
-                    )
-                    for index, candidate in enumerate(head)
-                ]
-                order = {item.candidate_id: item.rank for item in reranked}
-                enriched.sort(key=lambda item: order[item.candidate_id])
-                outcome.candidates = _renumber(enriched + tail)
-                outcome.packs.update({pack.candidate_id: pack for pack in packs})
-                outcome.stages.append(RerankStageResult(
-                    "vlm", True, len(head), len(head),
-                    int((perf_counter() - started) * 1000),
-                ))
+                        )
+                        for index, candidate in enumerate(reranked)
+                    ]
+                    outcome.candidates = _renumber(enriched + tail)
+                    outcome.packs.update({pack.candidate_id: pack for pack in valid_packs})
+                    outcome.stages.append(RerankStageResult(
+                        "vlm", True, len(head), len(valid_head),
+                        int((perf_counter() - started) * 1000),
+                    ))
             except DependencyUnavailableError as exc:
                 outcome.stages.append(RerankStageResult(
                     "vlm", False, len(head), len(head),
