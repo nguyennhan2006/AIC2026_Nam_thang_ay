@@ -201,7 +201,7 @@ class JinaClipV2Encoder:
     def __init__(
         self,
         model_path: str,
-        device: str = "cpu",
+        device: str | None = None,
         max_length: int = 320,
         task: str = JINA_QUERY_TASK,
     ) -> None:
@@ -210,6 +210,11 @@ class JinaClipV2Encoder:
         from transformers import AutoConfig, AutoModel, XLMRobertaTokenizerFast
 
         self._torch = torch
+
+        # Tự động dùng CUDA nếu có
+        if device is None:
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+
         self.device = device
         self.max_length = max_length
         self.task = task
@@ -347,11 +352,10 @@ def build_text_encoder(
             task=JINA_PASSAGE_TASK if for_passages else JINA_QUERY_TASK,
         )
     if kind == "jina_clip_v2":
-        # Dùng model_path từ env (AIC_CAPTION_DENSE_MODEL).
-        # model_path phải trỏ vào thư mục local storage/models/jina-clip-v2.
+        # Tự động dùng CUDA nếu có (JinaClipV2Encoder.auto-detect)
         return JinaClipV2Encoder(
             model_path=model_path,
-            device=device,
+            device=None,  # auto-detect CUDA
             max_length=max_length,
             task=JINA_PASSAGE_TASK if for_passages else JINA_QUERY_TASK,
         )
