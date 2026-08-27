@@ -101,6 +101,58 @@
 .stream-log::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: var(--radius-pill); }
 .stream-log li { padding: 1px 0; }
 
+/* Bảng "mỗi engine nhận query gì" (Query Routing V2).
+   `max-height` của .stream-log là 116px — vừa cho log một dòng, không vừa cho
+   bảng này, nên nới riêng khi có bundle. */
+.stream-log:has(.stream-bundle) { max-height: 340px; }
+
+.stream-bundle {
+  margin: var(--space-2) 0;
+  padding: var(--space-2);
+  background: var(--surface-raised, rgba(255, 255, 255, 0.03));
+  border-left: 2px solid var(--border-strong);
+  border-radius: var(--radius-nested);
+}
+.stream-bundle-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+  margin-bottom: var(--space-2);
+}
+.stream-bundle-table { width: 100%; border-collapse: collapse; }
+.stream-bundle-table th {
+  width: 8.5rem;
+  padding: 1px var(--space-2) 1px 0;
+  text-align: left;
+  font-weight: 400;
+  color: var(--text-tertiary);
+  vertical-align: top;
+  white-space: nowrap;
+}
+.stream-bundle-table td {
+  padding: 1px 0;
+  color: var(--text-secondary);
+  /* Query dài phải xuống dòng chứ không cắt cụt — cắt cụt đúng chỗ cần đọc
+     nhất thì bảng này mất tác dụng. */
+  word-break: break-word;
+}
+
+.stream-tag {
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-micro);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+/* rule vs llm phải phân biệt được ngay: đó là câu hỏi đầu tiên khi bundle
+   trông lạ — Tier 2 có chạy, hay đã lỗi và im lặng rơi về rule? */
+.stream-tag-rule { background: var(--border-subtle); color: var(--text-secondary); }
+.stream-tag-llm { background: var(--accent-soft, #2d4a63); color: var(--text-primary); }
+
+.stream-dim { color: var(--text-tertiary); opacity: 0.75; }
+.stream-log li.stream-step { color: var(--text-secondary); }
+
 /* ---- Submission board ---- */
 .submission-board { display: flex; flex-direction: column; gap: var(--space-4); min-width: 0; }
 .submission-board label { display: flex; flex-direction: column; gap: var(--space-2); font-size: var(--text-caption); color: var(--text-secondary); }

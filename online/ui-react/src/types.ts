@@ -358,7 +358,52 @@ export interface SearchExecutionTrace {
 export type StreamEvent =
   | { type: "search_started"; query_id: string; task: string }
   | { type: "query_prepared"; query_id: string; normalized_query: string; modality_weights: Record<string, number> }
-  | { type: "branch_started"; query_id: string; branch_id: string; execution_id: string }
+  // Query Routing V2: query RIÊNG cho từng engine. `source` cho biết bundle
+  // do rule dựng hay LLM viết lại — thiếu nó thì không phân biệt được "Tier 2
+  // đang chạy" với "Tier 2 lỗi và đã im lặng rơi về rule".
+  | {
+      type: "query_bundle";
+      query_id: string;
+      raw_query: string;
+      normalized_query: string;
+      visual_query: string;
+      visual_query_en: string;
+      caption_query: string;
+      ocr_query: string;
+      asr_query: string;
+      intent: string;
+      answer_type: string;
+      expected_units: string[];
+      exact_phrases: string[];
+      complexity: number;
+      entities: string[];
+      actions: string[];
+      attributes: string[];
+      events: string[];
+      llm: { prompt: string; fields: string[] } | null;
+      source: "rule" | "llm";
+    }
+  // Từng step của TRAKE sau khi tách — chỗ hỏng thường gặp nhất của task này.
+  | {
+      type: "trake_step";
+      query_id: string;
+      step: number;
+      total_steps: number;
+      text: string;
+      exact_phrases: string[];
+    }
+  // `query_sent` là chuỗi nhánh này THẬT SỰ đem đi tìm; `query_source` là
+  // trường nó lấy từ đó. Không có hai trường này thì nhìn log không phân biệt
+  // được "nhánh chạy sai query" với "nhánh chạy đúng query nhưng index rỗng".
+  | {
+      type: "branch_started";
+      query_id: string;
+      branch_id: string;
+      execution_id: string;
+      query_sent?: string;
+      query_source?: string;
+      weight?: number | null;
+    }
   | {
       type: "branch_completed" | "branch_failed";
       query_id: string;

@@ -78,6 +78,35 @@ def build_caption_query(bundle: SearchQueryBundle) -> str:
     return SPACE_RE.sub(" ", combined).strip()
 
 
+# Số ĐÁNH DẤU của đề bài, không phải chữ trên màn hình:
+#   "(1) Đoạn video..."      số thứ tự đoạn
+#   "Tầng 1: 2 khối hộp"     số tầng / số lượng trong mô tả bố cục
+#   "bước 3", "cảnh 2"       số bước
+# Đưa chúng vào ocr_query là đưa nhiễu thuần tuý — MỌI video có chữ số đều
+# khớp, và tín hiệu thật (vd "200 gr", chỉ có ở 1/873 video) bị chìm.
+_MARKER_NUMBER_RE = re.compile(
+    r"\(\s*\d+\s*\)"                                    # (1) (2)
+    r"|(?:tầng|bước|cảnh|phần|mục|câu|hình|đoạn|lớp)\s*\d+"
+    r"|\d+\s*(?=khối|hộp|cái|chiếc|người|con|tầng)",    # "2 khối hộp"
+    flags=re.IGNORECASE,
+)
+
+# Số ĐÁNG tìm trên màn hình: có đơn vị đi kèm, hoặc đủ dài để là mã/giá/năm.
+_CONTENT_NUMBER_RE = re.compile(
+    r"\b\d+(?:[.,]\d+)?\s*"
+    r"(?:kg|g|gr|gam|mg|ml|l|km|cm|mm|m|%|độ|đồng|vnd|usd|tuổi|điểm)\b"
+    r"|\b\d{3,}\b",
+    flags=re.IGNORECASE,
+)
+
+
+def _content_numbers(query: str) -> list[str]:
+    """Số THẬT SỰ có thể hiện trên màn hình, đã bỏ số đánh dấu của đề bài."""
+
+    stripped = _MARKER_NUMBER_RE.sub(" ", query)
+    return [match.strip() for match in _CONTENT_NUMBER_RE.findall(stripped)]
+
+
 def build_ocr_query(bundle: SearchQueryBundle) -> str:
     """OCR: chỉ chữ kỳ vọng thấy trên màn hình, KHÔNG mô tả thị giác."""
 
@@ -87,7 +116,7 @@ def build_ocr_query(bundle: SearchQueryBundle) -> str:
     parts.extend(bundle.exact_phrases)
     parts.extend(bundle.expected_units)
     parts.extend(keyword for keyword in OCR_KEYWORDS if contains_term(bundle.normalized_query, keyword))
-    parts.extend(re.findall(r"\b\d+(?:[.,]\d+)?\b", bundle.normalized_query))
+    parts.extend(_content_numbers(bundle.normalized_query))
 
     # Truy vấn hỏi số mà không nêu đơn vị: đưa các đơn vị cân nặng thường gặp
     # vào để nhánh OCR còn có gì để khớp (số trên cân hầu như luôn kèm kg/g).

@@ -254,7 +254,7 @@ Trả về DUY NHẤT một object JSON:
 
 PREPARE_QUERY_BUNDLE = PromptSpec(
     prompt_id="query.prepare_bundle",
-    version="3",
+    version="5",
     model_role="fast",
     temperature=0.0,
     max_tokens=420,
@@ -298,6 +298,28 @@ PREPARE_QUERY_BUNDLE = PromptSpec(
         "200g thit nac xay, OCR that ghi Nac dam xay 200 gr - lech ca don "
         "vi (g so voi gr) lan chinh ta (OCR doc sai). Khop chuoi nen truot "
         "hoan toan. v3 yeu cau sinh MOI cach viet va tach so khoi chu."
+        "\n"
+        "v4 - SUA HAI LOI tren truy van slide bai giang (so do 3 tang).\n"
+        "(a) ocr_terms nhan so DANH DAU. Truy van ghi Tang 1 / Tang 2 / "
+        "Tang 3, v3 trich ra [1, 2, 3] - moi video co chu so deu khop, tin "
+        "hieu that bi chim. So thu tu cua de bai KHONG phai chu tren man hinh.\n"
+        "(b) caption_vi bo mat chi tiet hiem. Do tren corpus 873 video: "
+        "khoi hop chi co o 5 video (0.6%), phong nen xanh duong 10 (1.1%), "
+        "trong khi so mi trang co o 224 (26%) va giao vien 128 (15%). v3 giu "
+        "nhung thu pho bien va bo thu hiem - nguoc hoan toan. v4 yeu cau giu "
+        "bang duoc chi tiet ky la, bo nguoi/trang phuc/boi canh chung."
+        "\n"
+        "v5 - SUA CHINH v4. Do tren gold L25_V060 (slide bai giang dia ly): "
+        "cac cum HIEM NHAT ma v4 bao giu lai KHONG HE CO trong caption -\n"
+        "    hoa van mo      0/873 video   gold: KHONG co\n"
+        "    khoi hop        5/873 video   gold: KHONG co\n"
+        "    dia ly dan cu   1/873 video   gold: CO\n"
+        "    tran ngoc anh  10/873 video   gold: CO\n"
+        "Ly do: truy van BTC ta HINH DANG slide (khoi hop, mui ten, mau sac) "
+        "con caption ta NOI DUNG bai giang (chu de, ten giang vien). Hai ben "
+        "noi ve hai thu khac nhau cua cung mot khung hinh.\n"
+        "Do hiem KHONG DU - phai hiem VA co kha nang duoc caption viet ra. "
+        "v5 yeu cau chuyen mo ta do hoa sang chu de/tieu de/ten nguoi."
     ),
     template="""Bạn chuẩn bị dữ liệu tìm kiếm cho một hệ thống truy hồi video.
 Hệ thống có 4 công cụ, MỖI CÔNG CỤ CẦN MỘT LOẠI DỮ LIỆU KHÁC NHAU. Nhiệm vụ
@@ -355,6 +377,25 @@ Soạn các trường sau:
   1 cách gọi khác cho mỗi khái niệm. Không cần đúng ngữ pháp.
   Thà cho 3 cụm hiếm còn hơn 10 từ mà đa số là từ chung.
 
+  Ưu tiên chi tiết vừa CỤ THỂ vừa CÓ KHẢ NĂNG ĐƯỢC VIẾT RA trong lời chú
+  thích. Hai điều kiện, thiếu một là vô dụng:
+
+  (1) Caption mô tả cảnh ở mức người xem kể lại — ai, làm gì, ở đâu, NỘI DUNG
+      gì. Nó gần như KHÔNG mô tả hình dạng đồ hoạ: "khối hộp", "mũi tên trỏ
+      xuống", "khung viền hồng tím", "hoa văn mờ" hiếm tới mức KHÔNG caption
+      nào dùng. Hiếm mà không ai viết thì tìm bằng nó là tìm vào chỗ trống.
+
+  (2) Nếu truy vấn tả BỐ CỤC/ĐỒ HOẠ của một slide hay bảng biểu, hãy chuyển
+      sang thứ caption thật sự ghi: CHỦ ĐỀ hoặc TIÊU ĐỀ đang trình bày, tên
+      người, tên chương trình.
+          truy vấn: "slide có sơ đồ 3 tầng, khối hộp cam, mũi tên xanh ngọc"
+            -> ĐÚNG: "màn hình trình chiếu", "sơ đồ", "bài giảng"
+            -> SAI : "khối hộp", "mũi tên xanh ngọc", "hoa văn mờ"
+
+  Vẫn bỏ từ quá phổ thông không thu hẹp được gì ("hình ảnh", "cảnh quay",
+  "màu sắc"). Nhưng "cụ thể" nghĩa là cụ thể theo cách CAPTION nói, không
+  phải theo cách đề bài nói.
+
 "ocr_terms" — cho công cụ đọc CHỮ HIỆN TRÊN MÀN HÌNH.
   Chỉ liệt kê chuỗi ký tự thật sự có thể nhìn thấy trên hình: chữ trong ngoặc
   kép của truy vấn, đơn vị đo, nhãn, biển hiệu.
@@ -370,6 +411,17 @@ Soạn các trường sau:
       "30%"    -> "30 %", "30%", "30 phần trăm"
   Tách RIÊNG phần số kèm đơn vị và phần chữ, đừng gộp thành một cụm dài —
   cụm dài gần như không bao giờ khớp đúng nguyên văn.
+
+  TUYỆT ĐỐI KHÔNG đưa vào các con số CHỈ DÙNG ĐỂ ĐÁNH DẤU trong đề bài —
+  số thứ tự đoạn "(1) (2)", số bước, số tầng/lớp trong mô tả bố cục:
+      "Tầng 1: 2 khối hộp. Tầng 2: 1 khối hộp lớn. Tầng 3: ..."
+        -> SAI  : ["1", "2", "3"]        (moi video co chu so deu khop)
+        -> ĐÚNG : []                      (khong co chu nao that su tren man hinh)
+  Những số đó là cách đề bài đánh số, không phải chữ hiện trên hình. Đưa vào
+  chỉ tạo nhiễu và làm chìm mất tín hiệu thật.
+
+  Cũng KHÔNG đưa từ chung chung của câu ("nam", "tiêu đề", "hình ảnh") —
+  chúng không phải chuỗi cụ thể nào hiện trên màn hình.
 
 "asr_vi" — cho công cụ tìm trong LỜI NÓI.
   Viết theo cách một người dẫn hoặc nhân vật sẽ NÓI RA nội dung này.

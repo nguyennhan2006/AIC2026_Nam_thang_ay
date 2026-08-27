@@ -51,7 +51,12 @@ UNITS = {
     "weight": ("kg", "g", "gam", "gram", "kilogram", "tan", "lbs", "oz"),
     "volume": ("ml", "lit", "cc"),
     "score": ("diem", "score"),
-    "time": ("phut", "giay", "gio", "ngay", "thang", "nam"),
+    # "nam" KHÔNG nằm ở đây: bỏ dấu thì "năm" (đơn vị) và "nam" (giới tính)
+    # trùng nhau, mà "giáo viên nam" / "người đàn ông" phổ biến hơn hẳn. Đã
+    # xảy ra: truy vấn "giáo viên nam mặc sơ mi trắng" cho ocr_query="nam 1 2 3".
+    # Đơn vị năm hầu như luôn đi kèm số ("năm 2024") nên bắt bằng NUMERIC_HINTS
+    # thì đúng hơn là bằng từ trần.
+    "time": ("phut", "giay", "gio", "ngay", "thang"),
     "temperature": ("do c", "°c", "°f"),
     "distance": ("km", "cm", "mm", "met"),
     "money": ("dong", "vnd", "usd", "trieu", "ty"),
