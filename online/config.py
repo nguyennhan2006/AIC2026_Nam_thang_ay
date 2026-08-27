@@ -236,8 +236,9 @@ class Settings:
     # Chuoi THIEU step van duoc tra ve. Do tren 873 video: chi 14/24 truy van
     # co du candidate o MOI step, nen doi chuoi day du la vut 10/24 truy van ve
     # khong — ke ca khi video dung dang nam san trong pool o 4/5 step.
-    trake_allow_missing_steps: bool = False
-    trake_min_covered_steps: int = 2
+    # Bước 2 TRAKE fix: default TRUE để partial-chain được phép.
+    trake_allow_missing_steps: bool = True
+    trake_min_covered_steps: int = 1  # Giảm từ 2 → 1: chỉ cần 1 event match
     trake_missing_step_penalty: float | None = None
     trake_beam_size: int | None = None
     trake_per_video_beam: int | None = None
@@ -420,8 +421,8 @@ class Settings:
                 int(os.environ["AIC_TRAKE_CANDIDATE_LIMIT"])
                 if os.getenv("AIC_TRAKE_CANDIDATE_LIMIT") else None
             ),
-            trake_allow_missing_steps=_env_bool("AIC_TRAKE_ALLOW_MISSING_STEPS", False),
-            trake_min_covered_steps=_env_int("AIC_TRAKE_MIN_COVERED_STEPS", 2),
+            trake_allow_missing_steps=_env_bool("AIC_TRAKE_ALLOW_MISSING_STEPS", True),
+            trake_min_covered_steps=_env_int("AIC_TRAKE_MIN_COVERED_STEPS", 1),
             trake_missing_step_penalty=(
                 float(os.environ["AIC_TRAKE_MISSING_STEP_PENALTY"])
                 if os.getenv("AIC_TRAKE_MISSING_STEP_PENALTY") else None

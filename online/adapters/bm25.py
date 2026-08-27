@@ -290,7 +290,19 @@ class LexicalRetriever:
         if effective_weight(plan, self.execution_id, self.modality, self.branch_id) <= 0:
             return []
         limit = effective_limit(plan, self.execution_id, limit, self.branch_id)
+
+        # Query Routing V2: use specialized queries when available
         query = plan.events[0].text if len(plan.events) == 1 else plan.normalized_query
+        # Map field to specialized query
+        field_to_query = {
+            "caption": plan.caption_query,
+            "ocr": plan.ocr_query,
+            "asr": plan.asr_query,
+        }
+        specialized = field_to_query.get(self.field)
+        if specialized:
+            query = specialized
+
         if self.query_transform is not None:
             query = self.query_transform(query)
         # `BM25Index.search` là Python thuần trên toàn bộ postings — ở corpus thi

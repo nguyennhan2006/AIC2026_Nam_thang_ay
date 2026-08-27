@@ -142,6 +142,13 @@ class PreparedQueryPlanner:
         if plan.task == TaskType.TRAKE and len(plan.events) >= 2:
             return plan
 
+        # QA queries bị phá nghiêm trọng bởi temporal splitting:
+        # "Con số hiển thị cuối cùng trên cân là bao nhiêu?" -> "trên cân là bao nhiêu?"
+        # Visual embedding nhận gần như empty query và recall sụp đổ.
+        # Giữ nguyên full query cho QA để retrieval có đủ ngữ cảnh thị giác.
+        if plan.task == TaskType.QA:
+            return plan
+
         parts = prepare_query(plan.normalized_query)
         dense_query = parts.target_query
         if self.include_ocr_in_dense and parts.ocr_query:

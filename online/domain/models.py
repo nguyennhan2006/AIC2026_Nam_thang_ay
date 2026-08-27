@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from pydantic import Field, computed_field, field_validator, model_validator
 
@@ -25,6 +25,10 @@ from online.domain.task_results import (  # noqa: F401 - re-export
     TrakeResultItem,
 )
 from online.domain.tasks import TaskType, normalize_task  # noqa: F401 - re-export
+
+if TYPE_CHECKING:
+    # Avoid circular import - only used for type hints
+    from online.services.query.models import SearchQueryBundle
 
 
 class SearchFilters(StrictModel):
@@ -93,6 +97,17 @@ class QueryPlan(StrictModel):
     # so every retriever's per-branch lookup misses and falls back to
     # modality_weights exactly like before this field existed.
     search_options: SearchOptions = Field(default_factory=SearchOptions)
+    # Query Routing V2 — specialized queries per retrieval engine.
+    # These are populated by QueryRouter.prepare() when using the new query prep.
+    # Retriever adapters check these first, fall back to normalized_query if empty.
+    visual_query: str = ""
+    visual_query_en: str = ""
+    caption_query: str = ""
+    ocr_query: str = ""
+    asr_query: str = ""
+    # Classification metadata from query routing
+    query_intent: str = ""
+    answer_type: str = ""
 
     @model_validator(mode="after")
     def validate_weights(self) -> "QueryPlan":

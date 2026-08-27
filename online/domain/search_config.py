@@ -151,6 +151,12 @@ class ResultOptions(StrictModel):
     sort_by: Literal[
         "final_score", "visual_score", "caption_score", "ocr_score", "asr_score", "time"
     ] = "final_score"
+    # Lọc kết quả theo video. None = giữ kết quả tất cả video.
+    # Hữu ích khi user đang xem một video cụ thể và muốn UI chỉ show scene của video đó.
+    video_filter: str | None = None
+    # Boost điểm cho scene của video cụ thể (e.g., {"L21_V007": 2.0} => đẩy scene của
+    # L21_V007 lên top). Khác filter ở chỗ: vẫn show video khác, nhưng ưu tiên video này.
+    preferred_videos: dict[str, float] = Field(default_factory=dict)
 
 
 class SearchOptions(StrictModel):

@@ -39,7 +39,14 @@ class DenseRetriever:
     async def search(self, plan: QueryPlan, *, limit: int) -> list[Candidate]:
         if effective_weight(plan, self.execution_id, self.modality, self.branch_id) <= 0:
             return []
-        vector = await self.encoder.encode(plan.normalized_query)
+
+        # Query Routing V2: use specialized visual query if available
+        query_text = plan.normalized_query
+        if plan.visual_query:
+            # Prefer visual query (entity-focused, no abstract questions)
+            query_text = plan.visual_query
+
+        vector = await self.encoder.encode(query_text)
         candidates = await self.store.search(
             vector,
             limit=effective_limit(plan, self.execution_id, limit, self.branch_id),

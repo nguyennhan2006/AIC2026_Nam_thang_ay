@@ -43,7 +43,7 @@ const TASK_HINTS: Record<TaskType, string> = {
   AVS: "Mô tả chủ đề chung — hệ thống trả về nhiều đoạn liên quan thay vì một khung hình duy nhất.",
 };
 
-const QUERY_MAX_LENGTH = 500;
+const QUERY_MAX_LENGTH = 4000;
 const MODE_KEY = "aic_query_mode";
 
 function loadMode(): "simple" | "advanced" {
