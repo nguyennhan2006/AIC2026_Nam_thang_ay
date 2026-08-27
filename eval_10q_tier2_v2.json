@@ -1,0 +1,127 @@
+{
+  "label": "tier2_v2",
+  "video_recall_at_20": "8/10",
+  "frame_hit_at_20": "7/10",
+  "results": [
+    {
+      "id": "01_ca_can_goc",
+      "task": "QA",
+      "visual": "Cận cảnh màn hình hiển thị số của một chiếc cân điện tử có con cá đặt bên trên",
+      "ocr": "kg g",
+      "intent": "numeric_ocr",
+      "n_results": 40,
+      "top_video": "L29_V015",
+      "video_rank": 22,
+      "frame_hit": true,
+      "nearest_frame_delta": 195
+    },
+    {
+      "id": "02_ca_can_ngan",
+      "task": "QA",
+      "visual": "Một con cá nằm trên mặt bàn của chiếc cân điện tử, màn hình LED hiển thị con số.",
+      "ocr": "kg g",
+      "intent": "numeric_ocr",
+      "n_results": 40,
+      "top_video": "L29_V015",
+      "video_rank": 22,
+      "frame_hit": true,
+      "nearest_frame_delta": 0
+    },
+    {
+      "id": "03_ca_can_trake",
+      "task": "TRAKE",
+      "visual": "Cận cảnh màn hình hiển thị số của một chiếc cân điện tử có con cá đặt bên trên",
+      "ocr": "kg g",
+      "intent": "numeric_ocr",
+      "n_results": 57,
+      "top_video": "L29_V008",
+      "video_rank": null,
+      "frame_hit": false,
+      "nearest_frame_delta": null
+    },
+    {
+      "id": "04_ban_tay_do_chat_long",
+      "task": "TEXTUAL_KIS",
+      "visual": "Cận cảnh bàn tay đeo đồng hồ đang đổ chất lỏng vào một chiếc bát trắng đặt trên cân điện tử.",
+      "ocr": "g kg",
+      "intent": "visual",
+      "n_results": 40,
+      "top_video": "L29_V010",
+      "video_rank": 3,
+      "frame_hit": true,
+      "nearest_frame_delta": 0
+    },
+    {
+      "id": "05_ca_map_be_nuoc",
+      "task": "TEXTUAL_KIS",
+      "visual": "Góc nhìn từ trên cao xuống một con cá mập nhỏ có sọc đen trắng bơi trong bể nước trong suốt",
+      "ocr": "",
+      "intent": "visual",
+      "n_results": 40,
+      "top_video": "L21_V023",
+      "video_rank": 1,
+      "frame_hit": true,
+      "nearest_frame_delta": 0
+    },
+    {
+      "id": "06_dan_chuong_trinh",
+      "task": "TEXTUAL_KIS",
+      "visual": "Hai người dẫn chương trình đứng sau bàn studio truyền hình, phông nền phía sau là thành phố lúc hoàng hôn với ánh sáng cam vàng.",
+      "ocr": "",
+      "intent": "visual",
+      "n_results": 40,
+      "top_video": "L22_V019",
+      "video_rank": 19,
+      "frame_hit": false,
+      "nearest_frame_delta": 34590
+    },
+    {
+      "id": "07_ocr_toa_an_paris",
+      "task": "TEXTUAL_KIS",
+      "visual": "Một khung hình hiển thị dòng chữ tiêu đề lớn trên nền màu, nội dung về việc Tòa án Phúc thẩm Paris bác bỏ đơn kiện của bà Trần Tố Nga.",
+      "ocr": "TÒA ÁN PHÚC THẨM PARIS BÁC BỎ ĐƠN KIỆN CỦA BÀ TRẦN TỐ NGA",
+      "intent": "ocr",
+      "n_results": 40,
+      "top_video": "L21_V023",
+      "video_rank": 1,
+      "frame_hit": true,
+      "nearest_frame_delta": 0
+    },
+    {
+      "id": "08_asr_60_giay",
+      "task": "QA",
+      "visual": "Người dẫn chương trình nam hoặc nữ đứng trong trường quay, phía sau là màn hình lớn hiển thị logo chương trình 60 giây buổi sáng",
+      "ocr": "60 giây buổi sáng",
+      "intent": "visual",
+      "n_results": 40,
+      "top_video": "L22_V006",
+      "video_rank": null,
+      "frame_hit": false,
+      "nearest_frame_delta": null
+    },
+    {
+      "id": "09_phong_xu_an_ve",
+      "task": "TEXTUAL_KIS",
+      "visual": "Bức vẽ phác thảo đen trắng mô tả quang cảnh phòng xử án với các hàng ghế khán giả và bục xét xử",
+      "ocr": "",
+      "intent": "visual",
+      "n_results": 40,
+      "top_video": "L21_V023",
+      "video_rank": 1,
+      "frame_hit": true,
+      "nearest_frame_delta": 0
+    },
+    {
+      "id": "10_ran_soc_be_nhua",
+      "task": "TEXTUAL_KIS",
+      "visual": "Một con rắn vằn sọc đen trắng nằm trong bể nhựa, phần đuôi uốn cong",
+      "ocr": "nam",
+      "intent": "visual",
+      "n_results": 40,
+      "top_video": "L21_V023",
+      "video_rank": 1,
+      "frame_hit": true,
+      "nearest_frame_delta": 0
+    }
+  ]
+}

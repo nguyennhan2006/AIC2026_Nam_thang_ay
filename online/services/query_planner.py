@@ -18,8 +18,27 @@ from online.errors import InvalidQueryError
 
 QUOTED_RE = re.compile(r'["“”]([^"“”]{2,})["“”]')
 SPACE_RE = re.compile(r"\s+")
+# Marker MẠNH: luôn là chuyển cảnh, tách ở đâu cũng đúng.
 TEMPORAL_RE = re.compile(
-    r"\b(?:sau đó|tiếp theo|kế tiếp|cuối cùng|rồi|then|next|finally)\b",
+    r"\b(?:sau đó|tiếp theo|kế tiếp|rồi thì|then|next)\b",
+    flags=re.IGNORECASE,
+)
+
+# Marker YẾU: "cuối cùng"/"finally" chỉ là chuyển cảnh khi ĐỨNG ĐẦU MỆNH ĐỀ.
+#
+#     "Cuối cùng, người đàn ông đi vào nhà."   -> marker thời gian
+#     "Con số cuối cùng trên cân là bao nhiêu?" -> ĐỊNH NGỮ của "con số"
+#
+# Trước đây chúng nằm chung TEMPORAL_RE nên câu hỏi bị cắt thành một "event"
+# không tồn tại. Đo được trên truy vấn cá/cân: TRAKE tách 3 event, event thứ 3
+# là "trên cân là bao nhiêu?" — không phải cảnh nào cả. Chuỗi đòi khớp đủ 3
+# theo thứ tự nên không bao giờ dựng được, và TRAKE miss dù hai cảnh thật đều
+# có trong video gold.
+#
+# Cùng một lỗi, cùng một cách sửa như `online/services/query/normalize.py`;
+# đường này bị bỏ sót vì TRAKE dùng planner riêng, không đi qua QueryRouter.
+WEAK_TEMPORAL_RE = re.compile(
+    r"(?<=[,;:.])\s*(?:cuối cùng|finally)\s*,?\s*",
     flags=re.IGNORECASE,
 )
 # Gold TRAKE query dùng format liệt kê đánh số "(1) ...; (2) ...; (3) ..."
@@ -165,7 +184,15 @@ class RuleBasedQueryPlanner:
             if len(numbered) >= 2:
                 parts = numbered
             else:
-                temporal = [item.strip(" ,.;:") for item in TEMPORAL_RE.split(normalized)]
+                # Marker yếu tách TRƯỚC (chỉ khớp khi đứng đầu mệnh đề), rồi
+                # marker mạnh tách tiếp từng phần. Làm ngược lại thì "cuối
+                # cùng" ở giữa câu hỏi vẫn bị cắt.
+                pieces = WEAK_TEMPORAL_RE.split(normalized)
+                temporal = [
+                    part.strip(" ,.;:")
+                    for piece in pieces
+                    for part in TEMPORAL_RE.split(piece)
+                ]
                 temporal = [item for item in temporal if item]
                 if len(temporal) >= 2:
                     parts = temporal
