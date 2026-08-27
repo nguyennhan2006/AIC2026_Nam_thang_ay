@@ -786,9 +786,21 @@ class SearchService:
 
         TRAKE nhiều bước (>= 2 event) không stream theo branch: mỗi bước lại
         chạy một vòng retrieval riêng, nên việc dựng progress-per-step cho
-        đúng nghĩa cần một luồng sự kiện khác hẳn — trường hợp này chỉ phát
-        `search_started` -> `alignment_completed` -> `search_completed`, và
-        nói rõ điều đó trong sự kiện để không ai tưởng nhầm là bug.
+        đúng nghĩa cần một luồng sự kiện khác hẳn — trường hợp này phát
+        `search_started` -> `query_bundle` -> `trake_step`* ->
+        `alignment_completed` -> `search_completed`, và nói rõ điều đó trong
+        sự kiện để không ai tưởng nhầm là bug.
+
+        Sự kiện phục vụ CHẨN ĐOÁN, không chỉ tiến độ:
+
+        `query_bundle`   query mà mỗi engine sẽ nhận, kèm `source` = rule|llm
+        `trake_step`     từng step sau khi tách — chỗ hỏng thường gặp của TRAKE
+        `branch_started` chuỗi nhánh đó THẬT SỰ đem đi tìm (`query_sent`) và
+                         nó lấy từ trường nào (`query_source`)
+
+        Thiếu `query_sent` thì nhìn stream không phân biệt được "nhánh chạy
+        sai query" với "nhánh chạy đúng query nhưng index rỗng" — hai lỗi cần
+        hai cách sửa khác hẳn nhau.
         """
 
         started = perf_counter()
@@ -829,6 +841,12 @@ class SearchService:
             "entities": query_bundle.visual_entities,
             "actions": query_bundle.actions,
             "attributes": query_bundle.attributes,
+            # Bundle này do rule dựng hay LLM đã viết lại? Không có thông tin
+            # đó thì nhìn stream không biết Tier 2 có chạy hay đã im lặng rơi
+            # về rule (timeout/JSON hỏng chỉ ghi log, không nổi lên UI).
+            "events": list(query_bundle.events),
+            "llm": query_bundle.debug_info.get("llm_bundle"),
+            "source": "llm" if query_bundle.debug_info.get("llm_bundle") else "rule",
         }
         # Keep backward-compatible query_prepared event
         yield {
@@ -839,6 +857,21 @@ class SearchService:
         }
 
         if task == TaskType.TRAKE and len(plan.events) >= 2:
+            # Phát TỪNG STEP trước khi chạy. TRAKE chạy một vòng retrieval cho
+            # mỗi step, và cách TÁCH STEP là chỗ hỏng thường gặp nhất — đã đo:
+            # "cuối cùng" trong câu hỏi từng bị cắt thành một step không tồn
+            # tại ("trên cân là bao nhiêu?"), khiến chuỗi không bao giờ dựng
+            # được. Không phát ra thì lỗi đó vô hình, chỉ thấy TRAKE trả rỗng.
+            for index, event in enumerate(plan.events):
+                yield {
+                    "type": "trake_step",
+                    "query_id": query_id,
+                    "step": index + 1,
+                    "total_steps": len(plan.events),
+                    "text": event.text,
+                    "exact_phrases": list(event.exact_phrases),
+                }
+
             response = await self._search_impl(request)
             await self._record_trace(response, request)
             yield {
@@ -856,9 +889,19 @@ class SearchService:
 
         for retriever in self.retrievers:
             branch_id, execution_id = _branch_identity(retriever)
+            # Kèm CHUỖI nhánh này thật sự đem đi tìm. Không có nó thì nhìn
+            # stream không phân biệt được "nhánh chạy sai query" với "nhánh
+            # chạy đúng query nhưng index không có gì" — hai lỗi cần hai cách
+            # sửa khác hẳn nhau.
+            sent, source = _query_for_branch(plan, branch_id)
             yield {
                 "type": "branch_started", "query_id": query_id,
                 "branch_id": branch_id, "execution_id": execution_id,
+                "query_sent": sent,
+                "query_source": source,
+                "weight": plan.modality_weights.get(
+                    getattr(retriever, "modality", None), None
+                ),
             }
 
         lists: list[list[Candidate]] = []
@@ -1202,6 +1245,34 @@ def _merge_statuses(
                 }
             )
     return [merged[key] for key in sorted(merged)]
+
+
+def _query_for_branch(plan: QueryPlan, branch_id: str) -> tuple[str, str]:
+    """Chuỗi mà nhánh `branch_id` THẬT SỰ đem đi tìm, kèm tên trường nguồn.
+
+    Phải khớp đúng logic chọn query trong adapter (`dense_retriever.py`,
+    `bm25.py`); lệch nhau thì debug UI nói một đằng hệ chạy một nẻo — đúng
+    kiểu lỗi khó thấy nhất, vì màn hình vẫn hiển thị thứ trông hợp lý.
+    """
+
+    # dense_retriever.py: ưu tiên plan.visual_query, không có thì normalized_query.
+    if branch_id.startswith("dense_visual") or branch_id.startswith("lexical_hash"):
+        if getattr(plan, "visual_query", ""):
+            return plan.visual_query, "visual_query"
+        return plan.normalized_query, "normalized_query"
+
+    # bm25.py: map field -> query chuyên biệt; rỗng thì rơi về events[0]/normalized.
+    for field in ("caption", "ocr", "asr"):
+        if branch_id == f"bm25_{field}":
+            specialized = getattr(plan, f"{field}_query", "")
+            if specialized:
+                return specialized, f"{field}_query"
+            fallback = (
+                plan.events[0].text if len(plan.events) == 1 else plan.normalized_query
+            )
+            return fallback, "normalized_query"
+
+    return plan.normalized_query, "normalized_query"
 
 
 _SORT_KEYS: dict[str, tuple[str, ...]] = {

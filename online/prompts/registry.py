@@ -254,7 +254,7 @@ Trả về DUY NHẤT một object JSON:
 
 PREPARE_QUERY_BUNDLE = PromptSpec(
     prompt_id="query.prepare_bundle",
-    version="2",
+    version="3",
     model_role="fast",
     temperature=0.0,
     max_tokens=420,
@@ -286,7 +286,18 @@ PREPARE_QUERY_BUNDLE = PromptSpec(
         "thuỷ sản có 444 keyframe và 147 lần chữ 'cá', gấp đôi gold. Cạnh "
         "tranh bằng từ phổ thông thì video nhắc nhiều thắng, bất kể đúng sai. "
         "v2 yêu cầu ưu tiên danh từ ghép/cụ thể ('cân điện tử' thay vì 'cân') "
-        "và bỏ từ chung chung."
+        "va bo tu chung chung.\n\n"
+        "v3 - SUA HAI LOI DO DUOC tren gold L30_V078 frame 1788.\n"
+        "(a) visual_vi ta nham canh. Truy van neu chi tiet chi doc duoc "
+        "khi quay CAN CANH (chu tren giay), v2 ta luon canh can canh do. "
+        "Nhung gold la frame HANH DONG (nguoi phu nu dang cam to giay co "
+        "noi dung chu viet), con noi dung 200 gr nam o frame KHAC cach 60 "
+        "frame. Khung hinh hanh dong va khung hinh noi dung la HAI khung "
+        "hinh khac nhau.\n"
+        "(b) ocr_terms chep nguyen cach viet cua truy van. Truy van ghi "
+        "200g thit nac xay, OCR that ghi Nac dam xay 200 gr - lech ca don "
+        "vi (g so voi gr) lan chinh ta (OCR doc sai). Khop chuoi nen truot "
+        "hoan toan. v3 yeu cau sinh MOI cach viet va tach so khoi chu."
     ),
     template="""Bạn chuẩn bị dữ liệu tìm kiếm cho một hệ thống truy hồi video.
 Hệ thống có 4 công cụ, MỖI CÔNG CỤ CẦN MỘT LOẠI DỮ LIỆU KHÁC NHAU. Nhiệm vụ
@@ -316,11 +327,23 @@ Cách làm cụ thể:
 Soạn các trường sau:
 
 "visual_vi" — cho công cụ so ẢNH với CÂU (CLIP).
-  Nó so câu của bạn với NỘI DUNG NHÌN THẤY của một khung hình đứng yên.
+  Nó so câu của bạn với NỘI DUNG NHÌN THẤY của MỘT khung hình đứng yên.
   Hãy viết MỘT câu mô tả khung hình đó TRÔNG NHƯ THẾ NÀO: vật thể, người,
   hành động, màu sắc, vị trí tương đối. Viết như đang chú thích một tấm ảnh.
   BỎ: câu hỏi, thứ tự thời gian ("sau đó", "cuối cùng"), suy luận.
-  Nếu truy vấn kể nhiều cảnh, chỉ mô tả cảnh chứa ĐÁP ÁN.
+
+  QUAN TRỌNG — mô tả cảnh NHÌN THẤY ĐƯỢC, không phải cảnh chứa đáp án.
+  Nhiều truy vấn nêu một chi tiết chỉ đọc được khi quay CẬN CẢNH (chữ trên
+  giấy, số trên màn hình). Khung hình cho thấy HÀNH ĐỘNG (một người cầm tờ
+  giấy) và khung hình cho thấy NỘI DUNG (cận cảnh tờ giấy) là HAI khung hình
+  khác nhau, thường cách nhau vài giây.
+
+  Hãy mô tả khung hình HÀNH ĐỘNG — người đang làm gì, cầm gì, ở đâu — chứ
+  ĐỪNG mô tả nội dung chi tiết mà chỉ cận cảnh mới thấy. Nội dung đó thuộc
+  về "ocr_terms".
+      truy vấn: "người cầm công thức ghi 200g thịt nạc xay"
+      visual_vi ĐÚNG : "một người đang cầm tờ giấy có chữ viết, ngồi ở bàn"
+      visual_vi SAI  : "cận cảnh tờ công thức ghi 200g thịt nạc xay"
 
 "visual_en" — bản tiếng Anh của "visual_vi". Cụm mô tả ảnh, không phải câu
   dịch máy móc.
@@ -334,9 +357,19 @@ Soạn các trường sau:
 
 "ocr_terms" — cho công cụ đọc CHỮ HIỆN TRÊN MÀN HÌNH.
   Chỉ liệt kê chuỗi ký tự thật sự có thể nhìn thấy trên hình: chữ trong ngoặc
-  kép của truy vấn, đơn vị đo ("kg", "%"), nhãn, biển hiệu.
+  kép của truy vấn, đơn vị đo, nhãn, biển hiệu.
   Nếu cảnh không có lý do gì để chứa chữ, trả mảng RỖNG. Đừng nhét mô tả
   thị giác vào đây — nó chỉ tạo nhiễu.
+
+  ĐỪNG chép nguyên cách viết của truy vấn — hãy cho MỌI CÁCH VIẾT mà chữ đó
+  có thể xuất hiện trên màn hình. Người viết truy vấn và người làm phụ đề
+  hiếm khi viết giống nhau, và OCR khớp theo chuỗi nên lệch một ký tự là trượt:
+      "200g thịt nạc xay"
+        -> "200 gr", "200gr", "200 g", "200g", "nạc xay", "thịt xay"
+      "5kg"    -> "5 kg", "5kg", "5 kilogram"
+      "30%"    -> "30 %", "30%", "30 phần trăm"
+  Tách RIÊNG phần số kèm đơn vị và phần chữ, đừng gộp thành một cụm dài —
+  cụm dài gần như không bao giờ khớp đúng nguyên văn.
 
 "asr_vi" — cho công cụ tìm trong LỜI NÓI.
   Viết theo cách một người dẫn hoặc nhân vật sẽ NÓI RA nội dung này.

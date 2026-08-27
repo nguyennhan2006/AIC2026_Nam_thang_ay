@@ -38,6 +38,21 @@ GOLD_CAPTION_26090 = (
 )
 
 GROUPS = {
+    "nau_an": {
+        "gold_video": "L30_V078",
+        "gold_frame": 1848,
+        "variants": [
+            ("00_gold_caption", "Một bàn tay cầm tờ giấy hướng về phía người xem, hiển thị hướng dẫn nấu món ăn"),
+            ("01_query_goc", "Đoạn video về một người phụ nữ dạy nấu ăn cho những người khác, có người cầm công thức món ăn với nguyên liệu chính là 200g thịt nạc xay"),
+            ("02_ocr_nguyen_van", "Nạc đầm xay 200 gr ướp bột mềm hành tây bột nêm"),
+            ("03_chi_200gr", "200 gr"),
+            ("04_nhan_banh", "NHÂN BÁNH CƯỜNG nạc xay 200 gr hành tây"),
+            ("05_lop_day_lam_banh", "lớp dạy làm bánh, nhóm phụ nữ làm bánh trong bếp"),
+            ("06_ban_tay_to_giay", "Một bàn tay cầm tờ giấy công thức món ăn hướng về phía người xem"),
+            ("07_dung_tu_banh", "người phụ nữ dạy làm bánh, tờ giấy ghi nhân bánh nạc xay 200 gr"),
+        ],
+    },
+
     "ca_can": {
         "gold_video": "L21_V023",
         "gold_frame": 25995,
