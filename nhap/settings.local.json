@@ -1,0 +1,12 @@
+{
+  "env": {
+    "ANTHROPIC_API_KEY": "as_eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJwcm94eV9rZXkiLCJwcm9kdWN0SWQiOjYsImFjY291bnRUaW1lIjoiMSBtb250aCIsImlhdCI6MTc4NzcwMzUyOSwiZXhwIjoxNzkwMjk1NTI5fQ.181nbOuFkv7l_LNkMeGKicZ4aaDyvbEbQOKIZxafgP-AgSYMLk-AsRr4VMH4DKYdDonNAQdmN2yLfxH1o_C8lg",
+    "ANTHROPIC_AUTH_TOKEN": "as_eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJwcm94eV9rZXkiLCJwcm9kdWN0SWQiOjYsImFjY291bnRUaW1lIjoiMSBtb250aCIsImlhdCI6MTc4NzcwMzUyOSwiZXhwIjoxNzkwMjk1NTI5fQ.181nbOuFkv7l_LNkMeGKicZ4aaDyvbEbQOKIZxafgP-AgSYMLk-AsRr4VMH4DKYdDonNAQdmN2yLfxH1o_C8lg",
+    "ANTHROPIC_BASE_URL": "https://api.agentshop247.com/api/claude",
+    "ENABLE_TOOL_SEARCH": "false",
+    "API_TIMEOUT_MS": "3000000",
+    "BASH_MAX_TIMEOUT_MS": "500000",
+    "BASH_DEFAULT_TIMEOUT_MS": "30000",
+    "CLAUDE_ENABLE_STREAM_WATCHDOG": "true"
+  }
+}	

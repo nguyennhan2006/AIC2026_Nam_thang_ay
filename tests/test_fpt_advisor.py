@@ -207,7 +207,14 @@ class PromptRegistryTests(unittest.TestCase):
         self.assertIn("evidence.select@1", grouped["reasoning"])
 
     def test_prompt_ids_are_unique(self) -> None:
-        self.assertEqual(len(PROMPTS), 6)
+        # Kiểm ĐÚNG tính duy nhất của prompt_id, không kiểm số lượng: `PROMPTS`
+        # là dict khoá theo prompt_id nên hai spec trùng id sẽ nuốt nhau trong
+        # im lặng — đó mới là điều cần bắt. Chốt một con số cứng chỉ khiến mọi
+        # lần thêm prompt đều làm đỏ test mà không phát hiện lỗi nào.
+        ids = [spec.prompt_id for spec in PROMPTS.values()]
+        self.assertEqual(len(ids), len(set(ids)))
+        for prompt_id, spec in PROMPTS.items():
+            self.assertEqual(prompt_id, spec.prompt_id)
 
 
 if __name__ == "__main__":

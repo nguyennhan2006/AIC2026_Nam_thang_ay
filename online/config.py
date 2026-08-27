@@ -197,6 +197,12 @@ class Settings:
     # Mở rộng query bằng LLM (đồng nghĩa TIẾNG VIỆT) thay cho lexicon VI→EN
     # cứng, vốn đã lỗi thời từ khi caption chuyển sang tiếng Việt.
     enable_llm_expansion: bool = False
+    # Tier 2 của query prep: nhờ LLM SOẠN LẠI dữ liệu đầu vào cho từng search
+    # engine theo thế mạnh riêng của engine đó (xem
+    # online/adapters/fpt_query_bundle.py). Tắt thì tầng rule chạy một mình và
+    # hành vi không đổi. Bật thì rule vẫn là fallback cho mọi trường LLM không
+    # cải thiện được, nên đây là thay đổi CỘNG THÊM, không phải thay thế.
+    enable_llm_query_bundle: bool = False
     # Tách keyword từ truy vấn trước khi vào nhánh `bm25_keyword`. Phía tài
     # liệu là nhãn object 2-3 từ, phía truy vấn là cả câu — lệch hạt.
     enable_keyword_extraction: bool = False
@@ -401,6 +407,7 @@ class Settings:
             ),
             enable_query_translation=_env_bool("AIC_ENABLE_QUERY_TRANSLATION", False),
             enable_llm_expansion=_env_bool("AIC_ENABLE_LLM_EXPANSION", False),
+            enable_llm_query_bundle=_env_bool("AIC_ENABLE_LLM_QUERY_BUNDLE", False),
             enable_keyword_extraction=_env_bool("AIC_ENABLE_KEYWORD_EXTRACTION", False),
             ocr_overlay_df=(
                 float(os.environ["AIC_OCR_OVERLAY_DF"])

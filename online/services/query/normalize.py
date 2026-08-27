@@ -1,4 +1,14 @@
-"""Query normalization - basic preprocessing without model calls."""
+"""Query normalization - basic preprocessing without model calls.
+
+QUAN TRỌNG (bug 2026-08-27): mọi so khớp từ khoá ở tầng này phải đi qua
+`strip_diacritics` VÀ có biên từ. Bản trước viết danh sách keyword bằng ASCII
+không dấu rồi `in` thẳng vào query có dấu:
+
+    "ca" in "hình ảnh một con cá..."   -> False  (mất hết entity thật)
+    "ao" in "... là bao nhiêu?"        -> True   (khớp nhầm trong "bao")
+
+nên visual query của truy vấn cá/cân ra đúng hai chữ "ao sau".
+"""
 
 from __future__ import annotations
 
@@ -11,48 +21,71 @@ if TYPE_CHECKING:
 
 # Patterns for basic extraction
 SPACE_RE = re.compile(r"\s+")
-QUOTED_RE = re.compile(r'"([^"]+)"')
+QUOTED_RE = re.compile(r'["“”‘’]([^"“”‘’]{2,}?)["“”‘’]')
 NUMBER_RE = re.compile(r"\b\d+(?:[.,]\d+)?\b")
 
-# Question words - those that should NOT be in visual query
-QUESTION_WORDS = {
-    "bao nhieu", "bao nhieu?", "la bao nhieu", "may", "bang bao nhieu",
-    "gi", "la gi", "co gi", "o dau", "la o dau", "ai", "la ai", "cua ai",
-    "khi nao", "la khi nao", "nhu the nao", "bang cach nao",
-    "sao", "tai sao", "vi sao", "nhu the nao",
-    "what", "how", "when", "where", "who", "why", "which",
-}
-
-# Abstract question patterns - don't contain visual information
+# Câu hỏi trừu tượng — KHÔNG mang thông tin thị giác, bỏ khỏi visual query.
+# Viết bằng dạng KHÔNG DẤU: mọi text đều được `strip_diacritics` trước khi khớp.
 ABSTRACT_PATTERNS = [
-    r"\bba?o\s+nhieu\b",
-    r"\bla\s+gi\b",
+    r"\bla\s+bao\s+nhieu\b",
+    r"\bbao\s+nhieu\b",
+    # "<danh từ> gì" — thứ được hỏi là ẨN SỐ, không phải mô tả. "Cốc … có màu
+    # gì?" thì "cốc" mới là tín hiệu thị giác; "màu gì" không mô tả màu nào cả.
+    r"\b(?:mau|hinh dang|hinh|loai|kieu|ten|chu|noi dung|hanh dong|so)\s+gi\b",
+    r"\b(?:con|cai|vat|nguoi)\s+gi\b",
     r"\bco\s+gi\b",
-    r"\bo\s+dau\b",
+    r"\bla\s+gi\b",
     r"\bla\s+ai\b",
+    r"\bcua\s+ai\b",
+    r"\bo\s+dau\b",
+    r"\bkhi\s+nao\b",
     r"\bnhu\s+the\s+nao\b",
+    r"\btai\s+sao\b",
+    r"\bvi\s+sao\b",
     r"\bco\s+phai\s+khong\b",
+    r"\bhay\s+cho\s+biet\b",
+    r"\bhoi\b",
     r"\bwhat\s+is\b",
-    r"\bhow\s+many\b",
-    r"\bhow\s+much\b",
+    r"\bhow\s+(?:many|much|long|far|tall)\b",
     r"\bwho\s+(?:is|was|are|were)\b",
     r"\bwhy\b",
 ]
 
-# Strong temporal markers - CERTAINLY transitions
+# Từ mở đầu vô nghĩa với visual retrieval ("Hình ảnh ...", "Tìm cảnh ...").
+LEAD_IN_PATTERNS = [
+    r"^\s*hinh\s+anh\s+(?:cua\s+)?",
+    r"^\s*tim\s+(?:canh|video|khoanh\s+khac)\s+",
+    r"^\s*canh\s+quay\s+",
+    r"^\s*find\s+(?:the\s+)?(?:scene|video|moment)\s+",
+]
+
+# Strong temporal markers - CHẮC CHẮN là transition (dạng không dấu).
 STRONG_TEMPORAL = {
-    "sau do", "tiep theo", "ke tiep", "roi", "roi thi",
+    "sau do", "tiep theo", "ke tiep", "roi thi",
     "then", "next", "after that",
 }
 
-# Weak temporal markers - may be attribute of noun, not marker
+# Weak temporal markers - có thể là ĐỊNH NGỮ của danh từ, không phải marker.
+# "Con số cuối cùng trên cân" = attribute; "Cuối cùng, ông ấy đi vào" = temporal.
 WEAK_TEMPORAL = {
     "cuoi cung", "finally",
 }
 
 
+def strip_diacritics(text: str) -> str:
+    """Bỏ dấu tiếng Việt để so khớp keyword; giữ nguyên độ dài từ.
+
+    `đ`/`Đ` không phải tổ hợp dấu Unicode nên phải thay tay.
+    """
+
+    lowered = text.casefold().replace("đ", "d")
+    decomposed = unicodedata.normalize("NFD", lowered)
+    return "".join(ch for ch in decomposed if not unicodedata.combining(ch))
+
+
 def normalize_query(text: str) -> str:
-    """Normalize query: NFC, lowercase, strip."""
+    """Normalize query: NFC + gộp khoảng trắng. GIỮ NGUYÊN dấu và hoa/thường."""
+
     normalized = unicodedata.normalize("NFC", text).strip()
     normalized = SPACE_RE.sub(" ", normalized)
     return normalized
@@ -60,119 +93,93 @@ def normalize_query(text: str) -> str:
 
 def extract_quotes(text: str) -> list[str]:
     """Extract quoted phrases for OCR exact matching."""
+
     return [item.strip() for item in QUOTED_RE.findall(text) if item.strip()]
 
 
 def extract_numbers(text: str) -> list[str]:
-    """Extract all numbers from text."""
     return NUMBER_RE.findall(text)
 
 
+def contains_term(text: str, term: str) -> bool:
+    """Có chứa `term` như một CỤM TỪ trọn vẹn, bỏ qua dấu.
+
+    Dùng thay cho `term in text`: `"ao" in "bao nhiêu"` là True và chính nó
+    sinh ra visual query rác.
+    """
+
+    haystack = strip_diacritics(text)
+    needle = strip_diacritics(term)
+    if not needle:
+        return False
+    return re.search(rf"(?<!\w){re.escape(needle)}(?!\w)", haystack) is not None
+
+
 def strip_question_words(text: str) -> str:
-    """Remove abstract question words from visual query.
+    """Bỏ phần hỏi trừu tượng, GIỮ NGUYÊN phần mô tả thị giác.
 
-    "Con so hien thi cuoi cung tren can la bao nhieu?"
-    -> "Con so hien thi cuoi cung tren can"
+    "Con số hiển thị cuối cùng trên cân là bao nhiêu?"
+    -> "Con số hiển thị cuối cùng trên cân"
+
+    Khớp trên bản không dấu nhưng CẮT trên chuỗi gốc (hai chuỗi cùng độ dài
+    vì `strip_diacritics` chỉ bỏ ký tự tổ hợp, không đổi số ký tự cơ sở).
     """
+
     result = text
-    for pattern in ABSTRACT_PATTERNS:
-        result = re.sub(pattern, " ", result, flags=re.IGNORECASE)
-    # Clean up extra spaces
-    result = SPACE_RE.sub(" ", result).strip()
-    return result
-
-
-def is_temporal_marker(text: str, position: int = -1) -> bool:
-    """Check if text contains temporal marker.
-
-    Args:
-        text: The text to check.
-        position: Position of marker in original sentence (-1 = at end).
-
-    Returns:
-        True if strong temporal marker, False otherwise.
-    """
-    lowered = text.lower().strip()
-    # Strong markers always temporal
-    if lowered in STRONG_TEMPORAL:
-        return True
-    # Weak markers - check context
-    if lowered in WEAK_TEMPORAL:
-        # "cuoi cung" is temporal when at clause start
-        # "cuoi cung, nguoi dan ong..." = temporal
-        # "Con so cuoi cung tren can" = attribute
-        return position <= 5  # near start of sentence
-    return False
+    for pattern in LEAD_IN_PATTERNS + ABSTRACT_PATTERNS:
+        while True:
+            match = re.search(pattern, strip_diacritics(result))
+            if match is None:
+                break
+            result = result[: match.start()] + " " + result[match.end() :]
+    return SPACE_RE.sub(" ", result).strip(" ,.;:?!")
 
 
 def split_temporal_weak(text: str) -> tuple[str, str]:
-    """Split query by weak temporal markers (cuoi cung, finally).
+    """Tách theo marker YẾU ("cuối cùng"), chỉ khi nó đứng đầu mệnh đề.
 
-    Unlike strong markers, these should only split when clearly at clause start.
+    "Người A đổ nước, sau đó B rót. Cuối cùng, C uống."
+    -> ("Người A đổ nước, sau đó B rót.", "C uống")
 
-    "Nguoi A do nuoc, sau do B rot nuoc. Cuoi cung, C uong."
-    -> ("Nguoi A do nuoc, sau do B rot nuoc", "C uong")
-
-    "Con so cuoi cung tren can la bao nhieu?"
-    -> ("Con so cuoi cung tren can la bao nhieu?", "")  # NO split
+    "Con số cuối cùng trên cân là bao nhiêu?"
+    -> (nguyên câu, "")   # KHÔNG tách: đây là định ngữ của "con số"
 
     Returns:
-        Tuple of (target_query, context_query). Empty context if no split.
+        (target_query, context_query); context rỗng nghĩa là không tách.
     """
-    # Find "cuoi cung" / "finally" positions
-    text_lower = text.lower()
 
-    # Check if weak temporal is at clause boundary (preceded by comma or period)
-    # Pattern: ... marker , ... or ... marker .
-    weak_pattern = r"(?<=[,;:])\s*(cuoi cung|finally)\s*,?\s*"
-    matches = list(re.finditer(weak_pattern, text_lower))
-
+    ascii_text = strip_diacritics(text)
+    weak_pattern = r"(?<=[,;:.])\s*(?:cuoi cung|finally)\s*,?\s*"
+    matches = list(re.finditer(weak_pattern, ascii_text))
     if not matches:
         return text, ""
 
-    # Split at first weak temporal that's at clause boundary
-    first_match = matches[0]
-    before = text[:first_match.start()].strip()
-    after = text[first_match.end():].strip()
-
-    if after:
+    first = matches[0]
+    before = text[: first.start()].strip()
+    after = text[first.end() :].strip()
+    if before and after:
         return before, after
     return text, ""
 
 
 def token_count(text: str) -> int:
-    """Count tokens (rough word count)."""
     return len(text.split())
 
 
 def estimate_complexity(bundle: SearchQueryBundle) -> int:
-    """Estimate query complexity for deciding processing strategy.
+    """0-1 đơn giản, 2-3 trung bình, 4+ phức tạp."""
 
-    Returns:
-        0-1: Simple query, rule-only processing
-        2-3: Medium complexity, consider enhanced processing
-        4+: Complex, definitely use enhanced processing
-    """
     complexity = 0
-
-    # Token count
     if token_count(bundle.normalized_query) > 25:
         complexity += 1
     if token_count(bundle.normalized_query) > 50:
         complexity += 1
-
-    # Multiple events
     if len(bundle.events) >= 2:
         complexity += 1
     if len(bundle.events) >= 3:
         complexity += 1
-
-    # Has quotes (OCR evidence)
     if bundle.exact_phrases:
         complexity += 1
-
-    # Numeric question
     if bundle.answer_type.name == "NUMERIC":
         complexity += 1
-
-    return min(complexity, 5)  # Cap at 5
+    return min(complexity, 5)

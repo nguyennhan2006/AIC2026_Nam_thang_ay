@@ -23,7 +23,10 @@ Usage:
 
 from __future__ import annotations
 
+import asyncio
+from dataclasses import replace
 import logging
+import re
 from typing import TYPE_CHECKING
 
 from online.domain.models import SearchRequest, TaskType
@@ -33,11 +36,16 @@ from online.services.query.models import (
     SearchQueryBundle,
 )
 from online.services.query.normalize import (
+    STRONG_TEMPORAL,
     extract_numbers,
     extract_quotes,
     normalize_query,
     split_temporal_weak,
+    strip_diacritics,
 )
+
+# Gold TRAKE dùng format liệt kê "(1) ...; (2) ...", giống query_planner.py.
+NUMBERED_STEP_RE = re.compile(r"\(\d+\)\s*")
 from online.services.query.intent import (
     classify_answer_type,
     classify_intent,
@@ -49,6 +57,11 @@ from online.services.query.builders import (
     build_ocr_query,
     build_asr_query,
 )
+from online.services.query.builders.visual import (
+    extract_actions,
+    extract_attributes,
+    extract_visual_entities,
+)
 
 if TYPE_CHECKING:
     pass
@@ -59,15 +72,40 @@ logger = logging.getLogger(__name__)
 class QueryRouter:
     """Main router for Query Routing V2.
 
-    Takes raw query and produces specialized queries per retrieval engine.
+    Hai tầng, cố ý tách rời:
+
+    Tier 1 — rule (luôn chạy, <1ms, tất định)
+        Cắt phần hỏi trừu tượng, tách event, phân loại intent. Đây là NỀN:
+        mọi truy vấn đều có bundle dùng được kể cả khi không có mạng.
+
+    Tier 2 — LLM (tuỳ chọn, `refiner`)
+        VIẾT LẠI từng trường cho đúng thế mạnh của từng engine — việc rule
+        không làm được. Hỏng thì bundle rule đi tiếp nguyên vẹn.
+
+    `refiner=None` giữ nguyên hành vi thuần rule.
     """
 
-    def __init__(self) -> None:
-        pass
+    def __init__(self, refiner=None) -> None:
+        # refiner: đối tượng có `.refine(bundle, task=...) -> SearchQueryBundle`
+        # (xem online/adapters/fpt_query_bundle.py::FptQueryBundlePreparer).
+        self.refiner = refiner
 
     async def prepare(self, request: SearchRequest) -> SearchQueryBundle:
-        """Async version of prepare - same as prepare_sync."""
-        return self.prepare_sync(request)
+        """Bundle cho request; chạy phần LLM ngoài event loop nếu có cấu hình."""
+
+        bundle = self.prepare_sync(request)
+        if self.refiner is None:
+            return bundle
+
+        task = (request.task or TaskType.TEXTUAL_KIS).value
+        try:
+            # `refine` gọi HTTP đồng bộ; chạy thẳng trên event loop sẽ khoá cả
+            # server trong lúc chờ LLM — đúng lỗi mà bm25.py đã phải sửa bằng
+            # to_thread. Lỗi ngoài dự kiến cũng chỉ được phép mất phần cải thiện.
+            return await asyncio.to_thread(self.refiner.refine, bundle, task=task)
+        except Exception as exc:  # noqa: BLE001 - không truy vấn nào được chết vì refiner
+            logger.warning("LLM refine bundle hỏng, dùng bundle rule: %s", exc)
+            return bundle
 
     def prepare_sync(self, request: SearchRequest) -> SearchQueryBundle:
         """Prepare query bundle from search request.
@@ -109,11 +147,28 @@ class QueryRouter:
         answer_type = classify_answer_type(initial_bundle)
         expected_units = extract_expected_units(normalized)
 
-        # Step 6: Build specialized queries
-        visual_query, visual_query_en = build_visual_query(initial_bundle)
-        caption_query = build_caption_query(initial_bundle)
-        ocr_query = build_ocr_query(initial_bundle)
-        asr_query = build_asr_query(initial_bundle)
+        # Step 6: Build specialized queries.
+        #
+        # Builder ĐỌC `intent`/`answer_type`/`expected_units` (vd `build_ocr_query`
+        # kiểm tra `is_numeric_qa` để bơm đơn vị cân nặng), nên chúng phải nằm
+        # sẵn trong bundle truyền vào. Truyền `initial_bundle` — vốn chưa phân
+        # loại — làm nhánh đó im lặng không chạy và ocr_query ra rỗng.
+        classified = replace(
+            initial_bundle,
+            intent=intent,
+            answer_type=answer_type,
+            expected_units=expected_units,
+        )
+
+        # visual chạy trước: caption expansion dùng lại `visual_query_en`.
+        visual_query, visual_query_en = build_visual_query(classified)
+        classified = replace(
+            classified, visual_query=visual_query, visual_query_en=visual_query_en
+        )
+
+        caption_query = build_caption_query(classified)
+        ocr_query = build_ocr_query(classified)
+        asr_query = build_asr_query(classified)
 
         # Step 7: Extract entities for debugging
         entities = self._extract_entities(normalized)
@@ -163,24 +218,37 @@ class QueryRouter:
         return bundle
 
     def _detect_events(self, query: str, task: TaskType | None) -> list[str]:
-        """Detect event boundaries in query."""
-        # Only for TRAKE
-        if task != TaskType.TRAKE:
-            return []
+        """Tách query thành các event theo marker thời gian.
 
-        # Split by strong temporal markers
-        from online.services.query.normalize import STRONG_TEMPORAL
+        Chạy cho MỌI task, không riêng TRAKE: `events` còn được dùng để tính
+        complexity và để chọn intent TEMPORAL. Việc có tách `normalized_query`
+        hay không là quyết định RIÊNG của `_split_target_context`.
 
-        pieces = [query]
-        for marker in STRONG_TEMPORAL:
-            new_pieces = []
-            for piece in pieces:
-                parts = piece.split(marker)
-                new_pieces.extend([p.strip() for p in parts if p.strip()])
-            pieces = new_pieces
+        Ưu tiên format đánh số "(1) ... (2) ..." — đúng format gold TRAKE —
+        rồi mới tới marker "sau đó"/"tiếp theo".
+        """
 
-        # Filter empty
-        return [p for p in pieces if p]
+        numbered = [part.strip(" ,.;:") for part in NUMBERED_STEP_RE.split(query)[1:]]
+        numbered = [part for part in numbered if part]
+        if len(numbered) >= 2:
+            return numbered
+
+        # Tách trên bản KHÔNG DẤU rồi ánh xạ offset về chuỗi gốc: hai chuỗi
+        # cùng độ dài nên offset khớp 1-1.
+        ascii_query = strip_diacritics(query)
+        pattern = "|".join(re.escape(marker) for marker in sorted(STRONG_TEMPORAL, key=len, reverse=True))
+        pieces: list[str] = []
+        cursor = 0
+        for match in re.finditer(rf"(?<!\w)(?:{pattern})(?!\w)", ascii_query):
+            piece = query[cursor : match.start()].strip(" ,.;:")
+            if piece:
+                pieces.append(piece)
+            cursor = match.end()
+        tail = query[cursor:].strip(" ,.;:")
+        if tail:
+            pieces.append(tail)
+
+        return pieces if len(pieces) >= 2 else []
 
     def _split_target_context(
         self, query: str, events: list[str], task: TaskType | None
@@ -216,58 +284,17 @@ class QueryRouter:
 
         return target, context
 
+    # Trích entity/action/attribute dùng CHUNG một nguồn với visual builder
+    # (online/services/query/builders/visual.py) — trước đây router giữ bảng
+    # keyword riêng, nên sửa một chỗ không sửa chỗ kia.
     def _extract_entities(self, query: str) -> list[str]:
-        """Extract key entities from query for debugging."""
-        # Simple keyword extraction (ASCII Vietnamese)
-        entities = []
-
-        entity_keywords = [
-            "ca", "xe", "nguoi", "dan ong", "phu nu", "tre", "hoc sinh",
-            "giao vien", "can", "coc", "nuoc", "nha", "truong", "bang",
-        ]
-
-        query_lower = query.lower()
-        for entity in entity_keywords:
-            if entity in query_lower:
-                entities.append(entity)
-
-        return entities
+        return extract_visual_entities(query)
 
     def _extract_actions(self, query: str) -> list[str]:
-        """Extract action verbs from query."""
-        actions = []
-
-        action_keywords = [
-            "dat", "cam", "nam", "do", "rot", "uong", "an", "noi",
-            "hat", "nhay", "chay", "di", "ngoi", "dung", "vay tay",
-            "cao", "cuoc", "lai", "nem", "quang",
-        ]
-
-        query_lower = query.lower()
-        for action in action_keywords:
-            if action in query_lower:
-                actions.append(action)
-
-        return actions
+        return extract_actions(query)
 
     def _extract_attributes(self, query: str) -> list[str]:
-        """Extract visual attributes from query."""
-        attributes = []
-
-        # Colors (ASCII Vietnamese)
-        colors = ["do", "xanh", "vang", "trang", "den", "cam", "tim", "hong"]
-        query_lower = query.lower()
-        for color in colors:
-            if color in query_lower:
-                attributes.append(color)
-
-        # Spatial
-        spatial = ["tren", "duoi", "trai", "phai", "giua"]
-        for sp in spatial:
-            if sp in query_lower:
-                attributes.append(sp)
-
-        return attributes
+        return extract_attributes(query)
 
     def _estimate_complexity(
         self, query: str, events: list[str], exact_phrases: list[str], answer_type: AnswerType

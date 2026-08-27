@@ -252,11 +252,117 @@ Trả về DUY NHẤT một object JSON:
 )
 
 
+PREPARE_QUERY_BUNDLE = PromptSpec(
+    prompt_id="query.prepare_bundle",
+    version="2",
+    model_role="fast",
+    temperature=0.0,
+    max_tokens=420,
+    json_output=True,
+    notes=(
+        "Soạn dữ liệu ĐẦU VÀO RIÊNG cho từng search engine theo đúng thế mạnh "
+        "của engine đó, thay cho một query chung.\n\n"
+        "Vì sao cần LLM ở đây (số đo 2026-08-27, gold L21_V023 frame 25995): "
+        "hai truy vấn trỏ CÙNG MỘT FRAME cho thứ hạng lệch nhau 35 lần —\n"
+        "  'Bàn tay đeo đồng hồ đổ chất lỏng vào bát trắng đặt trên cân điện "
+        "tử'  -> rank 1\n"
+        "  'một con cá được đặt lên cân, sau đó ... trên cân là bao nhiêu'"
+        "        -> rank 35\n"
+        "Khác biệt là MÔ TẢ FRAME so với KỂ CHUYỆN + hỏi. Tầng rule chỉ cắt "
+        "được phần hỏi, nó không viết lại được câu kể thành mô tả thị giác — "
+        "đó chính là việc của prompt này.\n\n"
+        "Fallback là tầng rule (online/services/query/), nên prompt hỏng hay "
+        "timeout chỉ làm mất phần cải thiện, không mất truy vấn.\n\n"
+        "v2 — THÊM RÀNG BUỘC ĐỘ HIẾM. v1 chỉ bảo 'mô tả khung hình', nên model "
+        "dùng từ phổ thông và query bị video 'nam châm' nuốt. Đo trên corpus "
+        "873 video, số video chứa mỗi từ:\n"
+        "    ca            823/873  94%   idf 0.06   <- vo dung\n"
+        "    bat trang     436/873  50%   idf 0.69\n"
+        "    man hinh      384/873  44%   idf 0.82\n"
+        "    can            143/873  16%   idf 1.81\n"
+        "    can dien tu     26/873   3%   idf 3.51   <- phan biet duoc\n"
+        "    con so          13/873   1.5% idf 4.21   <- phan biet duoc\n"
+        "Truy vấn cá/cân của gold L21_V023 luôn thua L29_V015 — một phóng sự "
+        "thuỷ sản có 444 keyframe và 147 lần chữ 'cá', gấp đôi gold. Cạnh "
+        "tranh bằng từ phổ thông thì video nhắc nhiều thắng, bất kể đúng sai. "
+        "v2 yêu cầu ưu tiên danh từ ghép/cụ thể ('cân điện tử' thay vì 'cân') "
+        "và bỏ từ chung chung."
+    ),
+    template="""Bạn chuẩn bị dữ liệu tìm kiếm cho một hệ thống truy hồi video.
+Hệ thống có 4 công cụ, MỖI CÔNG CỤ CẦN MỘT LOẠI DỮ LIỆU KHÁC NHAU. Nhiệm vụ
+của bạn là soạn đúng loại dữ liệu cho từng công cụ.
+
+Truy vấn gốc: {query}
+Loại nhiệm vụ: {task}
+
+NGUYÊN TẮC QUAN TRỌNG NHẤT — CHỌN TỪ PHÂN BIỆT ĐƯỢC, KHÔNG PHẢI TỪ ĐÚNG:
+
+Kho có hàng trăm video. Một từ xuất hiện ở hầu hết video thì dù mô tả đúng
+cảnh vẫn VÔ DỤNG để tìm — nó chỉ đẩy lên những video nhắc từ đó nhiều nhất,
+chứ không phải video chứa đúng khoảnh khắc cần tìm.
+
+Với mỗi từ định dùng, hãy tự hỏi: "bao nhiêu video trong kho có thứ này?"
+  - Gần như video nào cũng có  -> BỎ, hoặc thay bằng dạng cụ thể hơn
+  - Chỉ một số ít video có     -> GIỮ, đây là thứ giúp tìm ra
+
+Cách làm cụ thể:
+  - Ưu tiên DANH TỪ GHÉP thay vì danh từ trần:
+        "cân điện tử" tốt hơn "cân";  "màn hình LED" tốt hơn "màn hình"
+  - Ưu tiên chi tiết BẤT THƯỜNG của cảnh — thứ hiếm gặp ở video khác
+  - BỎ các từ mô tả đúng nhưng có ở mọi nơi: "hình ảnh", "cảnh quay",
+    "màu sắc", "người", và các danh từ phổ thông không kèm định ngữ
+  - Một cảnh có 2-3 chi tiết hiếm thì tốt hơn một câu đầy đủ toàn từ chung
+
+Soạn các trường sau:
+
+"visual_vi" — cho công cụ so ẢNH với CÂU (CLIP).
+  Nó so câu của bạn với NỘI DUNG NHÌN THẤY của một khung hình đứng yên.
+  Hãy viết MỘT câu mô tả khung hình đó TRÔNG NHƯ THẾ NÀO: vật thể, người,
+  hành động, màu sắc, vị trí tương đối. Viết như đang chú thích một tấm ảnh.
+  BỎ: câu hỏi, thứ tự thời gian ("sau đó", "cuối cùng"), suy luận.
+  Nếu truy vấn kể nhiều cảnh, chỉ mô tả cảnh chứa ĐÁP ÁN.
+
+"visual_en" — bản tiếng Anh của "visual_vi". Cụm mô tả ảnh, không phải câu
+  dịch máy móc.
+
+"caption_vi" — cho BM25 trên kho caption TIẾNG VIỆT.
+  Là khớp TỪ nên đây là nơi nguyên tắc độ hiếm quan trọng nhất: một từ phổ
+  thông ở đây sẽ kéo lên những video nhắc từ đó hàng trăm lần.
+  Chỉ cho các danh từ ghép / cụm cụ thể phân biệt được cảnh này, kèm tối đa
+  1 cách gọi khác cho mỗi khái niệm. Không cần đúng ngữ pháp.
+  Thà cho 3 cụm hiếm còn hơn 10 từ mà đa số là từ chung.
+
+"ocr_terms" — cho công cụ đọc CHỮ HIỆN TRÊN MÀN HÌNH.
+  Chỉ liệt kê chuỗi ký tự thật sự có thể nhìn thấy trên hình: chữ trong ngoặc
+  kép của truy vấn, đơn vị đo ("kg", "%"), nhãn, biển hiệu.
+  Nếu cảnh không có lý do gì để chứa chữ, trả mảng RỖNG. Đừng nhét mô tả
+  thị giác vào đây — nó chỉ tạo nhiễu.
+
+"asr_vi" — cho công cụ tìm trong LỜI NÓI.
+  Viết theo cách một người dẫn hoặc nhân vật sẽ NÓI RA nội dung này.
+  Nếu đáp án không thể nằm trong lời nói, trả chuỗi rỗng.
+
+"events" — nếu truy vấn mô tả nhiều khoảnh khắc NỐI TIẾP nhau, tách thành
+  danh sách mô tả thị giác theo đúng thứ tự (mỗi phần tử viết như "visual_vi").
+  Truy vấn một cảnh thì trả mảng rỗng.
+
+"answer_type" — một trong: numeric, text, color, object, action, location,
+  person, time, unknown.
+
+Chỉ trả về JSON đúng khuôn sau, không thêm chữ nào khác:
+
+{{"visual_vi": "...", "visual_en": "...", "caption_vi": "...",
+"ocr_terms": ["..."], "asr_vi": "...", "events": ["..."],
+"answer_type": "..."}}""",
+)
+
+
 PROMPTS: dict[str, PromptSpec] = {
     spec.prompt_id: spec
     for spec in (
         TRANSLATE_QUERY,
         EXPAND_QUERY,
+        PREPARE_QUERY_BUNDLE,
         VLM_RERANK,
         SELECT_EVIDENCE,
         QA_ANSWER,
@@ -280,6 +386,7 @@ def prompts_by_role() -> dict[str, list[str]]:
 
 __all__ = [
     "EXPAND_QUERY",
+    "PREPARE_QUERY_BUNDLE",
     "PROMPTS",
     "PromptSpec",
     "QA_ANSWER",

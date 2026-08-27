@@ -2,6 +2,7 @@
 
 from online.prompts.registry import (
     EXPAND_QUERY,
+    PREPARE_QUERY_BUNDLE,
     PROMPTS,
     QA_ANSWER,
     RECOMMEND_WEIGHTS,
@@ -14,6 +15,7 @@ from online.prompts.registry import (
 
 __all__ = [
     "EXPAND_QUERY",
+    "PREPARE_QUERY_BUNDLE",
     "PROMPTS",
     "PromptSpec",
     "QA_ANSWER",

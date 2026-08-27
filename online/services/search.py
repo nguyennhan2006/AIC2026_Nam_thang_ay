@@ -54,6 +54,7 @@ class SearchService:
         retrievers: list[Retriever],
         *,
         planner: RuleBasedQueryPlanner | None = None,
+        query_router: QueryRouter | None = None,
         candidate_limit: int = 100,
         rrf_k: int = 60,
         rule_config: RuleConfig | None = None,
@@ -163,9 +164,10 @@ class SearchService:
         self.media_root = media_root
         self._last_avs_diagnostics: dict = {}
         self.planner = planner or RuleBasedQueryPlanner()
-        # Query Routing V2 — specialized queries per retriever engine.
-        # Set enable_query_router=True to activate; None = use legacy query_prep.
-        self._query_router = QueryRouter()
+        # Query Routing V2 — query riêng cho từng engine (online/services/query/).
+        # `query_router=None` dùng bản thuần rule; container truyền bản có
+        # refiner LLM khi FPT được bật.
+        self._query_router = query_router or QueryRouter()
         self.candidate_limit = candidate_limit
         self.rrf_k = rrf_k
         # Retrieval lấy nhiều hơn top_k để cải thiện recall. Fusion sau đó

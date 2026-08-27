@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 import json
+import logging
 from pathlib import Path
 
 from online.adapters.bm25 import LexicalRetriever
@@ -40,6 +41,8 @@ from online.adapters.vector_stores import InMemoryVectorStore, QdrantVectorStore
 from online.config import Settings
 from online.services.keyword_extraction import keyword_query
 from online.services.query_expansion import QueryExpansionRetriever
+from online.adapters.fpt_query_bundle import FptQueryBundlePreparer
+from online.services.query.router import QueryRouter
 from online.services.query_prep import PreparedQueryPlanner
 from online.services.evidence_builder import EvidenceBuilder
 from online.services.qa import QaProcessor
@@ -147,6 +150,9 @@ def _read_dataset_manifest(metadata_jsonl: Path) -> dict | None:
         return json.loads(manifest_path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
         return None
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -496,11 +502,18 @@ async def build_container(
                 for sid in corpus_scene_ids
                 if sid not in set(caption_dense.scene_ids)
             })
-            print(
-                f"[WARN] caption_dense coverage {coverage:.1%} < 98% "
-                f"({len(caption_dense.scene_ids):,} index / {len(corpus_scene_ids):,} corpus). "
-                f"Missing videos: {missing_videos[:5]}. "
-                "Nhánh vẫn chạy với index hiện có."
+            # `logger.warning`, KHÔNG `print`: stdout trên Windows mặc định là
+            # cp1258 và không encode nổi nhiều ký tự tiếng Việt tổ hợp (vd 'ẫ'
+            # trong "vẫn"). Đã xảy ra thật — dòng này ném UnicodeEncodeError và
+            # giết cả tiến trình boot, tức một CẢNH BÁO làm sập server.
+            # Logging tự xử lý lỗi encode của handler thay vì ném lên caller.
+            logger.warning(
+                "caption_dense coverage %.1f%% < 98%% (%s index / %s corpus). "
+                "Missing videos: %s. Nhanh van chay voi index hien co.",
+                coverage * 100,
+                f"{len(caption_dense.scene_ids):,}",
+                f"{len(corpus_scene_ids):,}",
+                missing_videos[:5],
             )
         caption_dense.assert_encoder_kind(caption_dense.encoder)
         try:
@@ -621,10 +634,28 @@ async def build_container(
         weight_recommender = FptWeightRecommender(client, model_id=settings.fpt_llm_model)
         evidence_selector = FptEvidenceSelector(client, model_id=settings.fpt_llm_model)
 
+    # Tier 2 của query prep: LLM soạn dữ liệu riêng cho từng engine. Rule vẫn
+    # là nền và là fallback — xem online/adapters/fpt_query_bundle.py.
+    query_router = QueryRouter()
+    if settings.enable_llm_query_bundle:
+        if not (settings.fpt_enabled and fast_llm_model):
+            raise ValueError(
+                "AIC_ENABLE_LLM_QUERY_BUNDLE=true nhưng chưa có LLM: cần "
+                "AIC_FPT_ENABLED=true và AIC_FPT_FAST_LLM_MODEL (hoặc AIC_FPT_LLM_MODEL)"
+            )
+        query_router = QueryRouter(
+            refiner=FptQueryBundlePreparer(
+                FptClient.from_settings(settings),
+                model_id=fast_llm_model,
+                cache_dir=settings.data_root / "cache" / "query_bundle",
+            )
+        )
+
     search_service = SearchService(
         repository,
         retrievers,
         planner=PreparedQueryPlanner() if settings.enable_query_prep else None,
+        query_router=query_router,
         candidate_limit=settings.candidate_limit,
         rrf_k=settings.rrf_k,
         rule_config=RuleConfig() if settings.enable_rules else None,

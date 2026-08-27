@@ -1,0 +1,127 @@
+{
+  "label": "baseline",
+  "video_recall_at_20": "8/10",
+  "frame_hit_at_20": "7/10",
+  "results": [
+    {
+      "id": "01_ca_can_goc",
+      "task": "QA",
+      "visual": "một con cá được đặt lên cân, sau đó có cảnh một con cá khác cùng loài bị một người cầm đuôi. Con số hiển thị cuối cùng trên cân",
+      "ocr": "kg g",
+      "intent": "numeric_ocr",
+      "n_results": 40,
+      "top_video": "L29_V015",
+      "video_rank": 24,
+      "frame_hit": true,
+      "nearest_frame_delta": 195
+    },
+    {
+      "id": "02_ca_can_ngan",
+      "task": "QA",
+      "visual": "Con cá được đặt trên cân điện tử, số hiển thị trên cân",
+      "ocr": "kg g",
+      "intent": "numeric_ocr",
+      "n_results": 40,
+      "top_video": "L29_V015",
+      "video_rank": 23,
+      "frame_hit": true,
+      "nearest_frame_delta": 0
+    },
+    {
+      "id": "03_ca_can_trake",
+      "task": "TRAKE",
+      "visual": "một con cá được đặt lên cân, sau đó có cảnh một con cá khác cùng loài bị một người cầm đuôi. Con số hiển thị cuối cùng trên cân",
+      "ocr": "kg g",
+      "intent": "numeric_ocr",
+      "n_results": 53,
+      "top_video": "L25_V066",
+      "video_rank": null,
+      "frame_hit": false,
+      "nearest_frame_delta": null
+    },
+    {
+      "id": "04_ban_tay_do_chat_long",
+      "task": "TEXTUAL_KIS",
+      "visual": "Bàn tay đeo đồng hồ đổ chất lỏng vào bát trắng đặt trên cân điện tử",
+      "ocr": "dong",
+      "intent": "visual",
+      "n_results": 40,
+      "top_video": "L29_V015",
+      "video_rank": 6,
+      "frame_hit": true,
+      "nearest_frame_delta": 0
+    },
+    {
+      "id": "05_ca_map_be_nuoc",
+      "task": "TEXTUAL_KIS",
+      "visual": "Một con cá mập nhỏ thân sọc đen trắng bơi trong bể nước trong suốt nhìn từ trên cao",
+      "ocr": "",
+      "intent": "visual",
+      "n_results": 40,
+      "top_video": "L21_V023",
+      "video_rank": 1,
+      "frame_hit": true,
+      "nearest_frame_delta": 0
+    },
+    {
+      "id": "06_dan_chuong_trinh",
+      "task": "TEXTUAL_KIS",
+      "visual": "Hai người dẫn chương trình đứng sau bàn trong studio truyền hình, phía sau là phông nền thành phố lúc hoàng hôn",
+      "ocr": "",
+      "intent": "visual",
+      "n_results": 40,
+      "top_video": "L22_V019",
+      "video_rank": 17,
+      "frame_hit": false,
+      "nearest_frame_delta": 34590
+    },
+    {
+      "id": "07_ocr_toa_an_paris",
+      "task": "TEXTUAL_KIS",
+      "visual": "Cảnh có dòng chữ \"TÒA ÁN PHÚC THẨM PARIS BÁC BỎ ĐƠN KIỆN CỦA BÀ TRẦN TỐ NGA\"",
+      "ocr": "TÒA ÁN PHÚC THẨM PARIS BÁC BỎ ĐƠN KIỆN CỦA BÀ TRẦN TỐ NGA dong",
+      "intent": "ocr",
+      "n_results": 40,
+      "top_video": "L21_V023",
+      "video_rank": 1,
+      "frame_hit": true,
+      "nearest_frame_delta": 0
+    },
+    {
+      "id": "08_asr_60_giay",
+      "task": "QA",
+      "visual": "Người dẫn chương trình nói chương trình 60 giây buổi sáng phát sóng vào ngày nào",
+      "ocr": "giay ngay 60",
+      "intent": "visual",
+      "n_results": 40,
+      "top_video": "L22_V006",
+      "video_rank": null,
+      "frame_hit": false,
+      "nearest_frame_delta": null
+    },
+    {
+      "id": "09_phong_xu_an_ve",
+      "task": "TEXTUAL_KIS",
+      "visual": "Bức vẽ đen trắng mô tả phòng xử án với nhiều người ngồi ở các hàng ghế",
+      "ocr": "",
+      "intent": "visual",
+      "n_results": 40,
+      "top_video": "L21_V023",
+      "video_rank": 1,
+      "frame_hit": true,
+      "nearest_frame_delta": 0
+    },
+    {
+      "id": "10_ran_soc_be_nhua",
+      "task": "TEXTUAL_KIS",
+      "visual": "Một con rắn vằn sọc đen trắng nằm trong bể nhựa, phần đuôi uốn cong",
+      "ocr": "nam",
+      "intent": "visual",
+      "n_results": 40,
+      "top_video": "L21_V023",
+      "video_rank": 1,
+      "frame_hit": true,
+      "nearest_frame_delta": 0
+    }
+  ]
+}
