@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 from time import perf_counter
@@ -15,6 +16,7 @@ from online.domain.models import (
     Evidence,
     FrameEvidence,
     Modality,
+    QueryEvent,
     QueryPlan,
     SceneDocument,
     SearchHit,
@@ -526,9 +528,11 @@ class SearchService:
         })
         if task == TaskType.TRAKE and len(plan.events) >= 2:
             step_overrides = plan.search_options.temporal.step_modality_weights
-            event_hit_lists: list[list[SearchHit]] = []
             statuses: list[BranchStatus] = []
-            for index, event in enumerate(plan.events):
+
+            async def _run_step(
+                index: int, event: QueryEvent
+            ) -> tuple[list[SearchHit], list[BranchStatus]]:
                 # PR-14A: trọng số modality riêng cho TỪNG step — trước đây mọi
                 # step dùng chung weight suy từ cả câu multi-event, nên step
                 # không có OCR/ASR vẫn bị đẩy nhánh sai theo step khác.
@@ -548,8 +552,28 @@ class SearchService:
                 candidates, step_statuses = await self._retrieve(
                     event_plan, self.trake_candidate_limit or self.candidate_limit
                 )
+                return await self._hydrate(candidates, event.text), step_statuses
+
+            # Các step ĐỘC LẬP: mỗi step là một lượt retrieval riêng trên cùng
+            # corpus, không cái nào cần kết quả của cái nào. Chạy tuần tự khiến
+            # TRAKE tốn đúng N lần một truy vấn thường — đo trên corpus 873
+            # video: một truy vấn ~137 s, nên 3 step vượt 400 s và client timeout
+            # TRƯỚC khi có phản hồi. Triệu chứng ở ngoài là "TRAKE không xuất ra
+            # được gì", dễ tưởng là lỗi dựng chuỗi.
+            #
+            # An toàn khi chạy song song: `_retrieve` vốn đã phục vụ nhiều
+            # request đồng thời (đo 7 truy vấn cùng lúc: 7/7 trả 200, RAM không
+            # đổi). `gather` giữ nguyên thứ tự nên `event_hit_lists[i]` vẫn là
+            # step i — thứ tự này là ràng buộc của `link_event_hits`.
+            step_results = await asyncio.gather(
+                *(_run_step(index, event) for index, event in enumerate(plan.events))
+            )
+            event_hit_lists: list[list[SearchHit]] = [hits for hits, _ in step_results]
+            # Gộp theo đúng thứ tự step: `_merge_statuses` giữ trạng thái XẤU
+            # nhất của mỗi execution, nên kết quả không phụ thuộc thứ tự hoàn
+            # thành thật sự của các coroutine.
+            for _, step_statuses in step_results:
                 statuses = _merge_statuses(statuses, step_statuses)
-                event_hit_lists.append(await self._hydrate(candidates, event.text))
             documents = await self._documents_for(
                 [hit for hits in event_hit_lists for hit in hits]
             )

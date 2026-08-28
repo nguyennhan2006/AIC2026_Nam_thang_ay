@@ -55,7 +55,18 @@ NUMBERED_STEP_RE = re.compile(r"\(\d+\)\s*")
 # regex này chạy nên không dùng được anchor dòng (^/MULTILINE) — phải dùng
 # lookbehind để "E<số>" chỉ khớp khi đứng như một token riêng, không phải một
 # phần của từ khác.
-LETTERED_STEP_RE = re.compile(r"(?<!\w)E\d+\s+")
+#
+# `\s+` sau số là SAI và đã làm hỏng thật: nó bắt buộc phải có khoảng trắng
+# ngay sau "E1", nên "E1: ...", "E1. ...", "E1) ..." đều KHÔNG khớp — mà dấu
+# hai chấm là cách viết tự nhiên nhất. Không khớp thì `parts` giữ nguyên cả
+# đoạn văn, `plan.events` còn 1 phần tử, `len(plan.events) >= 2` ở search.py
+# False, và TRAKE trả rỗng: đúng triệu chứng "không xuất ra được".
+# Dạng "E1 - ..." thì khớp nhưng để lại dấu gạch ở đầu mỗi event, đẩy rác vào
+# truy vấn từng bước.
+#
+# `(?![\w])` sau chữ số là chốt giữ lại tính "token riêng" mà `\s+` vốn đảm
+# nhiệm: thiếu nó thì "E1A"/"E12x" cũng bị cắt.
+LETTERED_STEP_RE = re.compile(r"(?<!\w)E\d+(?![\w])\s*[:.)\-–—]?\s*")
 # ROUTE-01: cue quyết định một modality có ĐƯỢC CHẠY hay không, nên phải phủ
 # đủ cách hỏi thường gặp. Thiếu cue => branch không chạy (không phải chạy rồi
 # nhân 0), nên bỏ sót cue ở đây là mất recall thật.
