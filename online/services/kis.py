@@ -28,7 +28,7 @@ import re
 
 from online.adapters.ocr_fuzzy import normalize_vi
 from online.domain.evidence import EvidencePack
-from online.domain.models import SceneDocument, SearchHit
+from online.domain.models import KisConstraints, SceneDocument, SearchHit
 from online.domain.task_results import KisResultItem
 from online.services.keyword_extraction import SCENE_NOUNS
 from online.services.negative_constraints import extract_negative_constraints
@@ -155,7 +155,56 @@ class KisConfig:
     cross_branch_weight: float = 0.15
     safe_frame_weight: float = 0.3
     contradiction_penalty: float = 0.8
+    structured_visual_weight: float = 0.35
+    structured_ocr_weight: float = 0.45
+    structured_asr_weight: float = 0.45
+    structured_must_weight: float = 0.60
+    structured_negative_penalty: float = 1.0
     safe_frame: SafeFrameConfig = field(default_factory=SafeFrameConfig)
+
+
+def _join_values(values: list[str]) -> str:
+    return " ".join(item.strip() for item in values if item.strip()).strip()
+
+
+def _term_hit(term: str, normalized_text: str, words: set[str]) -> bool:
+    term_norm = normalize_vi(term)
+    if not term_norm:
+        return False
+    if " " in term_norm:
+        return term_norm in normalized_text
+    return term_norm in words
+
+
+def _constraint_coverage(values: list[str], text: str) -> float:
+    terms = [item for item in values if item.strip()]
+    if not terms:
+        return 0.0
+    normalized = normalize_vi(text)
+    words = set(normalized.split())
+    return sum(1 for term in terms if _term_hit(term, normalized, words)) / len(terms)
+
+
+def _has_constraint_hit(values: list[str], text: str) -> bool:
+    if not values:
+        return False
+    normalized = normalize_vi(text)
+    words = set(normalized.split())
+    return any(_term_hit(term, normalized, words) for term in values)
+
+
+def _frame_query(query: str, constraints: KisConstraints | None) -> str:
+    if constraints is None:
+        return query
+    structured = " ".join(
+        item for item in (
+            _join_values(constraints.visual),
+            _join_values(constraints.ocr),
+            _join_values(constraints.must),
+        )
+        if item
+    ).strip()
+    return structured or query
 
 
 class KisProcessor:
@@ -173,6 +222,7 @@ class KisProcessor:
         packs: dict[str, EvidencePack] | None = None,
         limit: int = 100,
         normalizers: "ScoreNormalizers | None" = None,
+        constraints: KisConstraints | None = None,
     ) -> list[KisResultItem]:
         signature = build_signature(query)
         config = self.config
@@ -205,7 +255,10 @@ class KisProcessor:
             agreement = len(hit.matched_branches) / branch_ceiling
 
             safe = select_safe_frame(
-                document, query, config.safe_frame, prefer_frame_idx=hit.best_frame_idx
+                document,
+                _frame_query(query, constraints),
+                config.safe_frame,
+                prefer_frame_idx=hit.best_frame_idx,
             )
             safe_score = safe.total if safe else 0.0
             frame_idx = safe.frame.frame_idx if safe else hit.best_frame_idx
@@ -218,6 +271,29 @@ class KisProcessor:
                 + config.cross_branch_weight * agreement
                 + config.safe_frame_weight * safe_score
             )
+            if constraints is not None:
+                frame_text = " ".join(frame.search_text for frame in document.keyframes)
+                visual_text = " ".join([
+                    *document.captions,
+                    *document.object_labels,
+                    *document.action_tags,
+                    frame_text,
+                ])
+                ocr_text = " ".join(document.ocr_texts)
+                asr_text = " ".join(document.asr_texts)
+                all_text = " ".join([text, frame_text])
+                total += (
+                    config.structured_visual_weight
+                    * _constraint_coverage(constraints.visual, visual_text)
+                    + config.structured_ocr_weight
+                    * _constraint_coverage(constraints.ocr, ocr_text)
+                    + config.structured_asr_weight
+                    * _constraint_coverage(constraints.asr, asr_text)
+                    + config.structured_must_weight
+                    * _constraint_coverage(constraints.must, all_text)
+                )
+                if _has_constraint_hit(constraints.negative, all_text):
+                    total -= config.structured_negative_penalty
             if contradicted:
                 total -= config.contradiction_penalty
 

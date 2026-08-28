@@ -1074,6 +1074,7 @@ class SearchService:
             kis_results = self.kis_processor.rank(
                 plan.original_query, results, documents,
                 packs=packs, limit=request.top_k, normalizers=normalizers,
+                constraints=request.kis_constraints,
             )
             await _attach_playback(self.repository, kis_results, self.playback_pad_sec, self.media_root)
             return {"kis": kis_results}, []

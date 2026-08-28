@@ -20,6 +20,7 @@ import re
 from online.domain.models import Candidate, Modality, QueryPlan, SceneDocument
 from online.ports.interfaces import SceneRepository
 from online.services.branch_options import effective_limit, effective_weight
+from online.services.branch_query import get_branch_query
 
 TOKEN_RE = re.compile(r"[\wÀ-ỹ]+")
 
@@ -77,7 +78,16 @@ class ColorSearchRetriever:
         if effective_weight(plan, self.execution_id, self.modality, self.branch_id) <= 0:
             return []
         limit = effective_limit(plan, self.execution_id, limit, self.branch_id)
-        query_tags = extract_color_tags(plan.normalized_query)
+        query = get_branch_query(
+            plan,
+            self.branch_id,
+            self.modality,
+            plan.normalized_query,
+            execution_id=self.execution_id,
+        )
+        if query is None:
+            return []
+        query_tags = extract_color_tags(query)
         if not query_tags:
             return []
         # Quét toàn corpus là CPU-bound thuần: chạy thẳng trên event loop thì

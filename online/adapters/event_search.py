@@ -19,6 +19,7 @@ from online.adapters.bm25 import BM25Index
 from online.domain.models import Candidate, EventDocument, Modality, QueryPlan
 from online.errors import MetadataNotFoundError
 from online.services.branch_options import effective_limit, effective_weight
+from online.services.branch_query import get_branch_query
 
 
 def project_event(raw: dict) -> EventDocument:
@@ -93,6 +94,16 @@ class EventSearchRetriever:
             return []
         limit = effective_limit(plan, self.execution_id, limit, self.branch_id)
         query = plan.events[0].text if len(plan.events) == 1 else plan.normalized_query
+        branch_query = get_branch_query(
+            plan,
+            self.branch_id,
+            self.modality,
+            query,
+            execution_id=self.execution_id,
+        )
+        if branch_query is None:
+            return []
+        query = branch_query
         # BM25 Python thuần trên toàn bộ event — cùng lý do như bm25.py.
         results = await asyncio.to_thread(self.index.search, query, limit)
         candidates: list[Candidate] = []

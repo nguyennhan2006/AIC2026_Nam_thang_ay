@@ -33,6 +33,7 @@ import numpy as np
 
 from online.domain.models import Candidate, Modality, QueryPlan
 from online.services.branch_options import effective_limit, effective_weight
+from online.services.branch_query import get_branch_query
 
 DOCUMENT_SCHEMA = "caption_dense_v1"
 QUERY_PREFIX = "query: "
@@ -510,6 +511,16 @@ class CaptionDenseRetriever:
         # không phải chấm cả câu. Đọc `normalized_query` ở đây sẽ làm mọi bước
         # của một chuỗi dùng chung một truy vấn.
         query = plan.events[0].text if len(plan.events) == 1 else plan.normalized_query
+        branch_query = get_branch_query(
+            plan,
+            self.branch_id,
+            self.modality,
+            query,
+            execution_id=self.execution_id,
+        )
+        if branch_query is None:
+            return []
+        query = branch_query
         # Inference chạy trong thread riêng: `encode` là CPU-bound thuần và giữ
         # nguyên trong coroutine sẽ chặn event loop, làm MỌI nhánh khác trượt
         # deadline. Đã có tiền lệ đo được — `ocr_fuzzy` chạy đồng bộ kéo
