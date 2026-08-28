@@ -46,6 +46,9 @@ from online.services.query.normalize import (
 
 # Gold TRAKE dùng format liệt kê "(1) ...; (2) ...", giống query_planner.py.
 NUMBERED_STEP_RE = re.compile(r"\(\d+\)\s*")
+# Đề sơ tuyển thật dùng format "E1 ... E2 ... E3 ..." thay vì ngoặc — cùng lý
+# do và cùng cách xử lý như `online/services/query_planner.py::LETTERED_STEP_RE`.
+LETTERED_STEP_RE = re.compile(r"(?<!\w)E\d+\s+")
 from online.services.query.intent import (
     classify_answer_type,
     classify_intent,
@@ -232,6 +235,11 @@ class QueryRouter:
         numbered = [part for part in numbered if part]
         if len(numbered) >= 2:
             return numbered
+
+        lettered = [part.strip(" ,.;:") for part in LETTERED_STEP_RE.split(query)[1:]]
+        lettered = [part for part in lettered if part]
+        if len(lettered) >= 2:
+            return lettered
 
         # Tách trên bản KHÔNG DẤU rồi ánh xạ offset về chuỗi gốc: hai chuỗi
         # cùng độ dài nên offset khớp 1-1.

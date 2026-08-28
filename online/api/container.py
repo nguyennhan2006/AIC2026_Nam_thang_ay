@@ -687,6 +687,7 @@ async def build_container(
         trake_gap_penalty=settings.trake_gap_penalty,
         trake_candidate_limit=settings.trake_candidate_limit,
         trake_allow_missing_steps=settings.trake_allow_missing_steps,
+        kis_event_fanout=settings.kis_event_fanout,
         trake_min_covered_steps=settings.trake_min_covered_steps,
         trake_missing_step_penalty=settings.trake_missing_step_penalty,
         trake_beam_size=settings.trake_beam_size,
