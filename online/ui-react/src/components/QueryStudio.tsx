@@ -57,6 +57,13 @@ const KIS_FIELDS: { key: keyof KisConstraints; label: string; placeholder: strin
   { key: "must", label: "Must-have", placeholder: "điều bắt buộc, mỗi dòng một ý" },
   { key: "negative", label: "Negative", placeholder: "điều không được có" },
 ];
+const EMPTY_KIS_CONSTRAINTS: Record<keyof KisConstraints, string> = {
+  visual: "",
+  ocr: "",
+  asr: "",
+  must: "",
+  negative: "",
+};
 
 function loadMode(): "simple" | "advanced" {
   if (typeof localStorage === "undefined") return "simple";
@@ -69,6 +76,7 @@ function loadMode(): "simple" | "advanced" {
 export function QueryStudio(props: QueryStudioProps) {
   const [mode, setMode] = useState<"simple" | "advanced">(loadMode);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const kisConstraints = props.kisConstraints ?? EMPTY_KIS_CONSTRAINTS;
 
   useEffect(() => {
     localStorage.setItem(MODE_KEY, mode);
@@ -81,7 +89,7 @@ export function QueryStudio(props: QueryStudioProps) {
     el.style.height = `${el.scrollHeight}px`;
   }, [props.query]);
 
-  const structuredText = Object.entries(props.kisConstraints)
+  const structuredText = Object.entries(kisConstraints)
     .filter(([key]) => key !== "negative")
     .map(([, value]) => value)
     .join("\n")
@@ -170,11 +178,11 @@ export function QueryStudio(props: QueryStudioProps) {
                   <textarea
                     className="structured-kis-textarea"
                     rows={field.key === "negative" ? 2 : 3}
-                    value={props.kisConstraints[field.key]}
+                    value={kisConstraints[field.key]}
                     placeholder={field.placeholder}
                     aria-label={`Structured KIS ${field.label}`}
                     onChange={(event) => props.onKisConstraintsChange({
-                      ...props.kisConstraints,
+                      ...kisConstraints,
                       [field.key]: event.target.value,
                     })}
                     onKeyDown={handleKeyDown}
@@ -227,12 +235,12 @@ export function QueryStudio(props: QueryStudioProps) {
             icon={<X size={14} />}
             disabled={
               props.task === "TEXTUAL_KIS" && props.kisMode === "structured"
-                ? !Object.values(props.kisConstraints).some((value) => value.trim())
+                ? !Object.values(kisConstraints).some((value) => value.trim())
                 : !props.query
             }
             onClick={() => {
               if (props.task === "TEXTUAL_KIS" && props.kisMode === "structured") {
-                props.onKisConstraintsChange({ visual: "", ocr: "", asr: "", must: "", negative: "" });
+                props.onKisConstraintsChange(EMPTY_KIS_CONSTRAINTS);
               } else {
                 props.onQueryChange("");
               }
