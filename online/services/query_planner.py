@@ -47,6 +47,15 @@ WEAK_TEMPORAL_RE = re.compile(
 # mọi query TRAKE thật rơi về đúng 1 event, khiến `len(plan.events) >= 2` ở
 # search.py luôn False và TrakeProcessor không bao giờ chạy.
 NUMBERED_STEP_RE = re.compile(r"\(\d+\)\s*")
+# Đề sơ tuyển thật (query-p1-16-trake.txt) dùng format khác: "E1 ...\nE2
+# ...\nE3 ..." — không có ngoặc, không có từ nối. Đo trực tiếp: NUMBERED_STEP_RE
+# và TEMPORAL_RE đều không khớp gì trên văn bản này, `plan.events` dừng ở 1
+# phần tử (nguyên đoạn văn), TRAKE không bao giờ kích hoạt cho đúng định dạng
+# đề thi đang dùng. `normalize_query()` gộp newline thành space trước khi
+# regex này chạy nên không dùng được anchor dòng (^/MULTILINE) — phải dùng
+# lookbehind để "E<số>" chỉ khớp khi đứng như một token riêng, không phải một
+# phần của từ khác.
+LETTERED_STEP_RE = re.compile(r"(?<!\w)E\d+\s+")
 # ROUTE-01: cue quyết định một modality có ĐƯỢC CHẠY hay không, nên phải phủ
 # đủ cách hỏi thường gặp. Thiếu cue => branch không chạy (không phải chạy rồi
 # nhân 0), nên bỏ sót cue ở đây là mất recall thật.
@@ -233,6 +242,17 @@ class RuleBasedQueryPlanner:
                 item.strip(" ,.;:") for item in NUMBERED_STEP_RE.split(normalized)[1:]
             ]
             numbered = [item for item in numbered if item]
+            if len(numbered) < 2:
+                # Thử format "E1 ... E2 ... E3 ..." trước khi rơi về temporal
+                # marker — cùng vai trò với nhánh "(1)(2)(3)" ở trên, chỉ khác
+                # ký hiệu đánh số đề bài dùng.
+                lettered = [
+                    item.strip(" ,.;:")
+                    for item in LETTERED_STEP_RE.split(normalized)[1:]
+                ]
+                lettered = [item for item in lettered if item]
+                if len(lettered) >= 2:
+                    numbered = lettered
             if len(numbered) >= 2:
                 parts = numbered
             else:

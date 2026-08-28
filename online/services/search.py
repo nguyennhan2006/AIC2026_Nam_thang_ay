@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from time import perf_counter
 from typing import AsyncIterator
 from uuid import uuid4
+
+logger = logging.getLogger(__name__)
 
 from online.domain.models import (
     Candidate,
@@ -89,9 +92,16 @@ class SearchService:
         branch_timeout_ms: int | None = None,
         evidence_select_top_n: int = 10,
         retrieval_multiplier: int = 10,
+        # KIS/QA/AVS: query nhiều cảnh (`query_bundle.events`) chạy `_retrieve`
+        # thêm một lần MỖI event rồi union kết quả, thay vì chỉ tìm theo cảnh
+        # duy nhất mà visual_query/caption_query giữ lại — xem
+        # `_merge_candidate_pools`. Escape hatch tắt qua AIC_KIS_EVENT_FANOUT
+        # nếu chi phí N+1 lần retrieval mỗi câu nhiều cảnh quá chậm.
+        kis_event_fanout: bool = True,
     ) -> None:
         if not retrievers:
             raise ValueError("at least one retriever is required")
+        self.kis_event_fanout = kis_event_fanout
         self.repository = repository
         self.retrievers = retrievers
         self.registry = RetrieverRegistry(retrievers)
@@ -239,12 +249,6 @@ class SearchService:
         # còn kéo đổ cả request như `asyncio.gather` trần trước PR-03.
         lists, statuses = await self.orchestrator.execute(plan, retrieval_limit)
 
-        # DEBUG: Log retrieval stats
-        import logging
-        logger = logging.getLogger(__name__)
-        branch_counts = [(st.execution_id, st.candidate_count) for st in statuses]
-        logger.warning(f"_retrieve: retrieval_limit={retrieval_limit}, branch_counts={branch_counts}")
-
         fusion_options = plan.search_options.fusion
         # Chuẩn hóa trước, cắt ngưỡng sau, rồi mới fuse. Thứ tự này bắt buộc:
         # RRF dùng *hạng* trong danh sách của branch, nên cắt sau khi fuse sẽ
@@ -276,17 +280,6 @@ class SearchService:
             minimum_matching_branches=fusion_options.minimum_matching_branches,
         )
 
-        # DEBUG: Log candidates để xem scene_ids có vấn đề gì không
-        if len(candidates) > 0:
-            logger.warning(f"_retrieve: after fusion={len(candidates)} candidates")
-            # Log sample candidates
-            sample = candidates[:5]
-            for c in sample:
-                logger.warning(f"  candidate: scene_id={c.scene_id}, video_id={c.video_id}, source={c.source}")
-            # Check xem có scene_id nào bất thường không
-            abnormal = [c for c in candidates if c.scene_id and not c.scene_id.startswith(('L21_', 'L25_', 'L26_', 'L27_', 'L30_'))]
-            if abnormal:
-                logger.warning(f"  ABNORMAL scene_ids: {[c.scene_id for c in abnormal[:5]]}")
         constraints = (
             extract_negative_constraints(plan.normalized_query)
             if plan.search_options.query.enable_negative_constraints else []
@@ -384,17 +377,12 @@ class SearchService:
             for item in await self.repository.get_many(scene_ids_needed)
         }
 
-        # Debug: log missing scenes
         missing_scenes = [sid for sid in scene_ids_needed if sid not in documents]
         if missing_scenes:
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.warning(f"_hydrate: {len(missing_scenes)}/{len(scene_ids_needed)} scenes not found in repository: {missing_scenes[:5]}...")
-            logger.warning(f"  sample scene_ids in candidates: {scene_ids_needed[:5]}")
-            # Thử kiểm tra từng missing scene
-            for sid in missing_scenes[:3]:
-                doc = await self.repository.get(sid)
-                logger.warning(f"  re-check scene {sid}: {'EXISTS' if doc else 'NOT FOUND'}")
+            logger.warning(
+                "_hydrate: %d/%d scenes not found in repository: %s",
+                len(missing_scenes), len(scene_ids_needed), missing_scenes[:5],
+            )
 
         hits: list[SearchHit] = []
         skipped_count = 0
@@ -473,10 +461,6 @@ class SearchService:
                     warnings=warnings,
                 )
             )
-        # Debug log
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.warning(f"_hydrate: {len(candidates)} candidates -> {len(hits)} hits (skipped={skipped_count})")
         return hits
 
     async def search(self, request: SearchRequest) -> SearchResponse:
@@ -658,7 +642,42 @@ class SearchService:
                 warnings=warnings,
             )
 
-        candidates, statuses = await self._retrieve(plan, self.candidate_limit)
+        if (
+            task != TaskType.TRAKE
+            and self.kis_event_fanout
+            and len(query_bundle.events) >= 2
+        ):
+            # KIS/QA/AVS: `visual_query`/`caption_query` giữ đúng MỘT cảnh
+            # trong chuỗi tường thuật (xem query/router.py::_split_target_context
+            # và fpt_query_bundle.py::refine — cả hai tầng soạn query đều theo
+            # triết lý "target = 1 khung hình"), nhưng đáp án gold có thể nằm ở
+            # BẤT KỲ cảnh nào trong `query_bundle.events` — khác TRAKE, ở đây
+            # không cần đúng thứ tự nên UNION kết quả thay vì nối chuỗi.
+            candidates, statuses = await self._retrieve(plan, self.candidate_limit)
+            pools = [candidates]
+            for event_text in query_bundle.events:
+                event_text = event_text.strip()
+                if not event_text:
+                    continue
+                weights = compute_modality_weights(
+                    event_text, [],
+                    allow_zero=getattr(self.planner, "allow_zero_modality", True),
+                )
+                event_plan = plan.model_copy(update={
+                    "normalized_query": event_text,
+                    "visual_query": event_text,
+                    "visual_query_en": "",
+                    "caption_query": event_text,
+                    "modality_weights": weights,
+                })
+                event_candidates, event_statuses = await self._retrieve(
+                    event_plan, self.candidate_limit
+                )
+                pools.append(event_candidates)
+                statuses = _merge_statuses(statuses, event_statuses)
+            candidates = _merge_candidate_pools(pools, limit=self.candidate_limit)
+        else:
+            candidates, statuses = await self._retrieve(plan, self.candidate_limit)
         candidates = await self._attach_events(candidates)
         # P2: chụp thứ hạng TRƯỚC rerank. Phải chụp tại đây, không suy ngược
         # được từ kết quả cuối — rerank và task processor đều sắp lại. Thiếu nó
@@ -709,6 +728,14 @@ class SearchService:
 
         # PR-RECALL: Backfill cuối cùng từ pre-rerank
         # Luôn đảm bảo đủ top_k results
+        #
+        # `warnings` phải khởi tạo TRƯỚC đây: nhánh non-TRAKE (khác nhánh TRAKE
+        # phía trên, tự khởi tạo `warnings` riêng) trước đây không có dòng nào
+        # gán `warnings` trước lần .append() này — bất kỳ câu nào rerank/dedup
+        # trả về ít hơn top_k (rất bình thường với truy vấn hiếm) đều crash
+        # UnboundLocalError. Gán lại (không += ) ở dưới vẫn giữ nguyên nội
+        # dung này vì dùng `warnings + ...` thay vì ghi đè.
+        warnings: list[str] = []
         expected = request.top_k
         if len(candidates) < expected:
             warnings.append(
@@ -932,6 +959,48 @@ class SearchService:
             limit=self.candidate_limit, branches=plan.search_options.branches,
             minimum_matching_branches=fusion_options.minimum_matching_branches,
         )
+
+        if (
+            task != TaskType.TRAKE
+            and self.kis_event_fanout
+            and len(query_bundle.events) >= 2
+        ):
+            # Cùng logic với nhánh non-stream ở `_search_impl` (xem đó để biết
+            # LÝ DO): `visual_query`/`caption_query` chỉ giữ một cảnh, nên
+            # tìm thêm một lần MỖI event rồi union — KHÔNG lặp lại chi tiết
+            # từng branch qua stream (đã phát ở trên cho câu gốc), chỉ phát
+            # một sự kiện tóm tắt mỗi event để debug UI thấy fan-out chạy.
+            pools = [candidates]
+            for index, event_text in enumerate(query_bundle.events):
+                event_text = event_text.strip()
+                if not event_text:
+                    continue
+                weights = compute_modality_weights(
+                    event_text, [],
+                    allow_zero=getattr(self.planner, "allow_zero_modality", True),
+                )
+                event_plan = plan.model_copy(update={
+                    "normalized_query": event_text,
+                    "visual_query": event_text,
+                    "visual_query_en": "",
+                    "caption_query": event_text,
+                    "modality_weights": weights,
+                })
+                event_candidates, event_statuses = await self._retrieve(
+                    event_plan, self.candidate_limit
+                )
+                pools.append(event_candidates)
+                statuses = _merge_statuses(statuses, event_statuses)
+                yield {
+                    "type": "event_fanout_step",
+                    "query_id": query_id,
+                    "step": index + 1,
+                    "total_steps": len(query_bundle.events),
+                    "text": event_text,
+                    "candidate_count": len(event_candidates),
+                }
+            candidates = _merge_candidate_pools(pools, limit=self.candidate_limit)
+
         candidates = await self._attach_events(candidates)
         normalizers = ScoreNormalizers.from_pool(candidates)
         candidates = deduplicate_for_task(
@@ -1246,6 +1315,27 @@ def _merge_statuses(
                 }
             )
     return [merged[key] for key in sorted(merged)]
+
+
+def _merge_candidate_pools(
+    pools: list[list[Candidate]], *, limit: int
+) -> list[Candidate]:
+    """Gộp nhiều lần `_retrieve` (câu gốc + một lần mỗi event) thành một pool.
+
+    KIS/QA/AVS chấp nhận đáp án ở bất kỳ cảnh nào trong chuỗi tường thuật —
+    khác TRAKE, không cần giữ candidate nào khớp NHIỀU event hay đúng thứ tự.
+    Một candidate trùng `candidate_id` ở nhiều pool thì giữ `raw_score` cao
+    nhất (pool nào tìm ra nó tốt nhất, tin pool đó).
+    """
+
+    best: dict[str, Candidate] = {}
+    for pool in pools:
+        for candidate in pool:
+            existing = best.get(candidate.candidate_id)
+            if existing is None or candidate.raw_score > existing.raw_score:
+                best[candidate.candidate_id] = candidate
+    ranked = sorted(best.values(), key=lambda c: c.raw_score, reverse=True)
+    return ranked[:limit]
 
 
 def _query_for_branch(plan: QueryPlan, branch_id: str) -> tuple[str, str]:

@@ -251,6 +251,10 @@ class Settings:
     trake_max_chains_per_video: int | None = None
     trake_free_gap_sec: float | None = None
     trake_gap_cap: float | None = None
+    # KIS/QA/AVS: query nhiều cảnh chạy retrieval thêm 1 lần MỖI event rồi
+    # union kết quả — xem SearchService.kis_event_fanout / search.py
+    # _merge_candidate_pools. Tắt nếu chi phí N+1 lần retrieval quá chậm.
+    kis_event_fanout: bool = True
     # Dense visual local (PR-13) — text tower phải cùng model với vector ảnh
     # đã sinh (`scripts/embed_keyframes_local.py`), nếu không hai không gian
     # embedding lệch nhau và cosine similarity vô nghĩa. Chỉ thật sự nạp model
@@ -454,6 +458,7 @@ class Settings:
                 float(os.environ["AIC_TRAKE_GAP_CAP"])
                 if os.getenv("AIC_TRAKE_GAP_CAP") else None
             ),
+            kis_event_fanout=_env_bool("AIC_KIS_EVENT_FANOUT", True),
             visual_embedding_model=os.getenv("AIC_VISUAL_EMBEDDING_MODEL", "openai/clip-vit-large-patch14"),
             visual_embedding_name=os.getenv("AIC_VISUAL_EMBEDDING_NAME", "").strip(),
             dense_indexes=os.getenv("AIC_DENSE_INDEXES", "").strip(),
