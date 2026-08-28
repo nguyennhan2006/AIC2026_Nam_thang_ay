@@ -4,6 +4,7 @@ from online.domain.execution import BackendKind
 from online.domain.models import Candidate, Modality, QueryPlan
 from online.ports.interfaces import TextEncoder, VectorStore
 from online.services.branch_options import effective_limit, effective_weight
+from online.services.branch_query import get_branch_query
 
 
 class DenseRetriever:
@@ -45,6 +46,15 @@ class DenseRetriever:
         if plan.visual_query:
             # Prefer visual query (entity-focused, no abstract questions)
             query_text = plan.visual_query
+        query_text = get_branch_query(
+            plan,
+            self.branch_id,
+            self.modality,
+            query_text,
+            execution_id=self.execution_id,
+        )
+        if query_text is None:
+            return []
 
         vector = await self.encoder.encode(query_text)
         candidates = await self.store.search(

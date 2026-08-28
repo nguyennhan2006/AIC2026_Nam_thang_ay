@@ -120,6 +120,58 @@ def compute_modality_weights(
     return weights
 
 
+def _join_constraints(*groups: list[str]) -> str:
+    return " ".join(
+        item.strip()
+        for group in groups
+        for item in group
+        if item.strip()
+    ).strip()
+
+
+def _structured_kis_queries(request: SearchRequest) -> tuple[dict[str, str], dict[Modality, str]]:
+    constraints = request.kis_constraints
+    if (request.task or TaskType.TEXTUAL_KIS) != TaskType.TEXTUAL_KIS or constraints is None:
+        return {}, {}
+
+    visual = constraints.visual
+    ocr = constraints.ocr
+    asr = constraints.asr
+    must = constraints.must
+    visual_must = _join_constraints(visual, must)
+    caption = _join_constraints(visual, must, asr)
+    ocr_query = _join_constraints(ocr)
+    asr_query = _join_constraints(asr)
+    event = _join_constraints(visual, must, asr)
+
+    branch_queries = {
+        "dense_visual": visual_must,
+        "lexical_hash_fallback": visual_must,
+        "caption_dense": caption,
+        "bm25_caption": caption,
+        "bm25_keyword": visual_must,
+        "bm25_object": visual_must,
+        "bm25_action": visual_must,
+        "color_search": visual_must,
+        "bm25_ocr": ocr_query,
+        "ocr_fuzzy": ocr_query,
+        "bm25_asr": asr_query,
+        "event_search": event,
+    }
+    modality_queries = {
+        Modality.VISUAL: visual_must,
+        Modality.CAPTION: caption,
+        Modality.KEYWORD: visual_must,
+        Modality.OBJECT: visual_must,
+        Modality.ACTION: visual_must,
+        Modality.COLOR: visual_must,
+        Modality.OCR: ocr_query,
+        Modality.ASR: asr_query,
+        Modality.EVENT: event,
+    }
+    return branch_queries, modality_queries
+
+
 class RuleBasedQueryPlanner:
     """Safe V1 planner; an LLM planner can replace it through the same output model."""
 
@@ -209,6 +261,7 @@ class RuleBasedQueryPlanner:
         )
         search_options = request.search_options or SearchOptions()
         search_options = self._exempt_exact_match_branches(search_options, weights)
+        branch_queries, modality_queries = _structured_kis_queries(request)
         return QueryPlan(
             task=task,
             original_query=request.query,
@@ -217,5 +270,6 @@ class RuleBasedQueryPlanner:
             modality_weights=weights,
             filters=request.filters,
             search_options=search_options,
+            branch_queries=branch_queries,
+            modality_queries=modality_queries,
         )
-

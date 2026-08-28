@@ -13,6 +13,14 @@ export interface SearchFilters {
   end_sec_lte?: number | null;
 }
 
+export interface KisConstraints {
+  visual: string[];
+  ocr: string[];
+  asr: string[];
+  must: string[];
+  negative: string[];
+}
+
 // ---- Search Mixing Console (SearchOptions) — PR-04 ------------------------
 
 export interface BranchRuntimeOptions {
@@ -273,6 +281,8 @@ export interface QueryPlan {
   events: { event_idx: number; text: string; exact_phrases: string[] }[];
   modality_weights: Record<string, number>;
   filters: SearchFilters;
+  branch_queries?: Record<string, string>;
+  modality_queries?: Record<string, string>;
 }
 
 export interface SearchRequestBody {
@@ -282,6 +292,7 @@ export interface SearchRequestBody {
   filters?: SearchFilters;
   debug?: boolean;
   search_options?: SearchOptions;
+  kis_constraints?: KisConstraints;
 }
 
 export type PipelineStatus = "COMPLETED" | "COMPLETED_WITH_WARNINGS";

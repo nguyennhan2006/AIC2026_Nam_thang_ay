@@ -11,6 +11,7 @@ import re
 from online.domain.models import Candidate, Modality, QueryPlan, SceneDocument
 from online.ports.interfaces import SceneRepository
 from online.services.branch_options import effective_limit, effective_weight
+from online.services.branch_query import get_branch_query
 from online.services.lexical_coverage import CoverageConfig, compute_coverage
 
 
@@ -302,6 +303,16 @@ class LexicalRetriever:
         specialized = field_to_query.get(self.field)
         if specialized:
             query = specialized
+        branch_query = get_branch_query(
+            plan,
+            self.branch_id,
+            self.modality,
+            query,
+            execution_id=self.execution_id,
+        )
+        if branch_query is None:
+            return []
+        query = branch_query
 
         if self.query_transform is not None:
             query = self.query_transform(query)

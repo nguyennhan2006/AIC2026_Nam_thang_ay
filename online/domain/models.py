@@ -50,6 +50,20 @@ class SearchFilters(StrictModel):
         return self
 
 
+class KisConstraints(StrictModel):
+    """Manual slots for Structured KIS.
+
+    Empty lists mean the user intentionally left that slot blank. They are only
+    interpreted for TEXTUAL_KIS; other tasks ignore this field.
+    """
+
+    visual: list[str] = Field(default_factory=list)
+    ocr: list[str] = Field(default_factory=list)
+    asr: list[str] = Field(default_factory=list)
+    must: list[str] = Field(default_factory=list)
+    negative: list[str] = Field(default_factory=list)
+
+
 class SearchRequest(StrictModel):
     query: str = Field(min_length=1, max_length=4000)
     # None = "để endpoint quyết định". Convenience endpoint điền task của path;
@@ -60,6 +74,7 @@ class SearchRequest(StrictModel):
     filters: SearchFilters = Field(default_factory=SearchFilters)
     debug: bool = False
     search_options: SearchOptions | None = None
+    kis_constraints: KisConstraints | None = None
     # Nhờ LLM đề xuất trọng số cho từng nhánh theo truy vấn này. Đề xuất đi
     # kèm response ở `recommended_weights`, KHÔNG được tự áp: trọng số đổi ngầm
     # giữa hai lần tìm thì không ai tái lập được kết quả.
@@ -97,6 +112,10 @@ class QueryPlan(StrictModel):
     # so every retriever's per-branch lookup misses and falls back to
     # modality_weights exactly like before this field existed.
     search_options: SearchOptions = Field(default_factory=SearchOptions)
+    # Structured KIS: explicit query text per branch/modality. Empty value means
+    # "skip this branch" for that mode. Defaults keep legacy queries untouched.
+    branch_queries: dict[str, str] = Field(default_factory=dict)
+    modality_queries: dict[Modality, str] = Field(default_factory=dict)
     # Query Routing V2 — specialized queries per retrieval engine.
     # These are populated by QueryRouter.prepare() when using the new query prep.
     # Retriever adapters check these first, fall back to normalized_query if empty.

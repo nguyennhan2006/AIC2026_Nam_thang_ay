@@ -56,6 +56,7 @@ from difflib import SequenceMatcher
 from online.domain.models import Candidate, Modality, QueryPlan, SceneDocument
 from online.ports.interfaces import SceneRepository
 from online.services.branch_options import effective_limit, effective_weight
+from online.services.branch_query import get_branch_query
 
 
 _NON_WORD_RE = re.compile(r"[^\w\s]+", flags=re.UNICODE)
@@ -203,6 +204,18 @@ class OcrFuzzyRetriever:
             for event in plan.events
             for phrase in event.exact_phrases
         ]
+        structured = get_branch_query(
+            plan,
+            self.branch_id,
+            self.modality,
+            "",
+            execution_id=self.execution_id,
+        )
+        if structured is not None and (plan.branch_queries or plan.modality_queries):
+            raw = [structured]
+            return [q for q in (normalize_vi(item) for item in raw) if q]
+        if structured is None and (self.branch_id in plan.branch_queries or self.execution_id in plan.branch_queries or self.modality in plan.modality_queries):
+            return []
         raw = phrases or [plan.normalized_query]
         return [q for q in (normalize_vi(item) for item in raw) if q]
 

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { KeyboardEvent, ReactNode } from "react";
 import { Braces, HelpCircle, Link2, Radio, Search, Sparkles, X } from "lucide-react";
 import type { QueryPlan, TaskType } from "../types";
+import type { KisConstraints } from "../types";
 import { Badge, Button, Checkbox, NumericInput, SegmentedControl, TextField } from "../ui";
 import type { SegmentedOption } from "../ui";
 
@@ -14,6 +15,10 @@ export interface QueryStudioProps {
   onTaskChange: (task: TaskType) => void;
   query: string;
   onQueryChange: (value: string) => void;
+  kisMode: "simple" | "structured";
+  onKisModeChange: (value: "simple" | "structured") => void;
+  kisConstraints: Record<keyof KisConstraints, string>;
+  onKisConstraintsChange: (value: Record<keyof KisConstraints, string>) => void;
   topK: number;
   onTopKChange: (value: number) => void;
   debug: boolean;
@@ -45,6 +50,13 @@ const TASK_HINTS: Record<TaskType, string> = {
 
 const QUERY_MAX_LENGTH = 4000;
 const MODE_KEY = "aic_query_mode";
+const KIS_FIELDS: { key: keyof KisConstraints; label: string; placeholder: string }[] = [
+  { key: "visual", label: "Visual", placeholder: "mô tả hình ảnh chính cần tìm" },
+  { key: "ocr", label: "OCR", placeholder: "chữ xuất hiện trên màn hình" },
+  { key: "asr", label: "ASR", placeholder: "lời nói hoặc âm thanh cần khớp" },
+  { key: "must", label: "Must-have", placeholder: "điều bắt buộc, mỗi dòng một ý" },
+  { key: "negative", label: "Negative", placeholder: "điều không được có" },
+];
 
 function loadMode(): "simple" | "advanced" {
   if (typeof localStorage === "undefined") return "simple";
@@ -69,14 +81,23 @@ export function QueryStudio(props: QueryStudioProps) {
     el.style.height = `${el.scrollHeight}px`;
   }, [props.query]);
 
+  const structuredText = Object.entries(props.kisConstraints)
+    .filter(([key]) => key !== "negative")
+    .map(([, value]) => value)
+    .join("\n")
+    .trim();
+  const canSubmit = !props.submitting && (
+    props.task === "TEXTUAL_KIS" && props.kisMode === "structured"
+      ? structuredText.length > 0
+      : props.query.trim().length > 0
+  );
+
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
     if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
       event.preventDefault();
-      if (!props.submitting && props.query.trim()) props.onSubmit();
+      if (canSubmit) props.onSubmit();
     }
   }
-
-  const canSubmit = !props.submitting && props.query.trim().length > 0;
 
   return (
     <>
@@ -85,6 +106,21 @@ export function QueryStudio(props: QueryStudioProps) {
           <span className="control-group-label">Task</span>
           <SegmentedControl ariaLabel="Chọn loại nhiệm vụ" options={TASK_OPTIONS} value={props.task} onChange={props.onTaskChange} />
         </div>
+
+        {props.task === "TEXTUAL_KIS" && (
+          <div className="control-group">
+            <span className="control-group-label">KIS</span>
+            <SegmentedControl
+              ariaLabel="Chọn mode KIS"
+              value={props.kisMode}
+              onChange={props.onKisModeChange}
+              options={[
+                { value: "simple", label: "Simple" },
+                { value: "structured", label: "Structured" },
+              ]}
+            />
+          </div>
+        )}
 
         <div className="control-group">
           <span className="control-group-label">Top-K</span>
@@ -126,17 +162,39 @@ export function QueryStudio(props: QueryStudioProps) {
             )}
           </div>
 
-          <textarea
-            ref={textareaRef}
-            className="query-textarea"
-            rows={1}
-            value={props.query}
-            maxLength={QUERY_MAX_LENGTH}
-            placeholder={TASK_HINTS[props.task]}
-            aria-label="Nội dung truy vấn"
-            onChange={(event) => props.onQueryChange(event.target.value)}
-            onKeyDown={handleKeyDown}
-          />
+          {props.task === "TEXTUAL_KIS" && props.kisMode === "structured" ? (
+            <div className="structured-kis-grid">
+              {KIS_FIELDS.map((field) => (
+                <label key={field.key} className="structured-kis-field">
+                  <span className="field-label">{field.label}</span>
+                  <textarea
+                    className="structured-kis-textarea"
+                    rows={field.key === "negative" ? 2 : 3}
+                    value={props.kisConstraints[field.key]}
+                    placeholder={field.placeholder}
+                    aria-label={`Structured KIS ${field.label}`}
+                    onChange={(event) => props.onKisConstraintsChange({
+                      ...props.kisConstraints,
+                      [field.key]: event.target.value,
+                    })}
+                    onKeyDown={handleKeyDown}
+                  />
+                </label>
+              ))}
+            </div>
+          ) : (
+            <textarea
+              ref={textareaRef}
+              className="query-textarea"
+              rows={1}
+              value={props.query}
+              maxLength={QUERY_MAX_LENGTH}
+              placeholder={TASK_HINTS[props.task]}
+              aria-label="Nội dung truy vấn"
+              onChange={(event) => props.onQueryChange(event.target.value)}
+              onKeyDown={handleKeyDown}
+            />
+          )}
 
           {props.task === "TRAKE" && props.parsedEvents.length >= 2 && (
             <div className="query-chips">
@@ -153,7 +211,9 @@ export function QueryStudio(props: QueryStudioProps) {
             <span className="query-hint">Ctrl+Enter để tìm</span>
             <Checkbox checked={props.debug} onChange={props.onDebugChange} label="Debug" />
             <span className="query-counter tabular">
-              {props.query.length}/{QUERY_MAX_LENGTH}
+              {props.task === "TEXTUAL_KIS" && props.kisMode === "structured"
+                ? `${structuredText.length}/${QUERY_MAX_LENGTH}`
+                : `${props.query.length}/${QUERY_MAX_LENGTH}`}
             </span>
           </div>
         </div>
@@ -162,7 +222,23 @@ export function QueryStudio(props: QueryStudioProps) {
           <Button variant="primary" icon={<Search size={14} />} loading={props.submitting} disabled={!canSubmit} onClick={props.onSubmit} block>
             {props.submitting ? "Đang tìm" : "Tìm kiếm"}
           </Button>
-          <Button variant="ghost" icon={<X size={14} />} disabled={!props.query} onClick={() => props.onQueryChange("")} block>
+          <Button
+            variant="ghost"
+            icon={<X size={14} />}
+            disabled={
+              props.task === "TEXTUAL_KIS" && props.kisMode === "structured"
+                ? !Object.values(props.kisConstraints).some((value) => value.trim())
+                : !props.query
+            }
+            onClick={() => {
+              if (props.task === "TEXTUAL_KIS" && props.kisMode === "structured") {
+                props.onKisConstraintsChange({ visual: "", ocr: "", asr: "", must: "", negative: "" });
+              } else {
+                props.onQueryChange("");
+              }
+            }}
+            block
+          >
             Xoá
           </Button>
         </div>

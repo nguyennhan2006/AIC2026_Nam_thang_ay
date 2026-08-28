@@ -22,22 +22,54 @@ import { DatasetStats } from "./features/search/DatasetStats";
 import { WeightPanel } from "./features/weights/WeightPanel";
 import { loadApiBase, loadApiToken, saveApiBase, saveApiToken } from "./storage";
 import type {
-  HealthResponse, SceneAnswer, SearchFilters, SearchOptions, SearchResponse, StreamEvent, TaskType,
+  HealthResponse, KisConstraints, SceneAnswer, SearchFilters, SearchOptions, SearchResponse, StreamEvent, TaskType,
 } from "./types";
 import { PanelBody, PanelHeader, Surface, Tabs } from "./ui";
 import type { TabItem } from "./ui";
 
 type ResultTab = "results" | "task" | "submission" | "tuner";
+type KisMode = "simple" | "structured";
+type KisConstraintDraft = Record<keyof KisConstraints, string>;
 
 /** Demo mode (`?demo=1`): tự chạy MỘT search THẬT lên backend ngay khi mở, để
  * người xem thấy giao diện ở trạng thái có dữ liệu mà không phải gõ gì.
  * KHÔNG có fixture giả nào — nếu backend không chạy thì vẫn ra empty state
  * đúng như production, và nav hiện badge "demo" để không ai nhầm. */
 const DEMO_QUERY = "cảnh báo sạt lở nguy hiểm ven sông";
+const EMPTY_KIS_CONSTRAINTS: KisConstraintDraft = {
+  visual: "",
+  ocr: "",
+  asr: "",
+  must: "",
+  negative: "",
+};
 
 function isDemoMode(): boolean {
   if (typeof window === "undefined") return false;
   return new URLSearchParams(window.location.search).get("demo") === "1";
+}
+
+function constraintLines(value: string): string[] {
+  return value.split(/\n+/).map((item) => item.trim()).filter(Boolean);
+}
+
+function toKisConstraints(draft: KisConstraintDraft): KisConstraints {
+  return {
+    visual: constraintLines(draft.visual),
+    ocr: constraintLines(draft.ocr),
+    asr: constraintLines(draft.asr),
+    must: constraintLines(draft.must),
+    negative: constraintLines(draft.negative),
+  };
+}
+
+function structuredKisQuery(constraints: KisConstraints): string {
+  return [
+    ...constraints.visual,
+    ...constraints.ocr,
+    ...constraints.asr,
+    ...constraints.must,
+  ].join(" ").trim();
 }
 
 /** Nhãn tab "task" đổi theo task đang chọn — một tab duy nhất thay vì bốn tab
@@ -63,6 +95,8 @@ function App() {
   const [healthStatus, setHealthStatus] = useState<"checking" | "ok" | "error">("checking");
   const [resultTab, setResultTab] = useState<ResultTab>("results");
   const [task, setTask] = useState<TaskType>("TEXTUAL_KIS");
+  const [kisMode, setKisMode] = useState<KisMode>("simple");
+  const [kisConstraints, setKisConstraints] = useState<KisConstraintDraft>(EMPTY_KIS_CONSTRAINTS);
   const [query, setQuery] = useState("");
   const [topK, setTopK] = useState(20);
   const [debug, setDebug] = useState(false);
@@ -146,7 +180,11 @@ function App() {
     // Chỉ nhận string: nếu hàm này lỡ bị gắn thẳng làm event handler thì tham
     // số sẽ là một SyntheticEvent, và nó phải bị bỏ qua chứ không được đi
     // tiếp vào request body.
-    const effectiveQuery = typeof queryOverride === "string" ? queryOverride : query;
+    const structuredConstraints = toKisConstraints(kisConstraints);
+    const structuredQuery = structuredKisQuery(structuredConstraints);
+    const effectiveQuery = task === "TEXTUAL_KIS" && kisMode === "structured"
+      ? structuredQuery
+      : typeof queryOverride === "string" ? queryOverride : query;
     const effectiveOptions = overrides?.options ?? draftOptions;
     const effectiveTopK = overrides?.topK ?? topK;
     const effectiveVideos = overrides?.videoIds ?? focusVideos;
@@ -169,6 +207,9 @@ function App() {
       top_k: effectiveTopK,
       debug,
       search_options: effectiveOptions,
+      ...(task === "TEXTUAL_KIS" && kisMode === "structured"
+        ? { kis_constraints: structuredConstraints }
+        : {}),
       ...(filters ? { filters } : {}),
     };
     try {
@@ -406,6 +447,10 @@ function App() {
               onTaskChange={setTask}
               query={query}
               onQueryChange={setQuery}
+              kisMode={kisMode}
+              onKisModeChange={setKisMode}
+              kisConstraints={kisConstraints}
+              onKisConstraintsChange={setKisConstraints}
               topK={topK}
               onTopKChange={setTopK}
               debug={debug}
