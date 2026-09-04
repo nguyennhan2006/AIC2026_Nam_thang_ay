@@ -9,7 +9,9 @@
 #   - va config.json bang scripts/prepare_jina_offline.py thay vi va tay;
 #   - canh bao khi API mo ra Internet ma khong co token.
 #
-# Khoi dong mat ~4 phut. Doi dong "Application startup complete."
+# Khoi dong mat ~6-7 phut (do that: 390s toi khi san sang). Trong luc do
+# MOI endpoint khac deu chan; chi /v1/startup va /openapi.json tra loi:
+#     curl -s localhost:8000/v1/startup
 
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -40,12 +42,13 @@ do
     fi
 done
 if [ "$missing" -ne 0 ]; then
-    echo "Tai du lieu bang: python -m scripts.bootstrap_vast_from_kaggle" >&2
+    echo "Tai du lieu bang: ./scripts/bootstrap_vast_from_gdrive.sh --skip-keyframes" >&2
+    echo "  (duong cu, van chay: python -m scripts.bootstrap_vast_from_kaggle)" >&2
     exit 1
 fi
 
 if [ ! -f ".env.fpt.local" ]; then
-    echo "THIEU .env.fpt.local (nam trong 05_config.zip cua dataset Kaggle)." >&2
+    echo "THIEU .env.fpt.local (nam trong 05_config.zip cua pack)." >&2
     exit 1
 fi
 
@@ -89,7 +92,7 @@ fi
 echo "metadata : $AIC_METADATA_JSONL"
 echo "embedding: $AIC_VISUAL_EMBEDDING_NAME ($AIC_VISUAL_EMBEDDING_MODEL)"
 echo "lang nghe: $HOST:$PORT"
-echo "Khoi dong ~4 phut. Doi 'Application startup complete.'"
+echo "Khoi dong ~6-7 phut. Theo doi: curl -s localhost:$PORT/v1/startup"
 echo ""
 
 exec "$PYTHON" -m uvicorn online.api.app:app --host "$HOST" --port "$PORT"

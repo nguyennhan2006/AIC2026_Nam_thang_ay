@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 import json
 import math
+import os
+from dataclasses import dataclass, field
 from typing import Sequence
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -85,6 +87,16 @@ class VectorStoreTooLargeError(RuntimeError):
     """Corpus vượt ngưỡng mà đường Python thuần còn kịp trả lời."""
 
 
+@dataclass
+class _PendingSearch:
+    """Một truy vấn đang chờ được gộp vào lô chung."""
+
+    unit: object                      # vector đã chuẩn hoá (np.ndarray)
+    selected: list[int] | None
+    limit: int
+    future: "asyncio.Future" = field(repr=False)
+
+
 class InMemoryVectorStore:
     """Quét tuyến tính toàn bộ vector; có numpy thì bằng MỘT phép nhân ma trận.
 
@@ -132,6 +144,13 @@ class InMemoryVectorStore:
             self._video_rows.setdefault(video_id, []).append(index)
         self._has_ocr = [bool(payload.get("has_ocr")) for payload in self._payloads]
         self._has_asr = [bool(payload.get("has_asr")) for payload in self._payloads]
+
+        # Cửa sổ gộp lô, xem `search()`. 0 = tắt, giữ nguyên hành vi cũ.
+        self._batch_window_sec = (
+            max(0.0, float(os.environ.get("AIC_VECTOR_BATCH_WINDOW_MS", "5"))) / 1000.0
+        )
+        self._pending: list[_PendingSearch] = []
+        self._batch_loop: asyncio.AbstractEventLoop | None = None
 
         if _np is not None:
             self.backend_impl = "numpy"
@@ -195,25 +214,45 @@ class InMemoryVectorStore:
             selected = [index for index in selected if self._has_asr[index] == filters.has_asr]
         return selected
 
+    # `self._matrix[selected]` là fancy-index, tức COPY THẬT các hàng được chọn.
+    # Đo trên ma trận thi đấu (151.459 × 1024 float32, 620 MB), lọc giữ nửa
+    # corpus:
+    #
+    #     self._matrix[selected] @ q   92.0 ms  + 310 MB cấp phát MỖI request
+    #     (self._matrix @ q)[selected] 16.7 ms  + không cấp phát gì
+    #
+    # Bản sao đắt hơn cả phép nhân nó định tiết kiệm. Bảy request đồng thời
+    # nghĩa là ~2 GB cấp phát tạm — đúng cái làm hệ thống trông như thiếu RAM.
+    #
+    # Ngược lại khi lọc thật hẹp thì gather vẫn đáng: đường TRAKE khoá
+    # `AIC_TRAKE_VIDEO_TOP_K=10` video, tức ~1% số hàng, nên bản sao bé xíu còn
+    # phép nhân nhỏ đi trăm lần. Ngưỡng nằm ở đây; dưới nó thì gather hàng.
+    GATHER_ROWS_MAX_FRACTION = 0.25
+
     def _score(self, vector: Sequence[float], selected: list[int] | None):
         """Điểm cosine của các hàng đã chọn, cùng thứ tự với `selected`."""
 
         if _np is not None:
             query = _np.asarray(vector, dtype=_np.float32)
-            matrix = self._matrix if selected is None else self._matrix[selected]
 
             # Validate dimensions: query vector dim phải khớp matrix row dim
-            if matrix.shape[1] != query.shape[-1]:
+            if self._matrix.shape[1] != query.shape[-1]:
                 raise ValueError(
                     f"dimension mismatch: query vector dim={query.shape[-1]} "
-                    f"nhưng vector store row dim={matrix.shape[1]}. "
+                    f"nhưng vector store row dim={self._matrix.shape[1]}. "
                     f"Encoder và index phải dùng cùng model (CLIP=768, E5/jina=1024)."
                 )
 
+            count = self._matrix.shape[0] if selected is None else len(selected)
             norm = float(_np.linalg.norm(query))
             if norm == 0.0:
-                return _np.zeros(len(matrix), dtype=_np.float32)
-            return matrix @ (query / norm)
+                return _np.zeros(count, dtype=_np.float32)
+            unit = query / norm
+            if selected is None:
+                return self._matrix @ unit
+            if count <= self.GATHER_ROWS_MAX_FRACTION * self._matrix.shape[0]:
+                return self._matrix[selected] @ unit
+            return (self._matrix @ unit)[selected]
         norm = math.sqrt(sum(item * item for item in vector))
         unit = [item / norm for item in vector] if norm else None
         indices = range(len(self._ids)) if selected is None else selected
@@ -254,6 +293,118 @@ class InMemoryVectorStore:
         if selected is not None and not selected:
             return []
         scores = self._score(vector, selected)
+        return self._candidates(scores, selected, limit)
+
+    # Dưới ngưỡng này thì gộp lô LỖ: GEMV (một truy vấn) dùng kernel khác và rẻ
+    # hơn hẳn GEMM với k nhỏ. Đo trên ma trận thi đấu (151.459 × 1024):
+    #
+    #      1 query  GEMV        17 ms
+    #      3 query  1 GEMM      72 ms   — chạy rời từng cái: 52 ms  (lỗ)
+    #      7 query  1 GEMM      78 ms   — chạy rời từng cái: 121 ms (lãi 1,55×)
+    #     12 query  1 GEMM      77 ms   — chạy rời từng cái: 207 ms (lãi 2,7×)
+    #
+    # Chi phí phẳng từ 3 lên 12 vì ma trận chỉ được đọc MỘT lần cho cả lô. Đây
+    # là bài toán băng thông bộ nhớ, không phải phép tính: mỗi truy vấn chạy
+    # riêng phải kéo lại trọn 620 MB, mà băng thông là tài nguyên chung nên
+    # thêm luồng không giúp gì — chính là lý do 7 người hỏi cùng lúc thì chậm.
+    BATCH_MIN_SIZE = 4
+
+    async def search(
+        self,
+        vector: Sequence[float],
+        *,
+        limit: int,
+        filters: SearchFilters,
+    ) -> list[Candidate]:
+        # numpy nhả GIL trong lúc nhân ma trận nên phần này chạy song song thật
+        # được — nhưng song song ở đây chỉ chia nhau một băng thông cố định.
+        # Gộp các truy vấn đến gần nhau vào MỘT phép nhân thì cả lô chỉ quét
+        # ma trận một lần.
+        if _np is None or self._matrix is None or self._batch_window_sec <= 0:
+            return await asyncio.to_thread(self._search_sync, vector, limit, filters)
+
+        loop = asyncio.get_running_loop()
+        if self._batch_loop is not loop:
+            # Event loop khác (test dựng loop riêng cho mỗi ca): bỏ hàng chờ cũ
+            # thay vì gắn future vào loop đã đóng.
+            self._batch_loop = loop
+            self._pending = []
+
+        selected = self._selected_rows(filters)
+        if selected is not None and not selected:
+            return []
+        query = _np.asarray(vector, dtype=_np.float32)
+        if self._matrix.shape[1] != query.shape[-1]:
+            raise ValueError(
+                f"dimension mismatch: query vector dim={query.shape[-1]} "
+                f"nhưng vector store row dim={self._matrix.shape[1]}. "
+                f"Encoder và index phải dùng cùng model (CLIP=768, E5/jina=1024)."
+            )
+        norm = float(_np.linalg.norm(query))
+        unit = query / norm if norm else _np.zeros_like(query)
+
+        future: asyncio.Future = loop.create_future()
+        self._pending.append(_PendingSearch(unit, selected, limit, future))
+        if len(self._pending) == 1:
+            # Người đến đầu tiên mở cửa sổ; ai đến trong cửa sổ thì đi cùng lô.
+            loop.create_task(self._flush_after_window())
+        return await future
+
+    async def _flush_after_window(self) -> None:
+        await asyncio.sleep(self._batch_window_sec)
+        batch, self._pending = self._pending, []
+        if not batch:
+            return
+        try:
+            results = await asyncio.to_thread(self._run_batch_sync, batch)
+        except BaseException as exc:  # noqa: BLE001 - phải trả lỗi cho MỌI người chờ
+            for item in batch:
+                if not item.future.done():
+                    item.future.set_exception(exc)
+            return
+        for item, result in zip(batch, results, strict=True):
+            if not item.future.done():
+                item.future.set_result(result)
+
+    def _run_batch_sync(self, batch: list[_PendingSearch]) -> list[list[Candidate]]:
+        """Chạy cả lô trong MỘT luồng: không request nào phải giành băng thông."""
+
+        results: list[list[Candidate] | None] = [None] * len(batch)
+        cutoff = self.GATHER_ROWS_MAX_FRACTION * self._matrix.shape[0]
+        wide = [
+            position
+            for position, item in enumerate(batch)
+            if item.selected is None or len(item.selected) > cutoff
+        ]
+        if len(wide) >= self.BATCH_MIN_SIZE:
+            # (n, d) @ (d, k) -> (n, k): một lượt đọc ma trận cho cả lô.
+            stacked = _np.column_stack([batch[position].unit for position in wide])
+            scored = self._matrix @ stacked
+            for column, position in enumerate(wide):
+                item = batch[position]
+                scores = scored[:, column]
+                if item.selected is not None:
+                    scores = scores[item.selected]
+                results[position] = self._candidates(scores, item.selected, item.limit)
+            remaining = [p for p in range(len(batch)) if p not in set(wide)]
+        else:
+            remaining = list(range(len(batch)))
+        for position in remaining:
+            item = batch[position]
+            scores = self._score_unit(item.unit, item.selected)
+            results[position] = self._candidates(scores, item.selected, item.limit)
+        return [result or [] for result in results]
+
+    def _score_unit(self, unit, selected: list[int] | None):
+        """Như `_score` nhưng nhận vector ĐÃ chuẩn hoá."""
+
+        if selected is None:
+            return self._matrix @ unit
+        if len(selected) <= self.GATHER_ROWS_MAX_FRACTION * self._matrix.shape[0]:
+            return self._matrix[selected] @ unit
+        return (self._matrix @ unit)[selected]
+
+    def _candidates(self, scores, selected: list[int] | None, limit: int) -> list[Candidate]:
         rows = list(range(len(self._ids))) if selected is None else selected
         candidates: list[Candidate] = []
         for rank, position in enumerate(self._top_indices(scores, selected, limit), start=1):
@@ -267,22 +418,6 @@ class InMemoryVectorStore:
             if candidate is not None:
                 candidates.append(candidate)
         return candidates
-
-    async def search(
-        self,
-        vector: Sequence[float],
-        *,
-        limit: int,
-        filters: SearchFilters,
-    ) -> list[Candidate]:
-        # Ma trận thi đấu là 176.707 × 1024 float32 (~700 MB): riêng `matrix @ q`
-        # đã hàng trăm ms, và khi có filter thì `self._matrix[selected]` còn COPY
-        # các hàng được chọn trước khi nhân. Chạy trên event loop nghĩa là suốt
-        # quãng đó không request nào khác nhúc nhích được.
-        #
-        # Khác với BM25, phần này thực sự CHẠY SONG SONG được: numpy nhả GIL
-        # trong lúc nhân ma trận, nên hai truy vấn cùng lúc chồng lấn thật.
-        return await asyncio.to_thread(self._search_sync, vector, limit, filters)
 
 
 def _qdrant_filter(filters: SearchFilters) -> dict | None:
